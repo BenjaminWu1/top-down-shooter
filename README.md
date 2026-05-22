@@ -1,10 +1,14 @@
 # Pixel Shooter
 
+[![Play online](https://img.shields.io/badge/play-online-2ea44f?style=for-the-badge)](https://benjaminwu1.github.io/top-down-shooter/)
+
 A single-file, browser-based top-down arena shooter with retro pixel art. Written in vanilla HTML/CSS/JS — no build step, no external assets, no dependencies.
 
 ## Play
 
-Open [`index.html`](index.html) in any modern browser (Chrome, Edge, Firefox, Safari). Everything lives in the one file.
+**Online (no install):** https://benjaminwu1.github.io/top-down-shooter/
+
+**Locally:** clone the repo and open [`index.html`](index.html) in any modern browser (Chrome, Edge, Firefox, Safari). Everything lives in the one file.
 
 ## Controls
 
