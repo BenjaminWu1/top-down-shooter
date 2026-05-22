@@ -29,6 +29,13 @@ const W = 480, H = 270;
 // while keeping all gameplay math in the original 480x270 logical space.
 // Pure pixel-art sprites still look identical; text and sub-pixel geometry render crisper.
 const PX = 2;
+
+// World vs viewport: W/H are the on-screen viewport (fixed). worldW/worldH are
+// the gameplay arena, which can be larger than the viewport (L14-L20 use 2x).
+// camX/camY track the camera's top-left corner in world space. When worldW===W
+// the camera stays at 0,0 and there is no scrolling.
+let worldW = W, worldH = H;
+let camX = 0, camY = 0;
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 canvas.width = W * PX; canvas.height = H * PX;
@@ -852,7 +859,13 @@ const LEVELS = [
   { total:48, rate:0.45, mix:[['runner',0.15],['tank',0.2],['shooter',0.22],['charger',0.15],['exploder',0.15],['swarmer',0.13]],       boss:'reaper',   bossName:'WARDEN'      },
   { total:52, rate:0.43, mix:[['runner',0.15],['tank',0.2],['shooter',0.22],['charger',0.15],['exploder',0.15],['swarmer',0.13]],       boss:'bomber',   bossName:'IRONSIDES'   },
   { total:56, rate:0.4,  mix:[['runner',0.12],['tank',0.22],['shooter',0.22],['charger',0.16],['exploder',0.15],['swarmer',0.13]],      boss:'phantom',  bossName:'VOIDWALKER'  },
-  { total:60, rate:0.38, mix:[['runner',0.12],['tank',0.2],['shooter',0.25],['charger',0.15],['exploder',0.15],['swarmer',0.13]],       boss:'nemesis',  bossName:'ARCHDEMON'   }
+  { total:60, rate:0.38, mix:[['runner',0.12],['tank',0.2],['shooter',0.25],['charger',0.15],['exploder',0.15],['swarmer',0.13]],       boss:'nemesis',  bossName:'ARCHDEMON'   },
+  // ---- Endgame levels: 16-20 (boss AI reused; tougher spawn pressure + harder mixes) ----
+  { total:66, rate:0.36, mix:[['runner',0.1],['tank',0.22],['shooter',0.25],['charger',0.16],['exploder',0.15],['swarmer',0.12]],       boss:'twin',     bossName:'TEMPEST'     },
+  { total:72, rate:0.34, mix:[['runner',0.08],['tank',0.22],['shooter',0.25],['charger',0.17],['exploder',0.16],['swarmer',0.12]],      boss:'reaper',   bossName:'OBSIDIAN'    },
+  { total:78, rate:0.32, mix:[['runner',0.08],['tank',0.22],['shooter',0.25],['charger',0.18],['exploder',0.17],['swarmer',0.1]],       boss:'bomber',   bossName:'CATACLYSM'   },
+  { total:84, rate:0.3,  mix:[['runner',0.06],['tank',0.24],['shooter',0.26],['charger',0.18],['exploder',0.16],['swarmer',0.1]],       boss:'phantom',  bossName:'ABYSSAL'     },
+  { total:92, rate:0.28, mix:[['tank',0.26],['shooter',0.28],['charger',0.2],['exploder',0.16],['swarmer',0.1]],                         boss:'nemesis',  bossName:'GODKILLER'   }
 ];
 
 const BOSS_NAMES = {
@@ -862,7 +875,7 @@ const BOSS_NAMES = {
   bomber:'BOMBARDIER', phantom:'PHANTOM', nemesis:'NEMESIS'
 };
 
-// Non-boss enemies scale up per level. 1.0 at level 1, ~1.72 at level 10.
+// Non-boss enemies scale up per level. 1.0 at level 1, ~2.52 at level 20.
 function enemyScale(){ return 1 + levelIdx * 0.08; }
 
 // ============================================================
@@ -911,8 +924,8 @@ const CHARACTERS = {
     skillLabels:{ x:'BLADE', c:'SLOW' }
   },
   tank: {
-    name:'TANK', desc:'TOUGH · FLAMETHROWER (RMB)',
-    color:'#27ae60', hp:8, speed:80, damageMult:1.0, startShield:3,
+    name:'TANK', desc:'HEAVY · +20% DAMAGE · FLAMETHROWER (RMB)',
+    color:'#27ae60', hp:12, speed:95, damageMult:1.2, startShield:4,
     skills:{ x:'summon', c:'wall' },
     skillLabels:{ x:'BLADE', c:'WALL' }
   }
@@ -1005,10 +1018,12 @@ function createPlayer(charKey){
     damageMult:ch.damageMult || 1,
     fireCooldown:0, fireRate:0.14,
     spreadTime:0, rapidTime:0, laserTime:0,
-    rocketAmmo:0, shieldHp:ch.startShield || 0, shieldMax:3,
+    // Tank starts with a higher shield cap (5) so its bigger startShield doesn't
+    // immediately get capped down by a regular shield pickup. Other chars stay at 3.
+    rocketAmmo:0, shieldHp:ch.startShield || 0, shieldMax: charKey === 'tank' ? 5 : 3,
     // Flamethrower fuel (Tank only). No automatic regen — refilled by 'fuel' pickup.
-    fuel: charKey === 'tank' ? 8 : 0,
-    maxFuel: charKey === 'tank' ? 8 : 0,
+    fuel: charKey === 'tank' ? 12 : 0,
+    maxFuel: charKey === 'tank' ? 12 : 0,
     // New equipment timers (Minigun / Plasma / Homing missiles)
     minigunTime:0, plasmaTime:0, homingTime:0,
     // Passive powerups (temporary buffs)
@@ -1118,8 +1133,8 @@ function triggerSkill(name, dx, dy, mag){
   if(name === 'dash'){
     let ax = dx, ay = dy;
     if(mag === 0){ ax = Math.cos(player.angle); ay = Math.sin(player.angle); }
-    player.x = clamp(player.x + ax * 60, 8, W - 8);
-    player.y = clamp(player.y + ay * 60, 8, H - 10);
+    player.x = clamp(player.x + ax * 60, 8, worldW - 8);
+    player.y = clamp(player.y + ay * 60, 8, worldH - 10);
     player.invuln = Math.max(player.invuln, 0.35);
     emit(player.x, player.y, 14, '#f1c40f', 60, 180, 0.35);
     emit(player.x - ax*20, player.y - ay*20, 10, '#fff', 30, 100, 0.3);
@@ -1128,8 +1143,9 @@ function triggerSkill(name, dx, dy, mag){
   }
   if(name === 'blink'){
     // Teleport directly to the cursor (clamped). Scout's signature.
-    const tx = clamp(mouse.x, 8, W - 8);
-    const ty = clamp(mouse.y, 8, H - 10);
+    // Mouse is in screen space; add camera offset to translate to world coords.
+    const tx = clamp(mouse.x + camX, 8, worldW - 8);
+    const ty = clamp(mouse.y + camY, 8, worldH - 10);
     emit(player.x, player.y, 12, '#f1c40f', 40, 140, 0.35);
     player.x = tx; player.y = ty;
     player.invuln = Math.max(player.invuln, 0.45);
@@ -1173,8 +1189,8 @@ function triggerSkill(name, dx, dy, mag){
       }
     }
     for(let i = 0; i < 10; i++){
-      emit(rand(0, W), rand(0, H), 3, '#fff', 40, 160, 0.35);
-      emit(rand(0, W), rand(0, H), 3, '#f39c12', 40, 160, 0.35);
+      emit(rand(0, worldW), rand(0, worldH), 3, '#fff', 40, 160, 0.35);
+      emit(rand(0, worldW), rand(0, worldH), 3, '#f39c12', 40, 160, 0.35);
     }
     shakeTime = 0.2; shakeAmt = 3;
     try { sfx.explode(); } catch(err){ /* audio nodes are best-effort */ }
@@ -1236,10 +1252,10 @@ function spawnEnemyAtEdge(kind){
   const edge = Math.floor(Math.random()*4);
   const m = 14;
   let x, y;
-  if(edge===0){ x = rand(m, W-m); y = -m; }
-  else if(edge===1){ x = W+m; y = rand(m, H-m); }
-  else if(edge===2){ x = rand(m, W-m); y = H+m; }
-  else { x = -m; y = rand(m, H-m); }
+  if(edge===0){ x = rand(m, worldW-m); y = -m; }
+  else if(edge===1){ x = worldW+m; y = rand(m, worldH-m); }
+  else if(edge===2){ x = rand(m, worldW-m); y = worldH+m; }
+  else { x = -m; y = rand(m, worldH-m); }
   if(kind === 'swarmer'){
     // Swarmers spawn in a cluster of 3 near each other.
     for(let i = 0; i < 3; i++){
@@ -1251,7 +1267,9 @@ function spawnEnemyAtEdge(kind){
 }
 
 function spawnBoss(kind){
-  const b = createEnemy(kind, W/2, -25);
+  // Spawn the boss centered above the player so they don't have to chase across the larger arena.
+  const sx = player ? clamp(player.x, 40, worldW - 40) : worldW / 2;
+  const b = createEnemy(kind, sx, -25);
   entities.push(b);
   bossSpawnPulse = 1;
   sfx.bossSpawn();
@@ -1264,10 +1282,15 @@ function startLevel(idx){
   spawnTimer = 0.6;
   spawnedCount = 0;
   bossSpawned = false;
+  // L14+ uses a 2x world. View stays at W*H; a camera follows the player.
+  const big = idx >= 13;
+  worldW = big ? W * 2 : W;
+  worldH = big ? H * 2 : H;
+  camX = 0; camY = 0;
   entities = entities.filter(e => e.type === 'player' || e.type === 'companion');
   particles = [];
   if(!player){ player = createPlayer(selectedChar); entities.push(player); }
-  else { player.x = W/2; player.y = H/2; player.invuln = 1.2; }
+  else { player.x = worldW/2; player.y = worldH/2; player.invuln = 1.2; }
   // Refresh the companion each level: full HP, repositioned beside the player.
   if(!companion || companion.dead){
     companion = createCompanion();
@@ -1277,9 +1300,27 @@ function startLevel(idx){
     companion.x = player.x - 14; companion.y = player.y;
     companion.invuln = 1.2;
   }
+  // Snap camera to centered-on-player so the first frame doesn't lerp from (0,0).
+  camX = clamp(player.x - W/2, 0, Math.max(0, worldW - W));
+  camY = clamp(player.y - H/2, 0, Math.max(0, worldH - H));
   state = STATE.PLAYING;
   stateTime = 0;
 }
+// Camera follows the player, clamped so the view never shows past world edges.
+// On non-scrolling levels (worldW===W) this collapses to camX=camY=0 — a no-op.
+function updateCamera(dt){
+  const maxX = Math.max(0, worldW - W);
+  const maxY = Math.max(0, worldH - H);
+  const targetX = clamp(player.x - W/2, 0, maxX);
+  const targetY = clamp(player.y - H/2, 0, maxY);
+  // Smooth lerp toward the target so the camera doesn't jitter on every input change.
+  const k = Math.min(1, dt * 8);
+  camX += (targetX - camX) * k;
+  camY += (targetY - camY) * k;
+  if(maxX === 0) camX = 0;
+  if(maxY === 0) camY = 0;
+}
+
 function startGame(){
   initAudio();
   score = 0;
@@ -1323,15 +1364,17 @@ function updatePlaying(dt){
   const speedMult = player.speedTime > 0 ? 1.5 : 1;
   player.x += dx * player.speed * speedMult * dt;
   player.y += dy * player.speed * speedMult * dt;
-  player.x = clamp(player.x, 8, W-8);
-  player.y = clamp(player.y, 8, H-10);
+  player.x = clamp(player.x, 8, worldW-8);
+  player.y = clamp(player.y, 8, worldH-10);
 
   if(mag > 0){
     player.frameT += dt;
     if(player.frameT > 0.12){ player.frameT = 0; player.frame = (player.frame + 1) % 2; }
   } else { player.frame = 0; }
 
-  player.angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+  updateCamera(dt);
+  // Aim from the cursor's WORLD position (mouse is in screen coords).
+  player.angle = Math.atan2((mouse.y + camY) - player.y, (mouse.x + camX) - player.x);
 
   // ---- Special skills: X / C dispatched per-character ----
   if(player.skillCd.x > 0) player.skillCd.x -= dt;
@@ -1545,11 +1588,11 @@ function updatePlaying(dt){
 function fireFlamethrower(dt){
   const baseX = player.x + Math.cos(player.angle) * 7;
   const baseY = player.y + Math.sin(player.angle) * 7;
-  const range = 180;       // ~3x previous reach
-  const halfAngle = 0.6;   // ~34° (wider cone)
+  const range = 210;       // longer reach for the tank's signature attack
+  const halfAngle = 0.7;   // ~40° cone (wider than before)
   // The DAMAGE powerup (red explosion icon) now boosts flamethrower DPS too,
   // matching how it boosts bullet damage in fireWeapon.
-  const dps = 5 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
+  const dps = 7 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
   // Damage every enemy inside the cone, scaled by dt.
   for(const en of entities){
     if(en.type !== 'enemy' || en.dead) continue;
@@ -1669,8 +1712,18 @@ function fireWeapon(mx, my){
     sfx.rocket();
     return;
   }
-  // Tank's left-click is the same as Soldier's pistol — the second
-  // normal attack (flamethrower) is fired with right mouse button.
+  if(player.char === 'tank'){
+    // Heavy slug: 2× base damage, slightly larger and slower projectile, same fire rate
+    // as the soldier pistol. Combined with Tank's 1.2 damageMult, each shot lands for 2.4
+    // before bullet flags — meaningfully chunkier than the pistol while keeping cadence.
+    entities.push(createBullet(mx, my, player.angle, 'player', {
+      dmg: 2 * dmgMult, radius: 3, speed: 300, life: 1.6
+    }));
+    player.fireCooldown = player.fireRate * rapidFactor;
+    emit(mx, my, 4, '#e67e22', 30, 100, 0.22);
+    sfx.shoot();
+    return;
+  }
   // Soldier default pistol
   entities.push(createBullet(mx, my, player.angle, 'player', { dmg: 1 * dmgMult }));
   player.fireCooldown = player.fireRate * rapidFactor;
@@ -2092,8 +2145,8 @@ function updateBruiser(e, dt){
     }
   }
   e.x += e.vx * dt; e.y += e.vy * dt;
-  e.x = clamp(e.x, 14, W-14);
-  e.y = clamp(e.y, 14, H-16);
+  e.x = clamp(e.x, 14, worldW-14);
+  e.y = clamp(e.y, 14, worldH-16);
 }
 
 // SNIPER: maintain distance, aimed fast bullets, teleport occasionally
@@ -2132,14 +2185,14 @@ function updateSniper(e, dt){
   if(e.phaseT > 6){
     e.phaseT = 0;
     emit(e.x, e.y, 18, '#8e44ad', 30, 120, 0.5);
-    e.x = rand(40, W-40); e.y = rand(40, H-40);
+    e.x = rand(40, worldW-40); e.y = rand(40, worldH-40);
     emit(e.x, e.y, 18, '#8e44ad', 30, 120, 0.5);
     e.telegraphActive = false;
     sfx.teleport();
   }
   e.x += e.vx * dt; e.y += e.vy * dt;
-  e.x = clamp(e.x, 14, W-14);
-  e.y = clamp(e.y, 14, H-16);
+  e.x = clamp(e.x, 14, worldW-14);
+  e.y = clamp(e.y, 14, worldH-16);
 }
 
 // SPLITTER (and splitter_mid): chase + ring bursts
@@ -2148,8 +2201,8 @@ function updateSplitter(e, dt){
   e.vx = Math.cos(a) * e.speed;
   e.vy = Math.sin(a) * e.speed;
   e.x += e.vx * dt; e.y += e.vy * dt;
-  e.x = clamp(e.x, 12, W-12);
-  e.y = clamp(e.y, 12, H-14);
+  e.x = clamp(e.x, 12, worldW-12);
+  e.y = clamp(e.y, 12, worldH-14);
   if(e.kind === 'splitter'){
     e.fireCooldown -= dt;
     if(e.fireCooldown <= 0){
@@ -2197,8 +2250,8 @@ function updateSummoner(e, dt){
     e.fireCooldown = 2.2;
   }
   e.x += e.vx * dt; e.y += e.vy * dt;
-  e.x = clamp(e.x, 16, W-16);
-  e.y = clamp(e.y, 16, H-18);
+  e.x = clamp(e.x, 16, worldW-16);
+  e.y = clamp(e.y, 16, worldH-18);
 }
 
 // OVERLORD: 3-phase
@@ -2242,8 +2295,8 @@ function updateOverlord(boss, dt){
   boss.vx = tvx; boss.vy = tvy;
   boss.x += boss.vx * dt;
   boss.y += boss.vy * dt;
-  boss.x = clamp(boss.x, 18, W - 18);
-  boss.y = clamp(boss.y, 18, H - 22);
+  boss.x = clamp(boss.x, 18, worldW - 18);
+  boss.y = clamp(boss.y, 18, worldH - 22);
 }
 
 // TWIN STRIKER (L6): dual-pattern chaser — alternates dash slash and twin sideshot bursts.
@@ -2278,8 +2331,8 @@ function updateTwin(e, dt){
     }
   }
   e.x += e.vx * dt; e.y += e.vy * dt;
-  e.x = clamp(e.x, 14, W - 14);
-  e.y = clamp(e.y, 14, H - 16);
+  e.x = clamp(e.x, 14, worldW - 14);
+  e.y = clamp(e.y, 14, worldH - 16);
 }
 
 // REAPER (L7): high-speed dasher, leaves slash-arcs behind. Cycle: stalk → dash → cooldown.
@@ -2316,8 +2369,8 @@ function updateReaper(e, dt){
     }
   }
   e.x += e.vx * dt; e.y += e.vy * dt;
-  e.x = clamp(e.x, 14, W - 14);
-  e.y = clamp(e.y, 14, H - 16);
+  e.x = clamp(e.x, 14, worldW - 14);
+  e.y = clamp(e.y, 14, worldH - 16);
 }
 
 // BOMBARDIER (L8): slow turret — fires homing missiles (slow-turn) + ring bursts.
@@ -2327,7 +2380,7 @@ function updateBomber(e, dt){
   const d = Math.hypot(dx, dy);
   const a = Math.atan2(dy, dx);
   // Drift slowly toward center; back off if player gets close
-  const cx = W/2, cy = H/2;
+  const cx = worldW/2, cy = worldH/2;
   const ax = Math.atan2(cy - e.y, cx - e.x);
   if(d < 70){ e.vx = -Math.cos(a) * e.speed; e.vy = -Math.sin(a) * e.speed; }
   else      { e.vx = Math.cos(ax) * e.speed * 0.5; e.vy = Math.sin(ax) * e.speed * 0.5; }
@@ -2353,8 +2406,8 @@ function updateBomber(e, dt){
     e.fireCooldown = 1.6;
   }
   e.x += e.vx * dt; e.y += e.vy * dt;
-  e.x = clamp(e.x, 16, W - 16);
-  e.y = clamp(e.y, 16, H - 20);
+  e.x = clamp(e.x, 16, worldW - 16);
+  e.y = clamp(e.y, 16, worldH - 20);
 }
 
 // PHANTOM (L9): teleporting summoner of clones. Real boss is darker; clones flicker.
@@ -2380,14 +2433,14 @@ function updatePhantom(e, dt){
   if(e.phaseT > 5){
     e.phaseT = 0;
     emit(e.x, e.y, 22, '#8e44ad', 30, 130, 0.5);
-    e.x = rand(40, W - 40); e.y = rand(40, H - 40);
+    e.x = rand(40, worldW - 40); e.y = rand(40, worldH - 40);
     emit(e.x, e.y, 22, '#aed6f1', 30, 130, 0.5);
     sfx.teleport();
     for(let i=0;i<2;i++) spawnEnemyAtEdge('runner');
   }
   e.x += e.vx * dt; e.y += e.vy * dt;
-  e.x = clamp(e.x, 14, W - 14);
-  e.y = clamp(e.y, 14, H - 16);
+  e.x = clamp(e.x, 14, worldW - 14);
+  e.y = clamp(e.y, 14, worldH - 16);
 }
 
 // NEMESIS (L10): four-phase final boss.
@@ -2448,8 +2501,8 @@ function updateNemesis(boss, dt){
   boss.vx = tvx; boss.vy = tvy;
   boss.x += boss.vx * dt;
   boss.y += boss.vy * dt;
-  boss.x = clamp(boss.x, 20, W - 20);
-  boss.y = clamp(boss.y, 20, H - 24);
+  boss.x = clamp(boss.x, 20, worldW - 20);
+  boss.y = clamp(boss.y, 20, worldH - 24);
 }
 
 function updateBullet(b, dt){
@@ -2486,13 +2539,13 @@ function updateBullet(b, dt){
   b.x += b.vx * dt;
   b.y += b.vy * dt;
   b.life -= dt;
-  // Plasma bouncing: reflect off the screen edges until bounces are used up.
+  // Plasma bouncing: reflect off the world edges until bounces are used up.
   if(b.bounces && b.bounces > 0){
     let bounced = false;
     if(b.x < 4){ b.x = 4; b.vx = Math.abs(b.vx); bounced = true; }
-    else if(b.x > W - 4){ b.x = W - 4; b.vx = -Math.abs(b.vx); bounced = true; }
+    else if(b.x > worldW - 4){ b.x = worldW - 4; b.vx = -Math.abs(b.vx); bounced = true; }
     if(b.y < 4){ b.y = 4; b.vy = Math.abs(b.vy); bounced = true; }
-    else if(b.y > H - 4){ b.y = H - 4; b.vy = -Math.abs(b.vy); bounced = true; }
+    else if(b.y > worldH - 4){ b.y = worldH - 4; b.vy = -Math.abs(b.vy); bounced = true; }
     if(bounced){
       b.bounces--;
       b.angle = Math.atan2(b.vy, b.vx);
@@ -2500,7 +2553,7 @@ function updateBullet(b, dt){
       emit(b.x, b.y, 3, '#aed6f1', 40, 100, 0.18);
     }
   }
-  if(b.life <= 0 || b.x < -12 || b.x > W+12 || b.y < -12 || b.y > H+12){
+  if(b.life <= 0 || b.x < -12 || b.x > worldW+12 || b.y < -12 || b.y > worldH+12){
     if(b.isGrenade && b.life <= 0){
       // Detonate at end of fuse.
       explode(b.x, b.y, b.explodeRadius || 32, b.explodeDmg || 3);
@@ -2511,11 +2564,13 @@ function updateBullet(b, dt){
 function updatePickup(p, dt){
   p.life -= dt;
   if(p.life <= 0) p.dead = true;
-  // Magnet powerup pulls all pickups toward the player
+  // Magnet powerup pulls nearby pickups toward the player.
+  // Radius is 5× the player's diameter — see "pull pickups 10s" in drawHowTo.
   if(player.magnetTime > 0){
     const dx = player.x - p.x, dy = player.y - p.y;
     const d = Math.hypot(dx, dy);
-    if(d > 1){
+    const magnetRange = player.radius * 10;
+    if(d > 1 && d <= magnetRange){
       const pull = 200;
       p.x += (dx/d) * pull * dt;
       p.y += (dy/d) * pull * dt;
@@ -2587,28 +2642,33 @@ function themeForLevel(idx){
 // Deterministic pseudo-random for decoration placement; same input -> same output.
 function srand(seed){ return ((seed * 9301 + 49297) % 233280) / 233280; }
 
-function drawBackground(theme, idx){
+// `bw`/`bh` are the dims to fill — viewport (W/H) for menus, world (worldW/worldH)
+// for active gameplay (so a 2x level paints its full arena, not just the screen).
+function drawBackground(theme, idx, bw, bh){
   ctx.fillStyle = theme.bg;
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(0, 0, bw, bh);
   ctx.fillStyle = theme.tile;
-  for(let x = 0; x < W; x += 16){
-    for(let y = 0; y < H; y += 16){
+  for(let x = 0; x < bw; x += 16){
+    for(let y = 0; y < bh; y += 16){
       if(((x/16) + (y/16)) % 2 === 0) ctx.fillRect(x, y, 16, 16);
     }
   }
-  if(theme.decor) drawDecor(theme.decor, idx);
+  if(theme.decor) drawDecor(theme.decor, idx, bw, bh);
   ctx.strokeStyle = theme.border;
   ctx.lineWidth = 2;
-  ctx.strokeRect(1, 1, W - 2, H - 2);
+  ctx.strokeRect(1, 1, bw - 2, bh - 2);
 }
 
-function drawDecor(kind, idx){
+function drawDecor(kind, idx, bw, bh){
   const seedBase = idx * 100 + 1;
+  // Scale decoration counts with area so a 2x-larger arena doesn't look bare.
+  const areaScale = (bw * bh) / (W * H);
   if(kind === 'lava'){
     // Glowing magma blobs at fixed positions, ember specks pulsing.
-    for(let i = 0; i < 14; i++){
-      const x = srand(seedBase + i*2) * (W - 20) + 10;
-      const y = srand(seedBase + i*2 + 1) * (H - 20) + 10;
+    const blobs = Math.round(14 * areaScale);
+    for(let i = 0; i < blobs; i++){
+      const x = srand(seedBase + i*2) * (bw - 20) + 10;
+      const y = srand(seedBase + i*2 + 1) * (bh - 20) + 10;
       const r = 3 + srand(seedBase + i*2 + 50) * 3;
       const pulse = 0.55 + 0.45 * Math.sin(stateTime * 1.6 + i);
       ctx.fillStyle = '#7a1c10';
@@ -2621,9 +2681,10 @@ function drawDecor(kind, idx){
       ctx.globalAlpha = 1;
     }
     // Ember specks
-    for(let i = 0; i < 60; i++){
-      const x = (srand(seedBase + i + 500) * W) | 0;
-      const y = (srand(seedBase + i + 600) * H) | 0;
+    const embers = Math.round(60 * areaScale);
+    for(let i = 0; i < embers; i++){
+      const x = (srand(seedBase + i + 500) * bw) | 0;
+      const y = (srand(seedBase + i + 600) * bh) | 0;
       ctx.globalAlpha = 0.35 + 0.35 * Math.sin(stateTime * 2 + i);
       ctx.fillStyle = i % 3 === 0 ? '#f39c12' : '#e74c3c';
       ctx.fillRect(x, y, 1, 1);
@@ -2631,9 +2692,10 @@ function drawDecor(kind, idx){
     ctx.globalAlpha = 1;
   } else if(kind === 'ice'){
     // Frost crystals at fixed spots
-    for(let i = 0; i < 20; i++){
-      const x = (srand(seedBase + i*2) * (W - 16) + 8) | 0;
-      const y = (srand(seedBase + i*2 + 1) * (H - 16) + 8) | 0;
+    const crystals = Math.round(20 * areaScale);
+    for(let i = 0; i < crystals; i++){
+      const x = (srand(seedBase + i*2) * (bw - 16) + 8) | 0;
+      const y = (srand(seedBase + i*2 + 1) * (bh - 16) + 8) | 0;
       ctx.fillStyle = '#aed6f1';
       ctx.fillRect(x, y - 2, 1, 5);
       ctx.fillRect(x - 2, y, 5, 1);
@@ -2641,12 +2703,13 @@ function drawDecor(kind, idx){
       ctx.fillRect(x, y, 1, 1);
     }
     // Drifting snow (animated)
-    for(let i = 0; i < 50; i++){
-      const baseX = srand(seedBase + i + 700) * W;
-      const baseY = srand(seedBase + i + 800) * H;
-      const drift = (stateTime * (10 + (i % 5) * 4)) % H;
+    const flakes = Math.round(50 * areaScale);
+    for(let i = 0; i < flakes; i++){
+      const baseX = srand(seedBase + i + 700) * bw;
+      const baseY = srand(seedBase + i + 800) * bh;
+      const drift = (stateTime * (10 + (i % 5) * 4)) % bh;
       const x = baseX | 0;
-      const y = ((baseY + drift) % H) | 0;
+      const y = ((baseY + drift) % bh) | 0;
       ctx.globalAlpha = 0.4 + 0.3 * ((i % 3) / 3);
       ctx.fillStyle = '#fff';
       ctx.fillRect(x, y, 1, 1);
@@ -2654,9 +2717,10 @@ function drawDecor(kind, idx){
     ctx.globalAlpha = 1;
   } else if(kind === 'forest'){
     // Leaf clusters (small green dot groups)
-    for(let i = 0; i < 28; i++){
-      const cx = (srand(seedBase + i*2) * (W - 20) + 10) | 0;
-      const cy = (srand(seedBase + i*2 + 1) * (H - 20) + 10) | 0;
+    const leaves = Math.round(28 * areaScale);
+    for(let i = 0; i < leaves; i++){
+      const cx = (srand(seedBase + i*2) * (bw - 20) + 10) | 0;
+      const cy = (srand(seedBase + i*2 + 1) * (bh - 20) + 10) | 0;
       ctx.fillStyle = '#1e6840';
       ctx.fillRect(cx, cy, 2, 2);
       ctx.fillStyle = '#27ae60';
@@ -2666,17 +2730,19 @@ function drawDecor(kind, idx){
       ctx.fillRect(cx + 1, cy + 1, 1, 1);
     }
     // Dark patches / underbrush
-    for(let i = 0; i < 10; i++){
-      const x = (srand(seedBase + i + 900) * (W - 30) + 4) | 0;
-      const y = (srand(seedBase + i + 950) * (H - 30) + 4) | 0;
+    const patches = Math.round(10 * areaScale);
+    for(let i = 0; i < patches; i++){
+      const x = (srand(seedBase + i + 900) * (bw - 30) + 4) | 0;
+      const y = (srand(seedBase + i + 950) * (bh - 30) + 4) | 0;
       ctx.fillStyle = '#081608';
       ctx.fillRect(x, y, 8 + (i % 5), 4 + (i % 3));
     }
   } else if(kind === 'void'){
     // Stars at fixed positions with twinkle
-    for(let i = 0; i < 70; i++){
-      const x = (srand(seedBase + i*2) * W) | 0;
-      const y = (srand(seedBase + i*2 + 1) * H) | 0;
+    const stars = Math.round(70 * areaScale);
+    for(let i = 0; i < stars; i++){
+      const x = (srand(seedBase + i*2) * bw) | 0;
+      const y = (srand(seedBase + i*2 + 1) * bh) | 0;
       const tw = 0.3 + 0.7 * Math.abs(Math.sin(stateTime * 1.5 + i * 0.7));
       ctx.globalAlpha = tw;
       ctx.fillStyle = (i % 8 === 0) ? '#bb8fce' : '#fff';
@@ -2691,9 +2757,10 @@ function drawDecor(kind, idx){
     ctx.globalAlpha = 1;
   } else if(kind === 'arena'){
     // Subtle blue accent dots
-    for(let i = 0; i < 12; i++){
-      const x = (srand(seedBase + i*2) * W) | 0;
-      const y = (srand(seedBase + i*2 + 1) * H) | 0;
+    const dots = Math.round(12 * areaScale);
+    for(let i = 0; i < dots; i++){
+      const x = (srand(seedBase + i*2) * bw) | 0;
+      const y = (srand(seedBase + i*2 + 1) * bh) | 0;
       ctx.globalAlpha = 0.5 + 0.4 * Math.sin(stateTime * 1.2 + i * 0.6);
       ctx.fillStyle = '#5dade2';
       ctx.fillRect(x, y, 1, 1);
@@ -2707,23 +2774,34 @@ function drawDecor(kind, idx){
 function draw(){
   ctx.save();
 
-  // Themed background — uses level theme during PLAYING/LEVEL_COMPLETE/GAME_OVER/VICTORY,
-  // and the menu theme everywhere else.
+  // Game states render the world (entities, particles, themed background) inside a
+  // camera-translated transform so 2x-arena levels can scroll. Menus / character
+  // select / how-to are pure screen-space, no translation.
   const useGameTheme = state === STATE.PLAYING || state === STATE.LEVEL_COMPLETE
                     || state === STATE.GAME_OVER || state === STATE.VICTORY;
-  drawBackground(useGameTheme ? themeForLevel(levelIdx) : THEMES.menu, useGameTheme ? levelIdx : 0);
 
-  if(state === STATE.MENU) drawMenu();
-  else if(state === STATE.HOWTO) drawHowTo();
-  else if(state === STATE.CHARACTER_SELECT) drawCharacterSelect();
-  else if(state === STATE.PLAYING) drawGame();
-  else if(state === STATE.LEVEL_COMPLETE){ drawGame(); drawLevelComplete(); }
-  else if(state === STATE.GAME_OVER){ drawGame(); drawGameOver(); }
-  else if(state === STATE.VICTORY){ drawGame(); drawVictory(); }
+  if(useGameTheme){
+    ctx.save();
+    ctx.translate(-Math.floor(camX), -Math.floor(camY));
+    drawBackground(themeForLevel(levelIdx), levelIdx, worldW, worldH);
+    drawGame();
+    ctx.restore();
+    drawHUD();
+    if(state === STATE.LEVEL_COMPLETE) drawLevelComplete();
+    else if(state === STATE.GAME_OVER) drawGameOver();
+    else if(state === STATE.VICTORY) drawVictory();
+  } else {
+    drawBackground(THEMES.menu, 0, W, H);
+    if(state === STATE.MENU) drawMenu();
+    else if(state === STATE.HOWTO) drawHowTo();
+    else if(state === STATE.CHARACTER_SELECT) drawCharacterSelect();
+  }
 
   ctx.restore();
 }
 
+// World-space drawing only: entities and particles. HUD is screen-space and
+// is called by `draw()` after the camera translate is restored.
 function drawGame(){
   const list = entities.slice().sort((a,b) => a.y - b.y);
   for(const e of list){
@@ -2742,7 +2820,6 @@ function drawGame(){
     ctx.fillRect(Math.floor(p.x), Math.floor(p.y), p.size, p.size);
   }
   ctx.globalAlpha = 1;
-  drawHUD();
 }
 
 function drawPlayer(p){
@@ -3132,18 +3209,18 @@ function drawMenu(){
     ctx.lineWidth = 1;
     ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1);
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 10px monospace';
+    ctx.font = 'bold 9px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('L' + (i + 1), box.x + box.w / 2, box.y + 12);
+    ctx.fillText('L' + (i + 1), box.x + box.w / 2, box.y + 9);
     if(cleared){
       // Green check mark in the corner
       ctx.fillStyle = '#2ecc71';
-      ctx.font = 'bold 9px monospace';
-      ctx.fillText('CLEAR', box.x + box.w / 2, box.y + 21);
+      ctx.font = 'bold 7px monospace';
+      ctx.fillText('CLEAR', box.x + box.w / 2, box.y + 16);
     } else {
       ctx.fillStyle = '#7f8c8d';
       ctx.font = 'bold 7px monospace';
-      ctx.fillText('—', box.x + box.w / 2, box.y + 20);
+      ctx.fillText('—', box.x + box.w / 2, box.y + 16);
     }
   }
   ctx.textAlign = 'center';
@@ -3180,8 +3257,8 @@ function guideButtonRect(){ return { x: W - 64, y: 8, w: 56, h: 16 }; }
 
 // Geometry helper shared by drawMenu + handleMenu so click targets stay in sync.
 function levelBoxRect(i){
-  const cols = 5, rows = 3;
-  const bw = 30, bh = 22, gap = 4;
+  const cols = 5, rows = 4;
+  const bw = 30, bh = 18, gap = 3;
   const totalW = cols * bw + (cols - 1) * gap;
   const xs = Math.floor((W - totalW) / 2);
   const ys = 124;
@@ -3345,7 +3422,7 @@ function drawHowTo(){
     [SPR.p_damage, 'DAMAGE', '2x damage 8s',     '#e74c3c'],
     [SPR.p_slowmo, 'SLOW',   'enemies @40% 5s',  '#3498db'],
     [SPR.p_score,  'x2',     'double score 10s', '#f1c40f'],
-    [SPR.p_magnet, 'MAGNET', 'pull pickups 10s', '#e67e22']
+    [SPR.p_magnet, 'MAGNET', 'pull nearby pickups 10s', '#e67e22']
   ];
   pw.forEach((p, i) => {
     const yy = 72 + i*10;
@@ -3459,7 +3536,7 @@ function drawVictory(){
   ctx.fillText('VICTORY!', W/2, H/2 - 18);
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 10px monospace';
-  ctx.fillText('All 15 bosses fell. The arena is yours.', W/2, H/2 + 4);
+  ctx.fillText('All ' + LEVELS.length + ' bosses fell. The arena is yours.', W/2, H/2 + 4);
   ctx.fillText('FINAL SCORE: ' + score, W/2, H/2 + 22);
   if(score === highScore && score > 0){
     ctx.fillStyle = '#f1c40f';

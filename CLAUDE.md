@@ -8,7 +8,7 @@ A browser-based top-down arena shooter. **The entire game lives in `index.html`*
 
 `shooter game.html` is an older untracked draft — ignore it unless asked. The shipped game is `index.html`, served from GitHub Pages at https://benjaminwu1.github.io/top-down-shooter/ (the `.nojekyll` file disables Jekyll on Pages so the raw file is served as-is).
 
-`README.md` is out of date — it still describes 5 levels and 5 bosses. The shipped game has **15 levels and 15 bosses**, a persistent blue drone companion, and a summonable sword-knight ally on the X key. Trust this file and the code, not the README, for current scope.
+`README.md` is out of date — it still describes 5 levels and 5 bosses. The shipped game has **20 levels and 20 bosses**, a persistent blue drone companion, and a summonable sword-knight ally on the X key. Trust this file and the code, not the README, for current scope.
 
 ## Running / "Building"
 
@@ -52,12 +52,12 @@ Before the conversation closes, run `git status` and confirm the tree is clean. 
 
 ## Architecture
 
-`index.html` is organized as one ~3400-line script with banner-comment section headers (`// =====` blocks). The major sections, in order:
+`index.html` is organized as one ~3500-line script with banner-comment section headers (`// =====` blocks). The major sections, in order:
 
 1. **CONSTANTS & CANVAS** — fixed 480×270 pixel canvas, integer-scaled to the window via `resize()`. `imageSmoothingEnabled=false` is load-bearing for the pixel-art look.
 2. **SPRITES** — every sprite is a `{pal, rows}` object built by `S(pal, rows)`, where `rows` is an array of ASCII strings and `pal` maps each character to a CSS color (or `null` for transparent). `drawSprite` walks the rows and `fillRect`s a 1×1 pixel per non-null character. Most entities have two frames (`_a`/`_b`) animated by a `frameT`/`frame` timer.
 3. **AUDIO** — `tone()` / `noiseHit()` synthesize chiptune SFX with oscillators + filtered noise. `initAudio()` lazy-creates the `AudioContext` on the first mouse click (browsers block autoplay).
-4. **LEVELS** — `LEVELS` is a **15-element** array of `{total, rate, mix, boss, bossName?}`. `mix` is a weighted list consumed by `pickWeighted()` for enemy spawn rolls. The boss kind for each level is in `boss`; the displayed name comes from `BOSS_NAMES[boss]` unless the level provides an override `bossName` (L11-L15 reuse the L6-L10 boss kinds with new themed names — STORMCALLER, WARDEN, IRONSIDES, VOIDWALKER, ARCHDEMON). Non-boss enemy HP/speed scales with level via `enemyScale() = 1 + levelIdx*0.08` (≈1.0 at L1 → ≈2.12 at L15) inside `createEnemy`. Bosses keep fixed per-kind stats tuned for their level.
+4. **LEVELS** — `LEVELS` is a **20-element** array of `{total, rate, mix, boss, bossName?}`. `mix` is a weighted list consumed by `pickWeighted()` for enemy spawn rolls. **Mix weights must sum to 1.0** — `pickWeighted` does not normalize; entries past the cumulative-1.0 mark are unreachable. The boss kind for each level is in `boss`; the displayed name comes from `BOSS_NAMES[boss]` unless the level provides an override `bossName`. L11-L15 reuse the L6-L10 boss AIs with new names (STORMCALLER, WARDEN, IRONSIDES, VOIDWALKER, ARCHDEMON); L16-L20 reuse them again as TEMPEST, OBSIDIAN, CATACLYSM, ABYSSAL, GODKILLER. Non-boss enemy HP/speed scales with level via `enemyScale() = 1 + levelIdx*0.08` (≈1.0 at L1 → ≈2.52 at L20) inside `createEnemy`. Bosses keep fixed per-kind stats tuned for their level.
 5. **STATE** — `STATE` enum (`MENU`, `HOWTO`, `PLAYING`, `LEVEL_COMPLETE`, `GAME_OVER`, `VICTORY`) drives both `update()` and `draw()` via dispatch on the `state` variable. High score persists in `localStorage` under the key `shooter_high`.
 6. **INPUT** — global `keys[]` map plus a `mouse` object; mouse coords are scaled from CSS pixels back into the 480×270 logical space.
 7. **ENTITY FACTORIES** — `createPlayer`, `createEnemy(kind, ...)`, `createBullet(...)`, `createPickup(...)`, `createCompanion()`, `createSwordAlly(x, y)`. All entities are plain objects with a `type` field (`'player'`, `'enemy'`, `'bullet'`, `'pickup'`, `'companion'`, `'sword_ally'`) and live in the global `entities` array. Dead entities set `dead:true` and are filtered out once per frame. The blue drone companion is also tracked via a global `companion` reference for convenient access; sword allies are only found by iterating `entities` (there can be at most one alive at a time — see the summon skill below).
@@ -107,10 +107,13 @@ The old M-slot was removed; the X/C HUD is rendered by `drawSkillHUD()`. Several
 
 These changes are recent enough to be worth recording so future passes don't unintentionally regress them:
 
-- **15 levels / 15 bosses** — L11-L15 reuse L6-L10 boss kinds with bossName overrides. Victory screen says "All 15 bosses fell."
+- **20 levels / 20 bosses** — L11-L15 and L16-L20 each reuse L6-L10 boss AIs with bossName overrides. Victory screen reads "All N bosses fell" using `LEVELS.length` (no hardcoded number).
+- **L16-L20 endgame curve** — totals 66→92, rates 0.36→0.28, mixes shed grunt entirely and lean on tank / shooter / charger / exploder. L20 mix has no runners, just the heavies. Difficulty above L15 is meant to feel like a slog, not a difficulty wall.
+- **Level-select grid is 5×4** — `levelBoxRect` uses `bw=30, bh=18, gap=3` to fit 20 boxes between `ys=124` and `y≈205`, leaving room for the HIGH SCORE line at `y=215`. If you add more levels, this layout will need another reshape.
 - **Companion stats tuned up** — HP 6, fire rate 0.25 s, bullet dmg 3 / speed 260 / life 1.5, detection radius 140 units, post-hit invuln 0.85 s. (Was HP 3 / 0.32 s / dmg 1 / speed 220 / radius 110 / invuln 0.7 originally.)
 - **Sword ally stats** — HP 4 (was 3), `swingDmg: 5` (was 3), `attackArc` 120°, `attackRange` 24, `attackRate` 0.55 s, 30 s spawn invuln 0.3 s.
-- **Tank fuel** — `maxFuel: 8` (was 5), giving ~8 s of continuous flame. Flamethrower DPS now scales with the `damageTime` powerup (matches `fireWeapon` behaviour).
+- **Tank overall buff pass** — Tank stats raised significantly so it's competitive with Soldier/Scout: `hp: 8→12`, `speed: 80→95`, `damageMult: 1.0→1.2`, `startShield: 3→4`, `shieldMax: 3→5` (tank only), `maxFuel: 8→12`. Flamethrower: `range: 180→210`, `halfAngle: 0.6→0.7` (~40°), `dps: 5→7`. Flamethrower DPS still scales with `damageMult` and the `damageTime` powerup. Tank's `desc` text in `CHARACTERS` updated to `'HEAVY · +20% DAMAGE · FLAMETHROWER (RMB)'`.
+- **Tank now has a dedicated default weapon (heavy slug)** — `fireWeapon`'s class-default branch added a `player.char === 'tank'` case BEFORE the soldier-pistol fallthrough. Tank slug: `dmg: 2`, `radius: 3`, `speed: 300`, `life: 1.6`. Same `fireRate` as the pistol (so cadence is unchanged), but each shot does 2× base damage (≈2.4 after `damageMult: 1.2`). The old comment "Tank's left-click is the same as Soldier's pistol" is no longer true — update it if you reshuffle this function.
 - **Tank drop pool** — fuel and armor get real slices; both pools sum to 1.0. The fuel-never-drops bug from the prior implementation is fixed.
 - **Armor pickup (`armor`)** — "extra protective case". Raises `shieldMax` to 5 (cap was 3), refills shield, grants 1.5 s invuln on grab.
 - **Magnet pickup** — was 0.04 weight (≈0.9% per kill). Bumped to 0.06-0.08 (≈1.3-1.8% per kill).
@@ -119,4 +122,14 @@ These changes are recent enough to be worth recording so future passes don't uni
 
 ### Coordinate system
 
-World is logical 480×270. All gameplay positions, radii, and speeds are in those units. `resize()` only scales the canvas element's CSS size — the backing store stays 480×270 and the mouse handler rescales pointer coords into world space. Don't accidentally use `clientX`/`clientY` directly.
+World is logical, viewport is 480×270. For most levels world == viewport, but **L14-L20 use a 2× world (`worldW = 960, worldH = 540`)** with a camera that follows the player. The relevant globals near the top of the script:
+
+- `W, H` — constants, 480×270. The on-screen viewport. **Use for HUD / menu / mouse-screen-space math.**
+- `worldW, worldH` — mutable, set in `startLevel(idx)`. The playable arena. **Use for entity clamps, bullet despawn/bounce, spawn-edge calculations, world-center positions, decor placement.**
+- `camX, camY` — top-left corner of the camera in world space. Smoothly lerped toward `(player.x - W/2, player.y - H/2)` by `updateCamera(dt)`, clamped so the view never crosses world edges. Stays at `(0,0)` whenever `worldW === W`.
+
+**Mouse coordinates are screen-space.** `mouse.x/y` are in `0..W, 0..H` (the visible canvas), NOT world space. To get the cursor's world position add the camera: `mouse.x + camX, mouse.y + camY`. The player aim angle and Scout's `blink` skill do this; new code that reads the cursor in gameplay must do the same.
+
+**`draw()` flow on game states**: `ctx.save() → translate(-camX, -camY) → drawBackground(theme, idx, worldW, worldH) → drawGame()` (entities + particles only) `→ ctx.restore()`, THEN `drawHUD()` and any overlay (LEVEL_COMPLETE / GAME_OVER / VICTORY). HUD and overlays render un-translated so they stay pinned to the screen. The boss HP bar, "ENEMIES: N" counter, and boss-arrival flash are all screen-space — they don't follow the boss across the arena. `drawBackground` and `drawDecor` scale their decoration counts by `(bw*bh)/(W*H)` so 2× arenas don't look bare.
+
+`resize()` only scales the canvas element's CSS size — the backing store stays 480×270×PX and the mouse handler rescales pointer coords into the 480×270 screen space. Don't accidentally use `clientX`/`clientY` directly.
