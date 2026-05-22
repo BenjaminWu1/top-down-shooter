@@ -1,0 +1,18 @@
+# OS detritus
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Logs
+*.log
+
+# Personal/local notes
+notes.local.md
+*.local.*
