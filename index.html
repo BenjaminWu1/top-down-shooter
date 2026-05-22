@@ -320,6 +320,47 @@ const SPR = {
     ".3..3.",
     "3....3"
   ]),
+  // ---- Powerups (passive temporary buffs) ----
+  p_speed: S({'.':null,'1':'#fff','2':'#e91e63'}, [
+    ".222..",
+    "22211.",
+    ".221..",
+    "..122.",
+    ".11222",
+    "..222."
+  ]),
+  p_damage: S({'.':null,'1':'#fff','2':'#e74c3c','3':'#7f8c8d'}, [
+    "..22..",
+    ".1111.",
+    "..22..",
+    "..22..",
+    "..22..",
+    ".3223."
+  ]),
+  p_slowmo: S({'.':null,'1':'#fff','2':'#3498db','e':'#aed6f1'}, [
+    "..22..",
+    ".2ee2.",
+    "21e112",
+    "211e12",
+    ".2ee2.",
+    "..22.."
+  ]),
+  p_score: S({'.':null,'1':'#fff','2':'#f1c40f'}, [
+    "..11..",
+    ".2112.",
+    ".1112.",
+    ".2111.",
+    ".2112.",
+    "..11.."
+  ]),
+  p_magnet: S({'.':null,'1':'#bdc3c7','2':'#e74c3c'}, [
+    "2....2",
+    "2....2",
+    "21..12",
+    "21..12",
+    ".2222.",
+    "..22.."
+  ]),
   // ---- Bullets ----
   bullet_p: S({'.':null,'1':'#f1c40f','2':'#fff'}, [
     ".11.",
@@ -470,6 +511,7 @@ let shakeTime = 0;
 let shakeAmt = 0;
 let stateTime = 0;
 let bossSpawnPulse = 0;
+let slowMoTime = 0;          // global powerup — slows enemies & enemy bullets
 
 // ============================================================
 // INPUT
@@ -514,6 +556,8 @@ function createPlayer(){
     fireCooldown:0, fireRate:0.14,
     spreadTime:0, rapidTime:0, laserTime:0,
     rocketAmmo:0, shieldHp:0, shieldMax:3,
+    // Passive powerups (temporary buffs)
+    speedTime:0, damageTime:0, magnetTime:0, scoreTime:0,
     hitFlash:0, invuln:0, frame:0, frameT:0, dead:false
   };
 }
@@ -648,7 +692,14 @@ function update(dt){
 }
 
 function updatePlaying(dt){
-  // ---- Player movement ----
+  // ---- Decay global & powerup timers ----
+  if(slowMoTime > 0) slowMoTime -= dt;
+  if(player.speedTime > 0)  player.speedTime  -= dt;
+  if(player.damageTime > 0) player.damageTime -= dt;
+  if(player.magnetTime > 0) player.magnetTime -= dt;
+  if(player.scoreTime > 0)  player.scoreTime  -= dt;
+
+  // ---- Player movement (Speed powerup boosts it) ----
   let dx=0, dy=0;
   if(keys['ArrowLeft']||keys['KeyA']) dx -= 1;
   if(keys['ArrowRight']||keys['KeyD']) dx += 1;
@@ -656,8 +707,9 @@ function updatePlaying(dt){
   if(keys['ArrowDown']||keys['KeyS']) dy += 1;
   const mag = Math.hypot(dx, dy);
   if(mag > 0){ dx /= mag; dy /= mag; }
-  player.x += dx * player.speed * dt;
-  player.y += dy * player.speed * dt;
+  const speedMult = player.speedTime > 0 ? 1.5 : 1;
+  player.x += dx * player.speed * speedMult * dt;
+  player.y += dy * player.speed * speedMult * dt;
   player.x = clamp(player.x, 8, W-8);
   player.y = clamp(player.y, 8, H-10);
 
@@ -701,11 +753,15 @@ function updatePlaying(dt){
     }
   }
 
-  // ---- Update entities ----
+  // ---- Update entities (Slow-Mo powerup scales enemy & enemy-bullet dt) ----
+  const enemyDt = dt * (slowMoTime > 0 ? 0.4 : 1);
   for(const e of entities){
     if(e.dead) continue;
-    if(e.type === 'enemy') updateEnemy(e, dt);
-    else if(e.type === 'bullet') updateBullet(e, dt);
+    if(e.type === 'enemy') updateEnemy(e, enemyDt);
+    else if(e.type === 'bullet'){
+      const bdt = (e.owner === 'enemy') ? enemyDt : dt;
+      updateBullet(e, bdt);
+    }
     else if(e.type === 'pickup') updatePickup(e, dt);
     if(e.hitFlash > 0) e.hitFlash -= dt;
   }
@@ -805,11 +861,13 @@ function updatePlaying(dt){
 // ============================================================
 function fireWeapon(mx, my){
   // Priority: rocket ammo > laser > spread > default. Rapid modifies cooldown.
+  // Damage powerup doubles bullet damage (and rocket damage).
   const rapidFactor = player.rapidTime > 0 ? 0.5 : 1;
+  const dmgMult = player.damageTime > 0 ? 2 : 1;
 
   if(player.rocketAmmo > 0){
     entities.push(createBullet(mx, my, player.angle, 'player', {
-      speed: 180, dmg: 2, explosive: true, explodeRadius: 28,
+      speed: 180, dmg: 2 * dmgMult, explosive: true, explodeRadius: 28,
       sprite: SPR.bullet_rocket, radius: 3, life: 2.2
     }));
     player.rocketAmmo--;
@@ -821,7 +879,7 @@ function fireWeapon(mx, my){
 
   if(player.laserTime > 0){
     entities.push(createBullet(mx, my, player.angle, 'player', {
-      speed: 360, pierce: true, dmg: 1,
+      speed: 360, pierce: true, dmg: 1 * dmgMult,
       sprite: SPR.bullet_laser, radius: 2, life: 1.0
     }));
     player.fireCooldown = 0.10 * rapidFactor;
@@ -832,28 +890,35 @@ function fireWeapon(mx, my){
 
   if(player.spreadTime > 0){
     const spr = 0.22;
-    entities.push(createBullet(mx, my, player.angle - spr, 'player'));
-    entities.push(createBullet(mx, my, player.angle,        'player'));
-    entities.push(createBullet(mx, my, player.angle + spr, 'player'));
+    entities.push(createBullet(mx, my, player.angle - spr, 'player', { dmg: 1 * dmgMult }));
+    entities.push(createBullet(mx, my, player.angle,        'player', { dmg: 1 * dmgMult }));
+    entities.push(createBullet(mx, my, player.angle + spr, 'player', { dmg: 1 * dmgMult }));
     player.fireCooldown = 0.12 * rapidFactor;
     emit(mx, my, 3, '#f1c40f', 30, 100, 0.18);
     sfx.shoot();
     return;
   }
 
-  entities.push(createBullet(mx, my, player.angle, 'player'));
+  entities.push(createBullet(mx, my, player.angle, 'player', { dmg: 1 * dmgMult }));
   player.fireCooldown = player.fireRate * rapidFactor;
   emit(mx, my, 3, '#f1c40f', 30, 100, 0.18);
   sfx.shoot();
 }
 
 function applyPickup(kind){
+  // Equipment
   if(kind === 'health')   player.hp = Math.min(player.maxHp, player.hp + 1);
   else if(kind === 'spread') player.spreadTime = Math.max(player.spreadTime, 8);
   else if(kind === 'rapid')  player.rapidTime  = Math.max(player.rapidTime,  8);
   else if(kind === 'laser')  player.laserTime  = Math.max(player.laserTime,  7);
   else if(kind === 'rocket') player.rocketAmmo = Math.min(15, player.rocketAmmo + 6);
   else if(kind === 'shield') player.shieldHp   = player.shieldMax;
+  // Powerups (passive temporary buffs)
+  else if(kind === 'speed')   player.speedTime  = Math.max(player.speedTime,  8);
+  else if(kind === 'damage')  player.damageTime = Math.max(player.damageTime, 8);
+  else if(kind === 'slowmo')  slowMoTime        = Math.max(slowMoTime,        5);
+  else if(kind === 'score2x') player.scoreTime  = Math.max(player.scoreTime, 10);
+  else if(kind === 'magnet')  player.magnetTime = Math.max(player.magnetTime,10);
 }
 
 // ============================================================
@@ -877,7 +942,8 @@ function damagePlayer(amount){
 
 function killEnemy(en){
   en.dead = true;
-  score += en.score;
+  const scoreMult = player.scoreTime > 0 ? 2 : 1;
+  score += en.score * scoreMult;
   emit(en.x, en.y, en.isBoss ? 40 : 14,
        en.isBoss ? '#9b59b6' : '#c0392b', 50, 200, en.isBoss ? 0.9 : 0.6);
   if(en.kind === 'tank'){
@@ -908,10 +974,10 @@ function killEnemy(en){
       entities.push(e2);
     }
   }
-  // Random drop from non-boss
-  if(!en.isBoss && Math.random() < 0.18){
-    const kinds = ['health','spread','rapid','shield','rocket','laser'];
-    const weights = [0.40, 0.14, 0.14, 0.12, 0.10, 0.10];
+  // Random drop from non-boss (6 equipment + 5 powerups, weighted)
+  if(!en.isBoss && Math.random() < 0.20){
+    const kinds   = ['health','spread','rapid','shield','rocket','laser','speed','damage','slowmo','score2x','magnet'];
+    const weights = [ 0.28,   0.10,    0.10,   0.08,    0.07,    0.07,   0.07,   0.07,    0.06,    0.05,     0.05    ];
     const r = Math.random();
     let acc = 0;
     let pick = 'health';
@@ -1167,6 +1233,16 @@ function updateBullet(b, dt){
 function updatePickup(p, dt){
   p.life -= dt;
   if(p.life <= 0) p.dead = true;
+  // Magnet powerup pulls all pickups toward the player
+  if(player.magnetTime > 0){
+    const dx = player.x - p.x, dy = player.y - p.y;
+    const d = Math.hypot(dx, dy);
+    if(d > 1){
+      const pull = 200;
+      p.x += (dx/d) * pull * dt;
+      p.y += (dy/d) * pull * dt;
+    }
+  }
 }
 
 // ============================================================
@@ -1258,6 +1334,7 @@ function drawPlayer(p){
   else if(p.laserTime > 0){ gunCol = '#27ae60'; tipCol = '#f1c40f'; }
   else if(p.spreadTime > 0){ gunCol = '#7d6608'; tipCol = '#f1c40f'; }
   else if(p.rapidTime > 0){ gunCol = '#a04000'; tipCol = '#e67e22'; }
+  if(p.damageTime > 0){ tipCol = '#e74c3c'; }  // Damage buff: red barrel tip
   ctx.fillStyle = gunCol;
   ctx.fillRect(0, -1, 8, 3);
   ctx.fillStyle = tipCol;
@@ -1341,17 +1418,21 @@ function drawBulletEntity(b){
 
 function drawPickupEntity(p){
   if(p.life < 3 && Math.floor(p.life * 6) % 2) return;
-  let sp;
-  if(p.kind === 'health') sp = SPR.p_health;
-  else if(p.kind === 'spread') sp = SPR.p_spread;
-  else if(p.kind === 'rapid') sp = SPR.p_rapid;
-  else if(p.kind === 'shield') sp = SPR.p_shield;
-  else if(p.kind === 'rocket') sp = SPR.p_rocket;
-  else if(p.kind === 'laser') sp = SPR.p_laser;
+  const sprMap = {
+    health: SPR.p_health, spread: SPR.p_spread, rapid: SPR.p_rapid,
+    shield: SPR.p_shield, rocket: SPR.p_rocket, laser: SPR.p_laser,
+    speed: SPR.p_speed,   damage: SPR.p_damage, slowmo: SPR.p_slowmo,
+    score2x: SPR.p_score, magnet: SPR.p_magnet
+  };
+  const sp = sprMap[p.kind];
   if(!sp) return;
   const off = Math.sin(stateTime * 6 + p.x) * 1.2;
-  // glow halo
-  const glowColors = { health:'#e74c3c', spread:'#f1c40f', rapid:'#e67e22', shield:'#1abc9c', rocket:'#bdc3c7', laser:'#27ae60' };
+  const glowColors = {
+    health:'#e74c3c', spread:'#f1c40f', rapid:'#e67e22',
+    shield:'#1abc9c', rocket:'#bdc3c7', laser:'#27ae60',
+    speed:'#e91e63',  damage:'#e74c3c', slowmo:'#3498db',
+    score2x:'#f1c40f', magnet:'#e74c3c'
+  };
   ctx.fillStyle = glowColors[p.kind] || '#fff';
   ctx.globalAlpha = 0.2 + 0.2 * Math.sin(stateTime * 8);
   ctx.fillRect(Math.floor(p.x) - sp.w/2 - 1, Math.floor(p.y + off) - sp.h/2 - 1, sp.w + 2, sp.h + 2);
@@ -1454,6 +1535,12 @@ function drawWeaponHUD(){
     ctx.fillText('x' + player.rocketAmmo, x + 7, y - 1);
     x += 36;
   }
+  // Passive powerups
+  if(player.speedTime > 0)  draw('SPEED', SPR.p_speed,  player.speedTime,  8,  '#e91e63');
+  if(player.damageTime > 0) draw('DMG',   SPR.p_damage, player.damageTime, 8,  '#e74c3c');
+  if(slowMoTime > 0)        draw('SLOW',  SPR.p_slowmo, slowMoTime,        5,  '#3498db');
+  if(player.scoreTime > 0)  draw('x2',    SPR.p_score,  player.scoreTime,  10, '#f1c40f');
+  if(player.magnetTime > 0) draw('MAG',   SPR.p_magnet, player.magnetTime, 10, '#e74c3c');
 }
 
 function drawMenu(){
@@ -1470,7 +1557,7 @@ function drawMenu(){
 
   ctx.font = 'bold 8px monospace';
   ctx.fillStyle = '#bdc3c7';
-  ctx.fillText('5 levels · 5 bosses · 6 weapons', W/2, 115);
+  ctx.fillText('5 levels · 5 bosses · 6 weapons · 5 powerups', W/2, 115);
 
   const sh = clickedRect(W/2 - 60, 140, 120, 24);
   ctx.fillStyle = sh ? '#3498db' : '#1f4e6b';
@@ -1507,62 +1594,72 @@ function drawMenu(){
 
 function drawHowTo(){
   ctx.textAlign = 'center';
-  ctx.font = 'bold 14px monospace';
+  ctx.font = 'bold 13px monospace';
   ctx.fillStyle = '#f1c40f';
-  ctx.fillText('HOW TO PLAY', W/2, 28);
+  ctx.fillText('HOW TO PLAY', W/2, 22);
 
-  ctx.font = 'bold 8px monospace';
+  ctx.font = 'bold 7px monospace';
   ctx.textAlign = 'left';
-  const leftX = 40;
-  const lines = [
+  const ctrl = [
     ['MOVE',  'WASD / ARROWS'],
     ['AIM',   'MOUSE'],
-    ['SHOOT', 'CLICK or HOLD']
+    ['SHOOT', 'CLICK or HOLD'],
   ];
-  ctx.fillStyle = '#ecf0f1';
-  lines.forEach((l, i) => {
-    ctx.fillStyle = '#3498db'; ctx.fillText(l[0], leftX, 50 + i*11);
-    ctx.fillStyle = '#fff';    ctx.fillText(l[1], leftX + 50, 50 + i*11);
+  ctrl.forEach((l, i) => {
+    ctx.fillStyle = '#3498db'; ctx.fillText(l[0], 16 + i*120, 38);
+    ctx.fillStyle = '#fff';    ctx.fillText(l[1], 16 + i*120 + 32, 38);
   });
 
-  // Equipment legend
-  ctx.fillStyle = '#f1c40f';
+  // Three columns: EQUIPMENT, POWERUPS, BOSSES
+  const colX = [14, 174, 324];
+
   ctx.font = 'bold 9px monospace';
-  ctx.fillText('EQUIPMENT', leftX, 96);
+  ctx.fillStyle = '#f1c40f'; ctx.fillText('EQUIPMENT', colX[0], 60);
+  ctx.fillStyle = '#e91e63'; ctx.fillText('POWERUPS',  colX[1], 60);
+  ctx.fillStyle = '#9b59b6'; ctx.fillText('BOSSES',    colX[2], 60);
 
   ctx.font = 'bold 7px monospace';
+
   const eq = [
-    [SPR.p_health, 'HEALTH',  '+1 HP',                       '#e74c3c'],
-    [SPR.p_spread, 'SPREAD',  '3-bullet cone for 8 sec',     '#f1c40f'],
-    [SPR.p_rapid,  'RAPID',   'half cooldown for 8 sec',     '#e67e22'],
-    [SPR.p_shield, 'SHIELD',  'absorbs 3 hits',              '#1abc9c'],
-    [SPR.p_rocket, 'ROCKET',  '+6 explosive AOE ammo',       '#bdc3c7'],
-    [SPR.p_laser,  'LASER',   'piercing beam for 7 sec',     '#27ae60']
+    [SPR.p_health, 'HP',     '+1 health',          '#e74c3c'],
+    [SPR.p_spread, 'SPREAD', '3-shot 8s',          '#f1c40f'],
+    [SPR.p_rapid,  'RAPID',  'half cooldown 8s',   '#e67e22'],
+    [SPR.p_shield, 'SHIELD', 'absorb 3 hits',      '#1abc9c'],
+    [SPR.p_rocket, 'ROCKET', '+6 AOE ammo',        '#bdc3c7'],
+    [SPR.p_laser,  'LASER',  'piercing beam 7s',   '#27ae60']
   ];
   eq.forEach((e, i) => {
-    const yy = 106 + i*11;
-    drawSprite(e[0], leftX, yy - 5);
-    ctx.fillStyle = e[3];
-    ctx.fillText(e[1], leftX + 9, yy);
-    ctx.fillStyle = '#bdc3c7';
-    ctx.fillText(e[2], leftX + 60, yy);
+    const yy = 72 + i*12;
+    drawSprite(e[0], colX[0], yy - 5);
+    ctx.fillStyle = e[3];    ctx.fillText(e[1], colX[0] + 9, yy);
+    ctx.fillStyle = '#bdc3c7'; ctx.fillText(e[2], colX[0] + 50, yy);
   });
 
-  // Bosses legend
-  ctx.fillStyle = '#9b59b6';
-  ctx.font = 'bold 9px monospace';
-  ctx.fillText('BOSSES', leftX + 220, 96);
-  ctx.font = 'bold 7px monospace';
+  const pw = [
+    [SPR.p_speed,  'SPEED',  '+50% move 8s',     '#e91e63'],
+    [SPR.p_damage, 'DAMAGE', '2x damage 8s',     '#e74c3c'],
+    [SPR.p_slowmo, 'SLOW',   'enemies @40% 5s',  '#3498db'],
+    [SPR.p_score,  'x2',     'double score 10s', '#f1c40f'],
+    [SPR.p_magnet, 'MAGNET', 'pull pickups 10s', '#e67e22']
+  ];
+  pw.forEach((p, i) => {
+    const yy = 72 + i*12;
+    drawSprite(p[0], colX[1], yy - 5);
+    ctx.fillStyle = p[3];    ctx.fillText(p[1], colX[1] + 9, yy);
+    ctx.fillStyle = '#bdc3c7'; ctx.fillText(p[2], colX[1] + 50, yy);
+  });
+
   const bosses = [
-    ['L1 BRUISER',  'charges & cross bursts'],
-    ['L2 NEEDLE',   'teleports, aimed shots'],
-    ['L3 HYDRA',    'splits when killed'],
-    ['L4 CONJURER', 'summons & ring blasts'],
-    ['L5 OVERLORD', '3-phase ultimate boss']
+    ['L1 BRUISER',  'charge + cross'],
+    ['L2 NEEDLE',   'teleport sniper'],
+    ['L3 HYDRA',    'splits on death'],
+    ['L4 CONJURER', 'summon + rings'],
+    ['L5 OVERLORD', '3-phase boss']
   ];
   bosses.forEach((b, i) => {
-    ctx.fillStyle = '#e74c3c'; ctx.fillText(b[0], leftX + 220, 106 + i*11);
-    ctx.fillStyle = '#bdc3c7'; ctx.fillText(b[1], leftX + 290, 106 + i*11);
+    const yy = 72 + i*12;
+    ctx.fillStyle = '#e74c3c'; ctx.fillText(b[0], colX[2], yy);
+    ctx.fillStyle = '#bdc3c7'; ctx.fillText(b[1], colX[2] + 60, yy);
   });
 
   ctx.textAlign = 'center';
