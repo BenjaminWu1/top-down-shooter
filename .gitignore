@@ -16,3 +16,6 @@ $RECYCLE.BIN/
 # Personal/local notes
 notes.local.md
 *.local.*
+
+# Older draft kept on disk but not shipped (see CLAUDE.md)
+shooter game.html

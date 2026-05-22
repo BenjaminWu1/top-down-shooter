@@ -271,6 +271,112 @@ const SPR = {
     "...gg................gg.",
     "....g.................g."
   ]),
+  // ---- Companion (player's AI assistant drone) ----
+  companion_a: S({'.':null,'1':'#aed6f1','2':'#2874a6','3':'#0e2a44','e':'#f1c40f'}, [
+    "..1111..",
+    ".122221.",
+    "12eee221",
+    "12eee221",
+    ".122221.",
+    "..1331..",
+    "..3..3.."
+  ]),
+  companion_b: S({'.':null,'1':'#aed6f1','2':'#2874a6','3':'#0e2a44','e':'#f1c40f'}, [
+    "..1111..",
+    ".122221.",
+    "12eee221",
+    "12eee221",
+    ".122221.",
+    "..1331..",
+    ".3....3."
+  ]),
+  // ---- New Bosses (L6-L10) ----
+  twin: S({'.':null,'1':'#5d2a2a','2':'#e67e22','3':'#1c0a0a','e':'#fff','y':'#f1c40f','b':'#bdc3c7'}, [
+    "...1111..1111...",
+    "..112211112211..",
+    ".11eeee11eeee11.",
+    ".11eeee11eeee11.",
+    "11222yy22yy22211",
+    "1b2222222222221b",
+    "1b2222222222221b",
+    "1b22yy2222yy221b",
+    "11222222222222b1",
+    ".11233333333211.",
+    ".11233333333211.",
+    "..3.33....33.3..",
+    ".3.3........3.3.",
+    "3.3............3"
+  ]),
+  reaper: S({'.':null,'1':'#1b1b2e','2':'#0a0a14','3':'#000','e':'#27ae60','y':'#f1c40f','b':'#aed6f1'}, [
+    "......2222......",
+    ".....211112.....",
+    "....21eeee12....",
+    "....1eyyyye1....",
+    "....1eeeeee1....",
+    "...11122221y....",
+    "..1112222211....",
+    ".11122222211y...",
+    "11122eeeee211b..",
+    "11122eyyye211b..",
+    "11122eeeee211b..",
+    "1112222222211...",
+    ".11233333321y...",
+    ".333.....3331...",
+    "3.3.......3.3...",
+    "3...........3..."
+  ]),
+  bomber: S({'.':null,'1':'#6e3a0c','2':'#a04500','3':'#2b1404','e':'#f1c40f','b':'#7f8c8d','y':'#e74c3c'}, [
+    "....bb....bb....",
+    "...bbbb..bbbb...",
+    "..bb1111111bb...",
+    ".b11122222111b..",
+    "b1112eyye2111bb.",
+    "b112eeyyee211bb.",
+    "b112eyyyyye21bb.",
+    "b112eeyyee211bb.",
+    "b1112eyye2111bb.",
+    ".b11122222111b..",
+    "..bb1133311bb...",
+    "...bb33333bb....",
+    "....bb3 3bb.....",
+    "....bb.. bb....."
+  ]),
+  phantom: S({'.':null,'1':'#5b2c6f','2':'#8e44ad','3':'#2c1338','e':'#aed6f1','y':'#f1c40f','b':'#1abc9c'}, [
+    ".....1111.....",
+    "....112211....",
+    "...11bbbb11...",
+    "..11bbeebb11..",
+    "..1bbeyeebb1..",
+    "..1bbeyeeb11..",
+    "..11bbbbbb11..",
+    "...1122221b...",
+    "...1122222b...",
+    "....122222....",
+    "....1y22y1....",
+    "..1.1y22y1.1..",
+    ".1...1..1...1.",
+    "1.....11.....1"
+  ]),
+  nemesis: S({'.':null,'1':'#2c0a0a','2':'#922b21','3':'#000','e':'#f1c40f','h':'#fff','g':'#1a1a2e','y':'#e67e22','b':'#9b59b6'}, [
+    ".........11111111111.........",
+    "........11ggggggggg11........",
+    ".......11gy11111111gy11......",
+    "......1122eeeeeeeee2211......",
+    ".....1122eheheheheheh2211....",
+    "....11222eyyyyyyyyye22211....",
+    "....1222ee1111111111e22211...",
+    "...11122eheheeeheheheh2211...",
+    "...11122ehhhhhyyhhhhhe2211...",
+    "...11122eheheeyeheheheh22b1..",
+    "....1122222ehhhhhhhh22221b...",
+    "....11.122yyyyyyyy22.111b....",
+    "....11...12yyyyyy21..111.....",
+    ".bg..bg...122yyyyy21.bg..bg..",
+    ".bg..bg...12gggggg21.bg..bg..",
+    "..bggg.....gggggggg..bggg....",
+    "...bg.......gggggg....bg.....",
+    "....b........gggg......b....."
+  ]),
   // ---- Pickups ----
   p_health: S({'.':null,'1':'#fff','2':'#e74c3c'}, [
     ".2222.",
@@ -361,6 +467,30 @@ const SPR = {
     ".2222.",
     "..22.."
   ]),
+  p_minigun: S({'.':null,'1':'#fff','2':'#7f8c8d','3':'#34495e'}, [
+    ".2222.",
+    "232323",
+    "212121",
+    "212121",
+    "232323",
+    ".2222."
+  ]),
+  p_plasma: S({'.':null,'1':'#fff','2':'#3498db','e':'#aed6f1'}, [
+    "..22..",
+    ".21e2.",
+    "21e1e2",
+    "2e1e12",
+    ".2e12.",
+    "..22.."
+  ]),
+  p_homing: S({'.':null,'1':'#fff','2':'#e91e63','3':'#9b59b6'}, [
+    "..2...",
+    ".221..",
+    "22112.",
+    "2e1122",
+    "..3222",
+    "...3.."
+  ]),
   // ---- Bullets ----
   bullet_p: S({'.':null,'1':'#f1c40f','2':'#fff'}, [
     ".11.",
@@ -385,6 +515,25 @@ const SPR = {
     "11233",
     "11223",
     ".11.."
+  ]),
+  bullet_companion: S({'.':null,'1':'#aed6f1','2':'#fff'}, [
+    ".11.",
+    "1221",
+    "1221",
+    ".11."
+  ]),
+  bullet_plasma: S({'.':null,'1':'#3498db','2':'#aed6f1','3':'#fff'}, [
+    "..3..",
+    ".121.",
+    "12321",
+    ".121.",
+    "..3.."
+  ]),
+  bullet_homing: S({'.':null,'1':'#e91e63','2':'#fff','3':'#9b59b6'}, [
+    ".21.",
+    "1221",
+    "1331",
+    ".11."
   ])
 };
 
@@ -480,17 +629,28 @@ const sfx = {
 // LEVEL CONFIG (one unique boss per level)
 // ============================================================
 const LEVELS = [
-  { total:10, rate:1.1,  mix:[['grunt',1.0]],                                                 boss:'bruiser'  },
-  { total:14, rate:1.0,  mix:[['grunt',0.6],['runner',0.4]],                                  boss:'sniper'   },
-  { total:18, rate:0.85, mix:[['grunt',0.5],['runner',0.3],['tank',0.2]],                     boss:'splitter' },
-  { total:22, rate:0.75, mix:[['grunt',0.4],['runner',0.25],['tank',0.2],['shooter',0.15]],   boss:'summoner' },
-  { total:18, rate:0.85, mix:[['grunt',0.35],['runner',0.25],['tank',0.2],['shooter',0.2]],   boss:'overlord' }
+  { total:10, rate:1.1,  mix:[['grunt',1.0]],                                                  boss:'bruiser'  },
+  { total:14, rate:1.0,  mix:[['grunt',0.6],['runner',0.4]],                                   boss:'sniper'   },
+  { total:18, rate:0.85, mix:[['grunt',0.5],['runner',0.3],['tank',0.2]],                      boss:'splitter' },
+  { total:22, rate:0.75, mix:[['grunt',0.4],['runner',0.25],['tank',0.2],['shooter',0.15]],    boss:'summoner' },
+  { total:24, rate:0.75, mix:[['grunt',0.35],['runner',0.25],['tank',0.2],['shooter',0.2]],    boss:'overlord' },
+  // ---- New levels: 6-10 ----
+  { total:26, rate:0.7,  mix:[['grunt',0.3],['runner',0.3],['tank',0.2],['shooter',0.2]],      boss:'twin'     },
+  { total:30, rate:0.65, mix:[['grunt',0.25],['runner',0.35],['tank',0.2],['shooter',0.2]],    boss:'reaper'   },
+  { total:32, rate:0.6,  mix:[['runner',0.4],['tank',0.25],['shooter',0.35]],                  boss:'bomber'   },
+  { total:36, rate:0.55, mix:[['runner',0.35],['tank',0.3],['shooter',0.35]],                  boss:'phantom'  },
+  { total:40, rate:0.5,  mix:[['runner',0.3],['tank',0.3],['shooter',0.4]],                    boss:'nemesis'  }
 ];
 
 const BOSS_NAMES = {
   bruiser:'BRUISER', sniper:'NEEDLE',
-  splitter:'HYDRA', summoner:'CONJURER', overlord:'OVERLORD'
+  splitter:'HYDRA', summoner:'CONJURER', overlord:'OVERLORD',
+  twin:'TWIN STRIKER', reaper:'REAPER',
+  bomber:'BOMBARDIER', phantom:'PHANTOM', nemesis:'NEMESIS'
 };
+
+// Non-boss enemies scale up per level. 1.0 at level 1, ~1.72 at level 10.
+function enemyScale(){ return 1 + levelIdx * 0.08; }
 
 // ============================================================
 // STATE
@@ -498,6 +658,7 @@ const BOSS_NAMES = {
 const STATE = { MENU:0, HOWTO:1, PLAYING:2, LEVEL_COMPLETE:3, GAME_OVER:4, VICTORY:5 };
 let state = STATE.MENU;
 let player = null;
+let companion = null;
 let entities = [];
 let particles = [];
 let levelIdx = 0;
@@ -556,6 +717,8 @@ function createPlayer(){
     fireCooldown:0, fireRate:0.14,
     spreadTime:0, rapidTime:0, laserTime:0,
     rocketAmmo:0, shieldHp:0, shieldMax:3,
+    // New equipment timers (Minigun / Plasma / Homing missiles)
+    minigunTime:0, plasmaTime:0, homingTime:0,
     // Passive powerups (temporary buffs)
     speedTime:0, damageTime:0, magnetTime:0, scoreTime:0,
     hitFlash:0, invuln:0, frame:0, frameT:0, dead:false
@@ -566,11 +729,14 @@ function createEnemy(kind, x, y){
   const base = { type:'enemy', kind, x, y, vx:0, vy:0, angle:0, hitFlash:0,
                  frame:0, frameT:0, fireCooldown:0, phase:0, phaseT:0, dead:false,
                  telegraph:0 };
+  // Scale non-boss enemies up with level so later stages are harder.
+  const ss = enemyScale();
+  const hpScale = Math.ceil(ss);   // 1 at L1, climbing to 2 by mid-game
   switch(kind){
-    case 'grunt':   return { ...base, speed:30, hp:1, maxHp:1, radius:4, score:10 };
-    case 'runner':  return { ...base, speed:72, hp:1, maxHp:1, radius:3, score:15 };
-    case 'tank':    return { ...base, speed:18, hp:3, maxHp:3, radius:7, score:30 };
-    case 'shooter': return { ...base, speed:25, hp:2, maxHp:2, radius:5, score:25, fireCooldown:1.5 };
+    case 'grunt':   return { ...base, speed:30*ss, hp:hpScale, maxHp:hpScale, radius:4, score:10 };
+    case 'runner':  return { ...base, speed:72*ss, hp:hpScale, maxHp:hpScale, radius:3, score:15 };
+    case 'tank':    return { ...base, speed:18*ss, hp:Math.ceil(3*ss), maxHp:Math.ceil(3*ss), radius:7, score:30 };
+    case 'shooter': return { ...base, speed:25*ss, hp:Math.ceil(2*ss), maxHp:Math.ceil(2*ss), radius:5, score:25, fireCooldown:1.5 };
     case 'bruiser': return { ...base, speed:28, hp:24, maxHp:24, radius:9, score:200, isBoss:true };
     case 'sniper':  return { ...base, speed:34, hp:28, maxHp:28, radius:7, score:240, isBoss:true, fireCooldown:1.2 };
     case 'splitter':return { ...base, speed:32, hp:34, maxHp:34, radius:11, score:280, isBoss:true, fireCooldown:2 };
@@ -578,8 +744,24 @@ function createEnemy(kind, x, y){
     case 'splitter_mini': return { ...base, speed:60, hp:4, maxHp:4, radius:4, score:25 };
     case 'summoner':return { ...base, speed:24, hp:42, maxHp:42, radius:11, score:320, isBoss:true, fireCooldown:1.5 };
     case 'overlord':return { ...base, speed:20, hp:60, maxHp:60, radius:14, score:400, isBoss:true };
+    // New bosses (L6-L10) — HP grows with the level number
+    case 'twin':    return { ...base, speed:46, hp:70, maxHp:70, radius:10, score:500, isBoss:true, fireCooldown:1.4 };
+    case 'reaper':  return { ...base, speed:42, hp:85, maxHp:85, radius:9, score:600, isBoss:true, fireCooldown:2.0 };
+    case 'bomber':  return { ...base, speed:14, hp:100, maxHp:100, radius:11, score:720, isBoss:true, fireCooldown:1.6 };
+    case 'phantom': return { ...base, speed:30, hp:120, maxHp:120, radius:9, score:850, isBoss:true, fireCooldown:1.5 };
+    case 'nemesis': return { ...base, speed:24, hp:170, maxHp:170, radius:15, score:1200, isBoss:true };
   }
   return base;
+}
+
+function createCompanion(){
+  return {
+    type:'companion', x:player ? player.x - 14 : W/2 - 14, y:player ? player.y : H/2,
+    vx:0, vy:0, angle:0, radius:4,
+    hp:3, maxHp:3,
+    fireCooldown:0, fireRate:0.32,
+    hitFlash:0, invuln:0, frame:0, frameT:0, dead:false
+  };
 }
 
 function createBullet(x,y,angle,owner,opts={}){
@@ -662,10 +844,19 @@ function startLevel(idx){
   spawnTimer = 0.6;
   spawnedCount = 0;
   bossSpawned = false;
-  entities = entities.filter(e => e.type === 'player');
+  entities = entities.filter(e => e.type === 'player' || e.type === 'companion');
   particles = [];
   if(!player){ player = createPlayer(); entities.push(player); }
   else { player.x = W/2; player.y = H/2; player.invuln = 1.2; }
+  // Refresh the companion each level: full HP, repositioned beside the player.
+  if(!companion || companion.dead){
+    companion = createCompanion();
+    entities.push(companion);
+  } else {
+    companion.hp = companion.maxHp;
+    companion.x = player.x - 14; companion.y = player.y;
+    companion.invuln = 1.2;
+  }
   state = STATE.PLAYING;
   stateTime = 0;
 }
@@ -673,7 +864,8 @@ function startGame(){
   initAudio();
   score = 0;
   player = createPlayer();
-  entities = [player];
+  companion = createCompanion();
+  entities = [player, companion];
   particles = [];
   startLevel(0);
 }
@@ -725,6 +917,9 @@ function updatePlaying(dt){
   if(player.spreadTime > 0) player.spreadTime -= dt;
   if(player.rapidTime > 0) player.rapidTime -= dt;
   if(player.laserTime > 0) player.laserTime -= dt;
+  if(player.minigunTime > 0) player.minigunTime -= dt;
+  if(player.plasmaTime > 0) player.plasmaTime -= dt;
+  if(player.homingTime > 0) player.homingTime -= dt;
 
   if(mouse.down && player.fireCooldown <= 0){
     const mx = player.x + Math.cos(player.angle) * 9;
@@ -734,6 +929,9 @@ function updatePlaying(dt){
 
   if(player.invuln > 0) player.invuln -= dt;
   if(player.hitFlash > 0) player.hitFlash -= dt;
+
+  // ---- Companion AI ----
+  if(companion && !companion.dead) updateCompanion(dt);
 
   // ---- Enemy spawning ----
   if(spawnedCount < levelData.total){
@@ -765,6 +963,10 @@ function updatePlaying(dt){
     else if(e.type === 'pickup') updatePickup(e, dt);
     if(e.hitFlash > 0) e.hitFlash -= dt;
   }
+  if(companion && !companion.dead){
+    if(companion.invuln > 0) companion.invuln -= dt;
+    if(companion.hitFlash > 0) companion.hitFlash -= dt;
+  }
 
   // ---- Collisions ----
   for(const b of entities){
@@ -793,11 +995,14 @@ function updatePlaying(dt){
         }
       }
     } else {
-      if(player.invuln > 0) continue;
-      const dr = b.radius + player.radius;
-      if(dist2(b, player) < dr*dr){
-        b.dead = true;
-        damagePlayer(1);
+      // Enemy bullet — can hit player or companion.
+      if(player.invuln <= 0){
+        const dr = b.radius + player.radius;
+        if(dist2(b, player) < dr*dr){ b.dead = true; damagePlayer(1); continue; }
+      }
+      if(companion && !companion.dead && companion.invuln <= 0){
+        const dr = b.radius + companion.radius;
+        if(dist2(b, companion) < dr*dr){ b.dead = true; damageCompanion(1); }
       }
     }
   }
@@ -810,6 +1015,19 @@ function updatePlaying(dt){
         const a = Math.atan2(en.y - player.y, en.x - player.x);
         en.x += Math.cos(a) * 12;
         en.y += Math.sin(a) * 12;
+        break;
+      }
+    }
+  }
+  if(companion && !companion.dead && companion.invuln <= 0){
+    for(const en of entities){
+      if(en.type !== 'enemy' || en.dead) continue;
+      const dr = companion.radius + en.radius;
+      if(dist2(en, companion) < dr*dr){
+        damageCompanion(en.isBoss ? 2 : 1);
+        const a = Math.atan2(en.y - companion.y, en.x - companion.x);
+        en.x += Math.cos(a) * 10;
+        en.y += Math.sin(a) * 10;
         break;
       }
     }
@@ -860,8 +1078,8 @@ function updatePlaying(dt){
 // WEAPONS
 // ============================================================
 function fireWeapon(mx, my){
-  // Priority: rocket ammo > laser > spread > default. Rapid modifies cooldown.
-  // Damage powerup doubles bullet damage (and rocket damage).
+  // Priority: rocket > laser > homing > plasma > spread > minigun > default.
+  // Rapid halves cooldown; Damage powerup doubles bullet damage (incl. rockets).
   const rapidFactor = player.rapidTime > 0 ? 0.5 : 1;
   const dmgMult = player.damageTime > 0 ? 2 : 1;
 
@@ -888,6 +1106,29 @@ function fireWeapon(mx, my){
     return;
   }
 
+  if(player.homingTime > 0){
+    entities.push(createBullet(mx, my, player.angle, 'player', {
+      speed: 180, dmg: 1.5 * dmgMult, homing: true,
+      sprite: SPR.bullet_homing, radius: 2, life: 2.0
+    }));
+    player.fireCooldown = 0.22 * rapidFactor;
+    emit(mx, my, 3, '#e91e63', 30, 100, 0.18);
+    sfx.shoot();
+    return;
+  }
+
+  if(player.plasmaTime > 0){
+    // Plasma pierces enemies AND bounces off walls; hitSet clears each bounce.
+    entities.push(createBullet(mx, my, player.angle, 'player', {
+      speed: 220, dmg: 1.5 * dmgMult, bounces: 2, pierce: true,
+      sprite: SPR.bullet_plasma, radius: 2, life: 2.4
+    }));
+    player.fireCooldown = 0.18 * rapidFactor;
+    emit(mx, my, 3, '#3498db', 30, 100, 0.18);
+    sfx.laser();
+    return;
+  }
+
   if(player.spreadTime > 0){
     const spr = 0.22;
     entities.push(createBullet(mx, my, player.angle - spr, 'player', { dmg: 1 * dmgMult }));
@@ -895,6 +1136,16 @@ function fireWeapon(mx, my){
     entities.push(createBullet(mx, my, player.angle + spr, 'player', { dmg: 1 * dmgMult }));
     player.fireCooldown = 0.12 * rapidFactor;
     emit(mx, my, 3, '#f1c40f', 30, 100, 0.18);
+    sfx.shoot();
+    return;
+  }
+
+  if(player.minigunTime > 0){
+    // Slight random spread to make it feel chaotic.
+    const jitter = (Math.random() - 0.5) * 0.10;
+    entities.push(createBullet(mx, my, player.angle + jitter, 'player', { dmg: 1 * dmgMult, speed: 280 }));
+    player.fireCooldown = 0.045 * rapidFactor;
+    emit(mx, my, 2, '#bdc3c7', 30, 100, 0.15);
     sfx.shoot();
     return;
   }
@@ -913,12 +1164,73 @@ function applyPickup(kind){
   else if(kind === 'laser')  player.laserTime  = Math.max(player.laserTime,  7);
   else if(kind === 'rocket') player.rocketAmmo = Math.min(15, player.rocketAmmo + 6);
   else if(kind === 'shield') player.shieldHp   = player.shieldMax;
+  else if(kind === 'minigun') player.minigunTime = Math.max(player.minigunTime, 8);
+  else if(kind === 'plasma')  player.plasmaTime  = Math.max(player.plasmaTime,  8);
+  else if(kind === 'homing')  player.homingTime  = Math.max(player.homingTime,  8);
   // Powerups (passive temporary buffs)
   else if(kind === 'speed')   player.speedTime  = Math.max(player.speedTime,  8);
   else if(kind === 'damage')  player.damageTime = Math.max(player.damageTime, 8);
   else if(kind === 'slowmo')  slowMoTime        = Math.max(slowMoTime,        5);
   else if(kind === 'score2x') player.scoreTime  = Math.max(player.scoreTime, 10);
   else if(kind === 'magnet')  player.magnetTime = Math.max(player.magnetTime,10);
+}
+
+// ============================================================
+// COMPANION (player's AI assistant)
+// ============================================================
+function updateCompanion(dt){
+  const c = companion;
+  // Float to a follow-point offset behind the player.
+  const target = {
+    x: player.x - Math.cos(player.angle) * 14,
+    y: player.y - Math.sin(player.angle) * 14
+  };
+  const dx = target.x - c.x, dy = target.y - c.y;
+  const d = Math.hypot(dx, dy);
+  const accel = 4.5;
+  if(d > 0.5){
+    c.vx += (dx / d) * accel * 60 * dt;
+    c.vy += (dy / d) * accel * 60 * dt;
+  }
+  c.vx *= 0.86; c.vy *= 0.86;
+  c.x += c.vx * dt; c.y += c.vy * dt;
+  c.x = clamp(c.x, 6, W - 6);
+  c.y = clamp(c.y, 6, H - 8);
+  c.frameT += dt;
+  if(c.frameT > 0.18){ c.frameT = 0; c.frame = (c.frame + 1) % 2; }
+
+  // Auto-fire at nearest enemy in range.
+  c.fireCooldown -= dt;
+  let nearest = null, nd = 110*110;
+  for(const en of entities){
+    if(en.type !== 'enemy' || en.dead) continue;
+    const dd = dist2(c, en);
+    if(dd < nd){ nd = dd; nearest = en; }
+  }
+  if(nearest){
+    c.angle = Math.atan2(nearest.y - c.y, nearest.x - c.x);
+    if(c.fireCooldown <= 0){
+      // Companion bullets are friendly to player (owner='player') so they share collision logic.
+      entities.push(createBullet(c.x, c.y, c.angle, 'player', {
+        sprite: SPR.bullet_companion, speed: 220, dmg: 1, radius: 2, life: 1.4
+      }));
+      c.fireCooldown = c.fireRate;
+      emit(c.x, c.y, 1, '#aed6f1', 20, 60, 0.15);
+    }
+  }
+}
+
+function damageCompanion(amount){
+  companion.hp -= amount;
+  companion.invuln = 0.7;
+  companion.hitFlash = 0.15;
+  emit(companion.x, companion.y, 6, '#e74c3c', 30, 90, 0.4);
+  sfx.hit();
+  if(companion.hp <= 0 && !companion.dead){
+    companion.dead = true;
+    emit(companion.x, companion.y, 20, '#3498db', 50, 160, 0.6);
+    sfx.enemyDeath();
+  }
 }
 
 // ============================================================
@@ -951,7 +1263,10 @@ function killEnemy(en){
   } else if(en.isBoss){
     shakeTime = 0.7; shakeAmt = 6;
     // Boss death drops a guaranteed special equipment
-    const drops = { bruiser:'rapid', sniper:'shield', splitter:'spread', summoner:'rocket', overlord:'laser' };
+    const drops = {
+      bruiser:'rapid', sniper:'shield', splitter:'spread', summoner:'rocket', overlord:'laser',
+      twin:'minigun', reaper:'plasma', bomber:'rocket', phantom:'homing', nemesis:'laser'
+    };
     const drop = drops[en.kind] || 'health';
     entities.push(createPickup(en.x, en.y, drop));
     // Plus a health top-up
@@ -974,10 +1289,10 @@ function killEnemy(en){
       entities.push(e2);
     }
   }
-  // Random drop from non-boss (6 equipment + 5 powerups, weighted)
-  if(!en.isBoss && Math.random() < 0.20){
-    const kinds   = ['health','spread','rapid','shield','rocket','laser','speed','damage','slowmo','score2x','magnet'];
-    const weights = [ 0.28,   0.10,    0.10,   0.08,    0.07,    0.07,   0.07,   0.07,    0.06,    0.05,     0.05    ];
+  // Random drop from non-boss (9 equipment + 5 powerups, weighted)
+  if(!en.isBoss && Math.random() < 0.22){
+    const kinds   = ['health','spread','rapid','shield','rocket','laser','minigun','plasma','homing','speed','damage','slowmo','score2x','magnet'];
+    const weights = [ 0.22,   0.08,    0.08,   0.07,    0.06,    0.06,   0.06,     0.06,    0.06,    0.06,   0.06,    0.05,    0.04,     0.04    ];
     const r = Math.random();
     let acc = 0;
     let pick = 'health';
@@ -996,6 +1311,11 @@ function updateEnemy(e, dt){
   if(e.kind === 'splitter_mini') return updateSeek(e, dt);
   if(e.kind === 'summoner') return updateSummoner(e, dt);
   if(e.kind === 'overlord') return updateOverlord(e, dt);
+  if(e.kind === 'twin')     return updateTwin(e, dt);
+  if(e.kind === 'reaper')   return updateReaper(e, dt);
+  if(e.kind === 'bomber')   return updateBomber(e, dt);
+  if(e.kind === 'phantom')  return updatePhantom(e, dt);
+  if(e.kind === 'nemesis')  return updateNemesis(e, dt);
   if(e.kind === 'shooter')  return updateShooter(e, dt);
   return updateSeek(e, dt);
 }
@@ -1219,14 +1539,261 @@ function updateOverlord(boss, dt){
   boss.y = clamp(boss.y, 18, H - 22);
 }
 
+// TWIN STRIKER (L6): dual-pattern chaser — alternates dash slash and twin sideshot bursts.
+function updateTwin(e, dt){
+  e.phaseT += dt;
+  const a = Math.atan2(player.y - e.y, player.x - e.x);
+  if(e.phase === 1){
+    // Dash forward in chargeAngle for ~0.8s
+    e.vx = Math.cos(e.chargeAngle) * e.speed * 3.0;
+    e.vy = Math.sin(e.chargeAngle) * e.speed * 3.0;
+    if(e.phaseT > 0.7){ e.phase = 0; e.phaseT = 0; e.fireCooldown = 1.4; }
+  } else {
+    // Strafing approach + periodic twin-bullet bursts at perpendicular angles
+    e.vx = Math.cos(a) * e.speed * 0.9 - Math.sin(a) * e.speed * 0.4;
+    e.vy = Math.sin(a) * e.speed * 0.9 + Math.cos(a) * e.speed * 0.4;
+    e.fireCooldown -= dt;
+    if(e.fireCooldown <= 0){
+      if(Math.random() < 0.45){
+        // Charge telegraph then dash
+        e.chargeAngle = a;
+        e.phase = 1; e.phaseT = 0;
+        emit(e.x, e.y, 14, '#e67e22', 40, 130, 0.3);
+      } else {
+        // Twin-blade burst: two parallel bullets either side of aim
+        const off = 0.35;
+        for(let k=-1;k<=1;k+=2){
+          entities.push(createBullet(e.x + Math.cos(a + Math.PI/2)*k*6, e.y + Math.sin(a + Math.PI/2)*k*6,
+                                     a + k*off, 'enemy', {speed:170}));
+        }
+        e.fireCooldown = 1.0;
+      }
+    }
+  }
+  e.x += e.vx * dt; e.y += e.vy * dt;
+  e.x = clamp(e.x, 14, W - 14);
+  e.y = clamp(e.y, 14, H - 16);
+}
+
+// REAPER (L7): high-speed dasher, leaves slash-arcs behind. Cycle: stalk → dash → cooldown.
+function updateReaper(e, dt){
+  e.phaseT += dt;
+  const a = Math.atan2(player.y - e.y, player.x - e.x);
+  if(e.phase === 1){
+    // Mid-dash: travel fast and shed sparks
+    e.vx = Math.cos(e.chargeAngle) * e.speed * 4.0;
+    e.vy = Math.sin(e.chargeAngle) * e.speed * 4.0;
+    emit(e.x, e.y, 2, '#27ae60', 20, 60, 0.25);
+    if(e.phaseT > 0.55){ e.phase = 2; e.phaseT = 0; }
+  } else if(e.phase === 2){
+    // Post-dash recovery + ring slash
+    e.vx *= 0.85; e.vy *= 0.85;
+    if(e.phaseT > 0.2 && !e.slashed){
+      e.slashed = true;
+      const n = 6;
+      for(let i=0;i<n;i++){
+        const aa = (i/n)*Math.PI*2 + e.phaseT;
+        entities.push(createBullet(e.x, e.y, aa, 'enemy', {speed:130}));
+      }
+    }
+    if(e.phaseT > 0.9){ e.phase = 0; e.phaseT = 0; e.slashed = false; e.fireCooldown = 1.0; }
+  } else {
+    // Approach in a curve
+    e.vx = Math.cos(a) * e.speed * 1.1 + Math.sin(a) * e.speed * 0.5;
+    e.vy = Math.sin(a) * e.speed * 1.1 - Math.cos(a) * e.speed * 0.5;
+    e.fireCooldown -= dt;
+    if(e.fireCooldown <= 0){
+      e.chargeAngle = a;
+      e.phase = 1; e.phaseT = 0;
+      emit(e.x, e.y, 16, '#27ae60', 50, 150, 0.35);
+    }
+  }
+  e.x += e.vx * dt; e.y += e.vy * dt;
+  e.x = clamp(e.x, 14, W - 14);
+  e.y = clamp(e.y, 14, H - 16);
+}
+
+// BOMBARDIER (L8): slow turret — fires homing missiles (slow-turn) + ring bursts.
+function updateBomber(e, dt){
+  e.phaseT += dt;
+  const dx = player.x - e.x, dy = player.y - e.y;
+  const d = Math.hypot(dx, dy);
+  const a = Math.atan2(dy, dx);
+  // Drift slowly toward center; back off if player gets close
+  const cx = W/2, cy = H/2;
+  const ax = Math.atan2(cy - e.y, cx - e.x);
+  if(d < 70){ e.vx = -Math.cos(a) * e.speed; e.vy = -Math.sin(a) * e.speed; }
+  else      { e.vx = Math.cos(ax) * e.speed * 0.5; e.vy = Math.sin(ax) * e.speed * 0.5; }
+  e.fireCooldown -= dt;
+  if(e.fireCooldown <= 0){
+    if(e.firePhase % 3 === 2){
+      // Ring of slow shells
+      const n = 12;
+      for(let i=0;i<n;i++){
+        const aa = (i/n)*Math.PI*2 + e.phaseT*0.4;
+        entities.push(createBullet(e.x, e.y, aa, 'enemy', {speed:90}));
+      }
+    } else {
+      // Volley of 3 homing missiles (enemy-side homing)
+      for(let i=-1;i<=1;i++){
+        entities.push(createBullet(e.x, e.y, a + i*0.4, 'enemy', {
+          speed: 110, homing: true, life: 3.5, sprite: SPR.bullet_homing, radius: 2
+        }));
+      }
+      emit(e.x, e.y, 6, '#e67e22', 40, 110, 0.3);
+    }
+    e.firePhase = (e.firePhase || 0) + 1;
+    e.fireCooldown = 1.6;
+  }
+  e.x += e.vx * dt; e.y += e.vy * dt;
+  e.x = clamp(e.x, 16, W - 16);
+  e.y = clamp(e.y, 16, H - 20);
+}
+
+// PHANTOM (L9): teleporting summoner of clones. Real boss is darker; clones flicker.
+function updatePhantom(e, dt){
+  e.phaseT += dt;
+  const dx = player.x - e.x, dy = player.y - e.y;
+  const d = Math.hypot(dx, dy);
+  const a = Math.atan2(dy, dx);
+  // Keep distance and strafe
+  if(d < 90){ e.vx = -Math.cos(a) * e.speed; e.vy = -Math.sin(a) * e.speed; }
+  else { e.vx = -Math.sin(a) * e.speed * 0.7; e.vy = Math.cos(a) * e.speed * 0.7; }
+  e.fireCooldown -= dt;
+  if(e.fireCooldown <= 0){
+    // Spiral spray
+    const n = 5;
+    for(let i=0;i<n;i++){
+      const aa = a + (i - (n-1)/2)*0.22 + Math.sin(e.phaseT*2)*0.3;
+      entities.push(createBullet(e.x, e.y, aa, 'enemy', {speed:140}));
+    }
+    e.fireCooldown = 1.2;
+  }
+  // Teleport every ~5s, summon a pair of runner adds on arrival
+  if(e.phaseT > 5){
+    e.phaseT = 0;
+    emit(e.x, e.y, 22, '#8e44ad', 30, 130, 0.5);
+    e.x = rand(40, W - 40); e.y = rand(40, H - 40);
+    emit(e.x, e.y, 22, '#aed6f1', 30, 130, 0.5);
+    sfx.teleport();
+    for(let i=0;i<2;i++) spawnEnemyAtEdge('runner');
+  }
+  e.x += e.vx * dt; e.y += e.vy * dt;
+  e.x = clamp(e.x, 14, W - 14);
+  e.y = clamp(e.y, 14, H - 16);
+}
+
+// NEMESIS (L10): four-phase final boss.
+function updateNemesis(boss, dt){
+  boss.phaseT += dt;
+  if(boss.phaseT > 4.5){
+    boss.phaseT = 0;
+    boss.phase = (boss.phase + 1) % 4;
+    boss.fireCooldown = 0.3;
+  }
+  const a = Math.atan2(player.y - boss.y, player.x - boss.x);
+  let tvx = Math.cos(a) * boss.speed;
+  let tvy = Math.sin(a) * boss.speed;
+  if(boss.phase === 0){
+    // Phase 0: dense ring blasts
+    boss.fireCooldown -= dt;
+    if(boss.fireCooldown <= 0){
+      for(let i=0;i<16;i++){
+        const aa = (i/16)*Math.PI*2 + boss.phaseT*0.4;
+        entities.push(createBullet(boss.x, boss.y, aa, 'enemy', {speed:130}));
+      }
+      boss.fireCooldown = 1.2;
+    }
+  } else if(boss.phase === 1){
+    // Phase 1: charging spread, faster pursuit
+    tvx *= 2.6; tvy *= 2.6;
+    boss.fireCooldown -= dt;
+    if(boss.fireCooldown <= 0){
+      for(let i=-2;i<=2;i++){
+        entities.push(createBullet(boss.x, boss.y, a + i*0.15, 'enemy', {speed:170}));
+      }
+      boss.fireCooldown = 0.55;
+    }
+  } else if(boss.phase === 2){
+    // Phase 2: summon adds + homing missiles
+    boss.fireCooldown -= dt;
+    if(boss.fireCooldown <= 0){
+      const k = ['shooter','runner','tank'][Math.floor(Math.random()*3)];
+      spawnEnemyAtEdge(k);
+      entities.push(createBullet(boss.x, boss.y, a, 'enemy', {
+        speed: 120, homing: true, life: 3.5, sprite: SPR.bullet_homing, radius: 2
+      }));
+      boss.fireCooldown = 1.1;
+    }
+  } else {
+    // Phase 3: spiral barrage, strafing
+    tvx = -Math.sin(a) * boss.speed * 1.4;
+    tvy = Math.cos(a) * boss.speed * 1.4;
+    boss.fireCooldown -= dt;
+    if(boss.fireCooldown <= 0){
+      for(let i=0;i<3;i++){
+        const aa = boss.phaseT * 4 + i * (Math.PI*2/3);
+        entities.push(createBullet(boss.x, boss.y, aa, 'enemy', {speed:150}));
+      }
+      boss.fireCooldown = 0.12;
+    }
+  }
+  boss.vx = tvx; boss.vy = tvy;
+  boss.x += boss.vx * dt;
+  boss.y += boss.vy * dt;
+  boss.x = clamp(boss.x, 20, W - 20);
+  boss.y = clamp(boss.y, 20, H - 24);
+}
+
 function updateBullet(b, dt){
+  // Homing: steer toward a target each tick. Player bullets seek nearest enemy;
+  // enemy bullets seek the player.
+  if(b.homing){
+    let target = null;
+    if(b.owner === 'player'){
+      let nd = Infinity;
+      for(const en of entities){
+        if(en.type !== 'enemy' || en.dead) continue;
+        const dd = dist2(b, en);
+        if(dd < nd){ nd = dd; target = en; }
+      }
+    } else {
+      target = player;
+    }
+    if(target){
+      const desired = Math.atan2(target.y - b.y, target.x - b.x);
+      const cur = Math.atan2(b.vy, b.vx);
+      let diff = desired - cur;
+      while(diff > Math.PI) diff -= Math.PI * 2;
+      while(diff < -Math.PI) diff += Math.PI * 2;
+      const turn = clamp(diff, -4 * dt, 4 * dt);
+      const ang = cur + turn;
+      const sp = Math.hypot(b.vx, b.vy);
+      b.vx = Math.cos(ang) * sp;
+      b.vy = Math.sin(ang) * sp;
+      b.angle = ang;
+      // Sparkle trail
+      if(Math.random() < 0.3) emit(b.x, b.y, 1, '#e91e63', 10, 30, 0.2);
+    }
+  }
   b.x += b.vx * dt;
   b.y += b.vy * dt;
   b.life -= dt;
-  if(b.life <= 0 || b.x < -12 || b.x > W+12 || b.y < -12 || b.y > H+12){
-    if(b.explosive && b.life <= 0){
-      // No explosion on lifeout — only on hit (simpler)
+  // Plasma bouncing: reflect off the screen edges until bounces are used up.
+  if(b.bounces && b.bounces > 0){
+    let bounced = false;
+    if(b.x < 4){ b.x = 4; b.vx = Math.abs(b.vx); bounced = true; }
+    else if(b.x > W - 4){ b.x = W - 4; b.vx = -Math.abs(b.vx); bounced = true; }
+    if(b.y < 4){ b.y = 4; b.vy = Math.abs(b.vy); bounced = true; }
+    else if(b.y > H - 4){ b.y = H - 4; b.vy = -Math.abs(b.vy); bounced = true; }
+    if(bounced){
+      b.bounces--;
+      b.angle = Math.atan2(b.vy, b.vx);
+      if(b.hitSet) b.hitSet.clear();
+      emit(b.x, b.y, 3, '#aed6f1', 40, 100, 0.18);
     }
+  }
+  if(b.life <= 0 || b.x < -12 || b.x > W+12 || b.y < -12 || b.y > H+12){
     b.dead = true;
   }
 }
@@ -1306,6 +1873,7 @@ function drawGame(){
     else if(e.type === 'enemy') drawEnemy(e);
     else if(e.type === 'bullet') drawBulletEntity(e);
     else if(e.type === 'pickup') drawPickupEntity(e);
+    else if(e.type === 'companion') drawCompanion(e);
   }
   for(const p of particles){
     const a = clamp(p.life / p.maxLife, 0, 1);
@@ -1332,7 +1900,10 @@ function drawPlayer(p){
   let gunCol = '#2c3e50', tipCol = '#95a5a6';
   if(p.rocketAmmo > 0){ gunCol = '#5d4037'; tipCol = '#e67e22'; }
   else if(p.laserTime > 0){ gunCol = '#27ae60'; tipCol = '#f1c40f'; }
+  else if(p.homingTime > 0){ gunCol = '#7d3c98'; tipCol = '#e91e63'; }
+  else if(p.plasmaTime > 0){ gunCol = '#21618c'; tipCol = '#3498db'; }
   else if(p.spreadTime > 0){ gunCol = '#7d6608'; tipCol = '#f1c40f'; }
+  else if(p.minigunTime > 0){ gunCol = '#4a4a4a'; tipCol = '#bdc3c7'; }
   else if(p.rapidTime > 0){ gunCol = '#a04000'; tipCol = '#e67e22'; }
   if(p.damageTime > 0){ tipCol = '#e74c3c'; }  // Damage buff: red barrel tip
   ctx.fillStyle = gunCol;
@@ -1372,6 +1943,11 @@ function drawEnemy(e){
     case 'splitter_mini': sp = SPR.splitter_mini; break;
     case 'summoner': sp = SPR.summoner; break;
     case 'overlord': sp = SPR.overlord; break;
+    case 'twin':     sp = SPR.twin; break;
+    case 'reaper':   sp = SPR.reaper; break;
+    case 'bomber':   sp = SPR.bomber; break;
+    case 'phantom':  sp = SPR.phantom; break;
+    case 'nemesis':  sp = SPR.nemesis; break;
   }
   if(!sp) return;
   // Sniper telegraph
@@ -1400,6 +1976,21 @@ function drawEnemy(e){
   }
 }
 
+function drawCompanion(c){
+  if(c.invuln > 0 && Math.floor(c.invuln * 18) % 2) return;
+  const sp = c.frame === 0 ? SPR.companion_a : SPR.companion_b;
+  if(c.hitFlash > 0){
+    drawSpriteTinted(sp, Math.floor(c.x - sp.w/2), Math.floor(c.y - sp.h/2), '#fff');
+  } else {
+    drawSpriteCentered(sp, c.x, c.y);
+  }
+  // Tiny HP pips above
+  ctx.fillStyle = '#0a0a14';
+  ctx.fillRect(Math.floor(c.x) - 4, Math.floor(c.y - sp.h/2) - 3, 9, 2);
+  ctx.fillStyle = '#3498db';
+  ctx.fillRect(Math.floor(c.x) - 4, Math.floor(c.y - sp.h/2) - 3, Math.floor(9 * (c.hp / c.maxHp)), 2);
+}
+
 function drawBulletEntity(b){
   ctx.save();
   ctx.translate(Math.floor(b.x), Math.floor(b.y));
@@ -1421,6 +2012,7 @@ function drawPickupEntity(p){
   const sprMap = {
     health: SPR.p_health, spread: SPR.p_spread, rapid: SPR.p_rapid,
     shield: SPR.p_shield, rocket: SPR.p_rocket, laser: SPR.p_laser,
+    minigun: SPR.p_minigun, plasma: SPR.p_plasma, homing: SPR.p_homing,
     speed: SPR.p_speed,   damage: SPR.p_damage, slowmo: SPR.p_slowmo,
     score2x: SPR.p_score, magnet: SPR.p_magnet
   };
@@ -1430,6 +2022,7 @@ function drawPickupEntity(p){
   const glowColors = {
     health:'#e74c3c', spread:'#f1c40f', rapid:'#e67e22',
     shield:'#1abc9c', rocket:'#bdc3c7', laser:'#27ae60',
+    minigun:'#bdc3c7', plasma:'#3498db', homing:'#e91e63',
     speed:'#e91e63',  damage:'#e74c3c', slowmo:'#3498db',
     score2x:'#f1c40f', magnet:'#e74c3c'
   };
@@ -1469,7 +2062,7 @@ function drawHUD(){
   ctx.fillStyle = '#f1c40f';
   ctx.fillText('SCORE ' + score, W - 6, 14);
   ctx.fillStyle = '#3498db';
-  ctx.fillText('LVL ' + (levelIdx + 1) + '/5', W - 6, 26);
+  ctx.fillText('LVL ' + (levelIdx + 1) + '/' + LEVELS.length, W - 6, 26);
 
   // Active weapon row (bottom-left)
   drawWeaponHUD();
@@ -1525,9 +2118,12 @@ function drawWeaponHUD(){
     ctx.fillText(label, x + 7, y - 7);
     x += 48;
   };
-  if(player.rapidTime > 0)   draw('RAPID',  SPR.p_rapid,  player.rapidTime,  8, '#e67e22');
-  if(player.spreadTime > 0)  draw('SPREAD', SPR.p_spread, player.spreadTime, 8, '#f1c40f');
-  if(player.laserTime > 0)   draw('LASER',  SPR.p_laser,  player.laserTime,  7, '#27ae60');
+  if(player.rapidTime > 0)   draw('RAPID',  SPR.p_rapid,   player.rapidTime,   8, '#e67e22');
+  if(player.spreadTime > 0)  draw('SPREAD', SPR.p_spread,  player.spreadTime,  8, '#f1c40f');
+  if(player.laserTime > 0)   draw('LASER',  SPR.p_laser,   player.laserTime,   7, '#27ae60');
+  if(player.minigunTime > 0) draw('MINI',   SPR.p_minigun, player.minigunTime, 8, '#bdc3c7');
+  if(player.plasmaTime > 0)  draw('PLSMA',  SPR.p_plasma,  player.plasmaTime,  8, '#3498db');
+  if(player.homingTime > 0)  draw('SEEK',   SPR.p_homing,  player.homingTime,  8, '#e91e63');
   if(player.rocketAmmo > 0){
     drawSprite(SPR.p_rocket, x, y - 7);
     ctx.fillStyle = '#fff';
@@ -1557,7 +2153,7 @@ function drawMenu(){
 
   ctx.font = 'bold 8px monospace';
   ctx.fillStyle = '#bdc3c7';
-  ctx.fillText('5 levels · 5 bosses · 6 weapons · 5 powerups', W/2, 115);
+  ctx.fillText('10 levels · 10 bosses · 9 weapons · 5 powerups · AI ally', W/2, 115);
 
   const sh = clickedRect(W/2 - 60, 140, 120, 24);
   ctx.fillStyle = sh ? '#3498db' : '#1f4e6b';
@@ -1621,15 +2217,18 @@ function drawHowTo(){
   ctx.font = 'bold 7px monospace';
 
   const eq = [
-    [SPR.p_health, 'HP',     '+1 health',          '#e74c3c'],
-    [SPR.p_spread, 'SPREAD', '3-shot 8s',          '#f1c40f'],
-    [SPR.p_rapid,  'RAPID',  'half cooldown 8s',   '#e67e22'],
-    [SPR.p_shield, 'SHIELD', 'absorb 3 hits',      '#1abc9c'],
-    [SPR.p_rocket, 'ROCKET', '+6 AOE ammo',        '#bdc3c7'],
-    [SPR.p_laser,  'LASER',  'piercing beam 7s',   '#27ae60']
+    [SPR.p_health,  'HP',     '+1 health',         '#e74c3c'],
+    [SPR.p_spread,  'SPREAD', '3-shot 8s',         '#f1c40f'],
+    [SPR.p_rapid,   'RAPID',  'half cooldown 8s',  '#e67e22'],
+    [SPR.p_shield,  'SHIELD', 'absorb 3 hits',     '#1abc9c'],
+    [SPR.p_rocket,  'ROCKET', '+6 AOE ammo',       '#bdc3c7'],
+    [SPR.p_laser,   'LASER',  'piercing beam 7s',  '#27ae60'],
+    [SPR.p_minigun, 'MINI',   'rapid bullets 8s',  '#bdc3c7'],
+    [SPR.p_plasma,  'PLSMA',  'bouncing shots 8s', '#3498db'],
+    [SPR.p_homing,  'SEEK',   'homing missiles 8s','#e91e63']
   ];
   eq.forEach((e, i) => {
-    const yy = 72 + i*12;
+    const yy = 72 + i*10;
     drawSprite(e[0], colX[0], yy - 5);
     ctx.fillStyle = e[3];    ctx.fillText(e[1], colX[0] + 9, yy);
     ctx.fillStyle = '#bdc3c7'; ctx.fillText(e[2], colX[0] + 50, yy);
@@ -1643,21 +2242,30 @@ function drawHowTo(){
     [SPR.p_magnet, 'MAGNET', 'pull pickups 10s', '#e67e22']
   ];
   pw.forEach((p, i) => {
-    const yy = 72 + i*12;
+    const yy = 72 + i*10;
     drawSprite(p[0], colX[1], yy - 5);
     ctx.fillStyle = p[3];    ctx.fillText(p[1], colX[1] + 9, yy);
     ctx.fillStyle = '#bdc3c7'; ctx.fillText(p[2], colX[1] + 50, yy);
   });
+  // Companion blurb under the powerups list
+  drawSprite(SPR.companion_a, colX[1], 72 + 5*10 + 5);
+  ctx.fillStyle = '#aed6f1'; ctx.fillText('ALLY', colX[1] + 9, 72 + 5*10 + 10);
+  ctx.fillStyle = '#bdc3c7'; ctx.fillText('auto-fires, 3 HP', colX[1] + 35, 72 + 5*10 + 10);
 
   const bosses = [
-    ['L1 BRUISER',  'charge + cross'],
-    ['L2 NEEDLE',   'teleport sniper'],
-    ['L3 HYDRA',    'splits on death'],
-    ['L4 CONJURER', 'summon + rings'],
-    ['L5 OVERLORD', '3-phase boss']
+    ['L1 BRUISER',     'charge + cross'],
+    ['L2 NEEDLE',      'teleport sniper'],
+    ['L3 HYDRA',       'splits on death'],
+    ['L4 CONJURER',    'summon + rings'],
+    ['L5 OVERLORD',    '3-phase boss'],
+    ['L6 TWIN',        'dash + twin shots'],
+    ['L7 REAPER',      'dash + ring slash'],
+    ['L8 BOMBARDIER',  'homing missiles'],
+    ['L9 PHANTOM',     'teleport + spiral'],
+    ['L10 NEMESIS',    '4-phase final']
   ];
   bosses.forEach((b, i) => {
-    const yy = 72 + i*12;
+    const yy = 72 + i*10;
     ctx.fillStyle = '#e74c3c'; ctx.fillText(b[0], colX[2], yy);
     ctx.fillStyle = '#bdc3c7'; ctx.fillText(b[1], colX[2] + 60, yy);
   });
@@ -1697,7 +2305,7 @@ function drawGameOver(){
   ctx.font = 'bold 10px monospace';
   ctx.fillStyle = '#fff';
   ctx.fillText('FINAL SCORE: ' + score, W/2, H/2 + 14);
-  ctx.fillText('LEVEL REACHED: ' + (levelIdx + 1) + '/5', W/2, H/2 + 30);
+  ctx.fillText('LEVEL REACHED: ' + (levelIdx + 1) + '/' + LEVELS.length, W/2, H/2 + 30);
   if(score === highScore && score > 0){
     ctx.fillStyle = '#f1c40f';
     ctx.fillText('* NEW HIGH SCORE *', W/2, H/2 + 46);
@@ -1719,7 +2327,7 @@ function drawVictory(){
   ctx.fillText('VICTORY!', W/2, H/2 - 18);
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 10px monospace';
-  ctx.fillText('All 5 bosses fell. The arena is yours.', W/2, H/2 + 4);
+  ctx.fillText('All 10 bosses fell. The arena is yours.', W/2, H/2 + 4);
   ctx.fillText('FINAL SCORE: ' + score, W/2, H/2 + 22);
   if(score === highScore && score > 0){
     ctx.fillStyle = '#f1c40f';
