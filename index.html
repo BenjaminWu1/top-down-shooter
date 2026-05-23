@@ -865,7 +865,19 @@ const LEVELS = [
   { total:72, rate:0.34, mix:[['runner',0.08],['tank',0.22],['shooter',0.25],['charger',0.17],['exploder',0.16],['swarmer',0.12]],      boss:'reaper',   bossName:'OBSIDIAN'    },
   { total:78, rate:0.32, mix:[['runner',0.08],['tank',0.22],['shooter',0.25],['charger',0.18],['exploder',0.17],['swarmer',0.1]],       boss:'bomber',   bossName:'CATACLYSM'   },
   { total:84, rate:0.3,  mix:[['runner',0.06],['tank',0.24],['shooter',0.26],['charger',0.18],['exploder',0.16],['swarmer',0.1]],       boss:'phantom',  bossName:'ABYSSAL'     },
-  { total:92, rate:0.28, mix:[['tank',0.26],['shooter',0.28],['charger',0.2],['exploder',0.16],['swarmer',0.1]],                         boss:'nemesis',  bossName:'GODKILLER'   }
+  { total:92, rate:0.28, mix:[['tank',0.26],['shooter',0.28],['charger',0.2],['exploder',0.16],['swarmer',0.1]],                         boss:'nemesis',  bossName:'GODKILLER'   },
+  // ---- Levels 21-24 (still 2x world; tougher spawn pressure, same boss AI pool) ----
+  { total:100, rate:0.27, mix:[['tank',0.24],['shooter',0.28],['charger',0.2],['exploder',0.18],['swarmer',0.1]],                        boss:'twin',     bossName:'SHADOWFIRE'  },
+  { total:108, rate:0.26, mix:[['tank',0.26],['shooter',0.28],['charger',0.2],['exploder',0.16],['swarmer',0.1]],                        boss:'reaper',   bossName:'NIGHTREAPER' },
+  { total:116, rate:0.25, mix:[['tank',0.26],['shooter',0.3],['charger',0.2],['exploder',0.14],['swarmer',0.1]],                         boss:'bomber',   bossName:'WORLDBREAKER'},
+  { total:124, rate:0.24, mix:[['tank',0.28],['shooter',0.3],['charger',0.2],['exploder',0.14],['swarmer',0.08]],                        boss:'phantom',  bossName:'SOULTAKER'   },
+  // ---- Levels 25-30 (3x world — bigger arena than L14-L20, endgame curve) ----
+  { total:140, rate:0.22, mix:[['tank',0.3],['shooter',0.3],['charger',0.22],['exploder',0.12],['swarmer',0.06]],                        boss:'nemesis',  bossName:'DOOMBRINGER' },
+  { total:150, rate:0.20, mix:[['tank',0.3],['shooter',0.32],['charger',0.22],['exploder',0.1],['swarmer',0.06]],                        boss:'twin',     bossName:'APOCALYPSE'  },
+  { total:160, rate:0.19, mix:[['tank',0.32],['shooter',0.32],['charger',0.22],['exploder',0.1],['swarmer',0.04]],                       boss:'reaper',   bossName:'DOOMHERALD'  },
+  { total:175, rate:0.18, mix:[['tank',0.32],['shooter',0.34],['charger',0.22],['exploder',0.1],['swarmer',0.02]],                       boss:'bomber',   bossName:'WORLDEATER'  },
+  { total:190, rate:0.17, mix:[['tank',0.34],['shooter',0.34],['charger',0.22],['exploder',0.1]],                                         boss:'phantom',  bossName:'VOIDLORD'    },
+  { total:220, rate:0.16, mix:[['tank',0.36],['shooter',0.34],['charger',0.22],['exploder',0.08]],                                        boss:'nemesis',  bossName:'ANNIHILATOR' }
 ];
 
 const BOSS_NAMES = {
@@ -875,7 +887,7 @@ const BOSS_NAMES = {
   bomber:'BOMBARDIER', phantom:'PHANTOM', nemesis:'NEMESIS'
 };
 
-// Non-boss enemies scale up per level. 1.0 at level 1, ~2.52 at level 20.
+// Non-boss enemies scale up per level. 1.0 at level 1, ~2.52 at level 20, ~3.32 at level 30.
 function enemyScale(){ return 1 + levelIdx * 0.08; }
 
 // ============================================================
@@ -1291,10 +1303,13 @@ function startLevel(idx){
   spawnTimer = 0.6;
   spawnedCount = 0;
   bossSpawned = false;
-  // L14+ uses a 2x world. View stays at W*H; a camera follows the player.
-  const big = idx >= 13;
-  worldW = big ? W * 2 : W;
-  worldH = big ? H * 2 : H;
+  // World sizing: L1-L13 use the 1x viewport; L14-L24 use a 2x world; L25-L30
+  // use a 3x world. View stays at W*H either way — a camera follows the player.
+  let worldScale = 1;
+  if(idx >= 24) worldScale = 3;
+  else if(idx >= 13) worldScale = 2;
+  worldW = W * worldScale;
+  worldH = H * worldScale;
   camX = 0; camY = 0;
   entities = entities.filter(e => e.type === 'player' || e.type === 'companion');
   particles = [];
@@ -2033,8 +2048,10 @@ function killEnemy(en){
     // dedicated pool so the fuel canister occupies a real slice of the distribution.
     let kinds, weights;
     if(player && player.char === 'tank'){
+      // Fuel weight bumped from 0.13 to 0.20 so Tank can sustain the flamethrower
+      // more reliably. Health/slowmo/score2x/rocket/magnet shaved to keep sum = 1.0.
       kinds   = ['health','fuel','spread','rapid','shield','armor','rocket','laser','minigun','plasma','homing','speed','damage','slowmo','score2x','magnet'];
-      weights = [ 0.13,   0.13,  0.07,    0.07,    0.06,    0.06,   0.05,    0.05,   0.05,     0.05,    0.05,    0.05,   0.05,    0.04,    0.03,     0.06    ];
+      weights = [ 0.10,   0.20,  0.07,    0.07,    0.06,    0.06,   0.04,    0.05,   0.05,     0.05,    0.05,    0.05,   0.05,    0.03,    0.02,     0.05    ];
     } else {
       kinds   = ['health','spread','rapid','shield','armor','rocket','laser','minigun','plasma','homing','speed','damage','slowmo','score2x','magnet'];
       weights = [ 0.16,   0.08,    0.08,   0.07,    0.07,   0.06,    0.06,   0.06,     0.06,    0.05,    0.05,   0.06,    0.05,    0.03,     0.06    ];
@@ -3254,7 +3271,9 @@ function drawMenu(){
   ctx.fillStyle = '#bdc3c7';
   ctx.fillText('SELECT LEVEL  ·  ' + clearedLevels.size + ' / ' + LEVELS.length + ' CLEARED', W/2, 115);
 
-  // 5x3 level grid
+  // 6x5 level grid. Box color (green for cleared, blue for unbeaten) is the
+  // sole cleared-state indicator now that the boxes are too short for a
+  // second text line.
   for(let i = 0; i < LEVELS.length; i++){
     const box = levelBoxRect(i);
     const hov = clickedRect(box.x, box.y, box.w, box.h);
@@ -3268,17 +3287,7 @@ function drawMenu(){
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 9px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('L' + (i + 1), box.x + box.w / 2, box.y + 9);
-    if(cleared){
-      // Green check mark in the corner
-      ctx.fillStyle = '#2ecc71';
-      ctx.font = 'bold 7px monospace';
-      ctx.fillText('CLEAR', box.x + box.w / 2, box.y + 16);
-    } else {
-      ctx.fillStyle = '#7f8c8d';
-      ctx.font = 'bold 7px monospace';
-      ctx.fillText('—', box.x + box.w / 2, box.y + 16);
-    }
+    ctx.fillText('L' + (i + 1), box.x + box.w / 2, box.y + 11);
   }
   ctx.textAlign = 'center';
 
@@ -3314,8 +3323,10 @@ function guideButtonRect(){ return { x: W - 64, y: 8, w: 56, h: 16 }; }
 
 // Geometry helper shared by drawMenu + handleMenu so click targets stay in sync.
 function levelBoxRect(i){
-  const cols = 5, rows = 4;
-  const bw = 30, bh = 18, gap = 3;
+  // 30 levels in a 6x5 grid. Boxes shrank slightly from 30x18 to 26x15
+  // so the whole grid still fits above the HIGH SCORE line at y=215.
+  const cols = 6, rows = 5;
+  const bw = 26, bh = 15, gap = 2;
   const totalW = cols * bw + (cols - 1) * gap;
   const xs = Math.floor((W - totalW) / 2);
   const ys = 124;
