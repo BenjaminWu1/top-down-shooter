@@ -914,20 +914,20 @@ const CHARACTERS = {
   soldier: {
     name:'SOLDIER', desc:'BALANCED · +25% DAMAGE',
     color:'#3498db', hp:5, speed:90, damageMult:1.25, startShield:0,
-    skills:{ x:'summon', c:'slowmo' },
-    skillLabels:{ x:'BLADE', c:'SLOW' }
+    skills:{ x:'summon', c:'slowmo', b:'flameburst' },
+    skillLabels:{ x:'BLADE', c:'SLOW', b:'BURST' }
   },
   scout: {
     name:'SCOUT', desc:'FRAGILE · FAST · BLINK',
     color:'#f1c40f', hp:3, speed:130, damageMult:1.0, startShield:0,
-    skills:{ x:'summon', c:'slowmo' },
-    skillLabels:{ x:'BLADE', c:'SLOW' }
+    skills:{ x:'summon', c:'slowmo', b:'flameburst' },
+    skillLabels:{ x:'BLADE', c:'SLOW', b:'BURST' }
   },
   tank: {
     name:'TANK', desc:'HEAVY · +20% DAMAGE · FLAMETHROWER (RMB)',
     color:'#27ae60', hp:12, speed:95, damageMult:1.2, startShield:4,
-    skills:{ x:'summon', c:'wall' },
-    skillLabels:{ x:'BLADE', c:'WALL' }
+    skills:{ x:'summon', c:'wall', b:'flameburst' },
+    skillLabels:{ x:'BLADE', c:'WALL', b:'BURST' }
   }
 };
 let selectedChar = 'soldier';
@@ -946,7 +946,7 @@ const mouse = { x: W/2, y: H/2, down:false, rdown:false, clicked:false };
 // may still scroll itself to bring something into view.
 const GAMEPLAY_KEYS = new Set([
   'KeyW','KeyA','KeyS','KeyD',
-  'KeyX','KeyC',
+  'KeyX','KeyC','KeyB',
   'Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'
 ]);
 window.addEventListener('keydown', e => {
@@ -1030,8 +1030,8 @@ function createPlayer(charKey){
     speedTime:0, damageTime:0, magnetTime:0, scoreTime:0,
     // Special-skill cooldowns. X/C are class-specific (per CHARACTERS.skills).
     // The "summon" skill (sword ally) is now bound to X for every class.
-    skillCd:{ x:0, c:0 },
-    skillCdMax:{ x:4, c:12, blink:5, wall:18, summon:25 },
+    skillCd:{ x:0, c:0, b:0 },
+    skillCdMax:{ x:4, c:12, blink:5, wall:18, summon:25, flameburst:20 },
     hitFlash:0, invuln:0, frame:0, frameT:0, dead:false
   };
 }
@@ -1194,6 +1194,41 @@ function triggerSkill(name, dx, dy, mag){
     }
     shakeTime = 0.2; shakeAmt = 3;
     try { sfx.explode(); } catch(err){ /* audio nodes are best-effort */ }
+    return true;
+  }
+  if(name === 'flameburst'){
+    // Short-radius ring of fire around the player. Damage is instant; the visible
+    // flame particles linger ~0.3s. Tuned to one-shot small enemies (grunt/runner/
+    // swarmer/exploder at most levels) but leave heavies and bosses alive.
+    const radius = 36;
+    const dmg = 4 * (player.damageMult || 1);
+    const targets = entities.filter(e => e.type === 'enemy' && !e.dead);
+    for(const en of targets){
+      if(dist2(player, en) < radius * radius){
+        en.hp -= dmg;
+        en.hitFlash = 0.08;
+        if(en.hp <= 0) killEnemy(en);
+      }
+    }
+    // Ring of flame particles — lifetime ~0.3s.
+    const count = 28;
+    for(let i = 0; i < count; i++){
+      const a = (i / count) * Math.PI * 2 + Math.random() * 0.1;
+      const r = radius * (0.55 + Math.random() * 0.45);
+      const px = player.x + Math.cos(a) * r * 0.4;
+      const py = player.y + Math.sin(a) * r * 0.4;
+      const vx = Math.cos(a) * 110;
+      const vy = Math.sin(a) * 110;
+      const col = ['#fff', '#f1c40f', '#e67e22', '#e74c3c'][i % 4];
+      particles.push({
+        x: px, y: py, vx, vy,
+        life: 0.22 + Math.random() * 0.12,
+        maxLife: 0.34, color: col,
+        size: 1 + Math.floor(Math.random() * 2)
+      });
+    }
+    if(particles.length > 300) particles.length = 300;
+    sfx.explode();
     return true;
   }
   if(name === 'summon'){
@@ -1379,12 +1414,16 @@ function updatePlaying(dt){
   // ---- Special skills: X / C dispatched per-character ----
   if(player.skillCd.x > 0) player.skillCd.x -= dt;
   if(player.skillCd.c > 0) player.skillCd.c -= dt;
+  if(player.skillCd.b > 0) player.skillCd.b -= dt;
   const charSkills = CHARACTERS[player.char].skills;
   if(keys['KeyX'] && player.skillCd.x <= 0){
     if(triggerSkill(charSkills.x, dx, dy, mag)) player.skillCd.x = player.skillCdMax[charSkills.x];
   }
   if(keys['KeyC'] && player.skillCd.c <= 0){
     if(triggerSkill(charSkills.c, dx, dy, mag)) player.skillCd.c = player.skillCdMax[charSkills.c];
+  }
+  if(keys['KeyB'] && player.skillCd.b <= 0 && charSkills.b){
+    if(triggerSkill(charSkills.b, dx, dy, mag)) player.skillCd.b = player.skillCdMax[charSkills.b];
   }
 
   // ---- Shooting / Weapon dispatch ----
@@ -3147,11 +3186,14 @@ function drawSkillHUD(){
   const y = H - 30;
   const ch = CHARACTERS[player.char] || CHARACTERS.soldier;
   const skillColor = { dash:'#f1c40f', blink:'#f1c40f', slowmo:'#3498db', wall:'#27ae60',
-                       nuke:'#e74c3c', grenade:'#e67e22', summon:'#f1c40f' };
+                       nuke:'#e74c3c', grenade:'#e67e22', summon:'#f1c40f', flameburst:'#e67e22' };
   const skills = [
     { key:'X', label:ch.skillLabels.x, cd:player.skillCd.x, max:player.skillCdMax[ch.skills.x], color:skillColor[ch.skills.x] },
     { key:'C', label:ch.skillLabels.c, cd:player.skillCd.c, max:player.skillCdMax[ch.skills.c], color:skillColor[ch.skills.c] }
   ];
+  if(ch.skills.b){
+    skills.push({ key:'B', label:ch.skillLabels.b, cd:player.skillCd.b, max:player.skillCdMax[ch.skills.b], color:skillColor[ch.skills.b] });
+  }
   ctx.textAlign = 'left';
   let x = 6;
   for(const s of skills){
@@ -3323,6 +3365,7 @@ function drawCharacterSelect(){
     ctx.fillStyle = '#fff';
     ctx.fillText('X ' + ch.skillLabels.x, r.x + 12, r.y + 122);
     ctx.fillText('C ' + ch.skillLabels.c, r.x + 12, r.y + 131);
+    if(ch.skillLabels.b) ctx.fillText('B ' + ch.skillLabels.b, r.x + 12, r.y + 140);
 
     ctx.textAlign = 'center';
   }
