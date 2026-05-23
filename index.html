@@ -1291,6 +1291,15 @@ function spawnBoss(kind){
   // Spawn the boss centered above the player so they don't have to chase across the larger arena.
   const sx = player ? clamp(player.x, 40, worldW - 40) : worldW / 2;
   const b = createEnemy(kind, sx, -25);
+  // Bosses scale per level so the same AI reused at higher levels actually
+  // feels harder. HP +7%/level, speed +1.5%/level. At L1 (bruiser) this is a
+  // no-op; at L30 (ANNIHILATOR) the nemesis ends up with ~515 HP / ~34 speed
+  // instead of the base 170 / 24.
+  const hpScale = 1 + levelIdx * 0.07;
+  const spdScale = 1 + levelIdx * 0.015;
+  b.hp = Math.ceil(b.hp * hpScale);
+  b.maxHp = b.hp;
+  b.speed = b.speed * spdScale;
   entities.push(b);
   bossSpawnPulse = 1;
   sfx.bossSpawn();
