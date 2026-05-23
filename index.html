@@ -1028,6 +1028,8 @@ function createPlayer(charKey){
     minigunTime:0, plasmaTime:0, homingTime:0,
     // Passive powerups (temporary buffs)
     speedTime:0, damageTime:0, magnetTime:0, scoreTime:0,
+    // Tank's B-key flameburst: ring of fire centered on the player. Set to 3s on cast.
+    flameburstTime:0,
     // Special-skill cooldowns. X/C are class-specific (per CHARACTERS.skills).
     // The "summon" skill (sword ally) is now bound to X for every class.
     skillCd:{ x:0, c:0, b:0 },
@@ -1197,37 +1199,9 @@ function triggerSkill(name, dx, dy, mag){
     return true;
   }
   if(name === 'flameburst'){
-    // Short-radius ring of fire around the player. Damage is instant; the visible
-    // flame particles linger ~0.3s. Tuned to one-shot small enemies (grunt/runner/
-    // swarmer/exploder at most levels) but leave heavies and bosses alive.
-    const radius = 36;
-    const dmg = 4 * (player.damageMult || 1);
-    const targets = entities.filter(e => e.type === 'enemy' && !e.dead);
-    for(const en of targets){
-      if(dist2(player, en) < radius * radius){
-        en.hp -= dmg;
-        en.hitFlash = 0.08;
-        if(en.hp <= 0) killEnemy(en);
-      }
-    }
-    // Ring of flame particles — lifetime ~0.3s.
-    const count = 28;
-    for(let i = 0; i < count; i++){
-      const a = (i / count) * Math.PI * 2 + Math.random() * 0.1;
-      const r = radius * (0.55 + Math.random() * 0.45);
-      const px = player.x + Math.cos(a) * r * 0.4;
-      const py = player.y + Math.sin(a) * r * 0.4;
-      const vx = Math.cos(a) * 110;
-      const vy = Math.sin(a) * 110;
-      const col = ['#fff', '#f1c40f', '#e67e22', '#e74c3c'][i % 4];
-      particles.push({
-        x: px, y: py, vx, vy,
-        life: 0.22 + Math.random() * 0.12,
-        maxLife: 0.34, color: col,
-        size: 1 + Math.floor(Math.random() * 2)
-      });
-    }
-    if(particles.length > 300) particles.length = 300;
+    // Arm a 3-second ring of fire centered on the player. The per-frame damage
+    // and flame particles are emitted in updatePlaying via tickFlameburst().
+    player.flameburstTime = Math.max(player.flameburstTime, 3);
     sfx.explode();
     return true;
   }
@@ -1415,6 +1389,10 @@ function updatePlaying(dt){
   if(player.skillCd.x > 0) player.skillCd.x -= dt;
   if(player.skillCd.c > 0) player.skillCd.c -= dt;
   if(player.skillCd.b > 0) player.skillCd.b -= dt;
+  if(player.flameburstTime > 0){
+    player.flameburstTime -= dt;
+    tickFlameburst(dt);
+  }
   const charSkills = CHARACTERS[player.char].skills;
   if(keys['KeyX'] && player.skillCd.x <= 0){
     if(triggerSkill(charSkills.x, dx, dy, mag)) player.skillCd.x = player.skillCdMax[charSkills.x];
@@ -1624,6 +1602,43 @@ function updatePlaying(dt){
 // Tank's flamethrower: a cone of damage in the aim direction this frame,
 // plus visual flame particles. Called each tick while right-mouse is held
 // and fuel remains.
+// Tank's B-key flameburst: a 3-second ring of fire centered on the player.
+// Called every frame while player.flameburstTime > 0. DPS is tuned so a small
+// mob (grunt/runner/swarmer/exploder, hp ≤ ~3) dies in well under a second of
+// contact but a Tank enemy needs to sit in the ring for ~2s and bosses survive.
+function tickFlameburst(dt){
+  const radius = 36;
+  const dps = 6 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
+  // Damage any enemy inside the ring this tick.
+  for(const en of entities){
+    if(en.type !== 'enemy' || en.dead) continue;
+    if(dist2(player, en) < (radius + en.radius) * (radius + en.radius)){
+      en.hp -= dps * dt;
+      en.hitFlash = 0.06;
+      if(en.hp <= 0) killEnemy(en);
+    }
+  }
+  // Spray flame particles along the ring (count scaled by dt so it looks
+  // dense at 60fps without overflowing the 300-particle cap).
+  const count = Math.max(1, Math.floor(120 * dt));
+  for(let i = 0; i < count; i++){
+    const a = Math.random() * Math.PI * 2;
+    const r = radius * (0.55 + Math.random() * 0.45);
+    const px = player.x + Math.cos(a) * r * 0.5;
+    const py = player.y + Math.sin(a) * r * 0.5;
+    const vx = Math.cos(a) * 70;
+    const vy = Math.sin(a) * 70;
+    const col = ['#fff', '#f1c40f', '#e67e22', '#e74c3c'][i % 4];
+    particles.push({
+      x: px, y: py, vx, vy,
+      life: 0.18 + Math.random() * 0.12,
+      maxLife: 0.3, color: col,
+      size: 1 + Math.floor(Math.random() * 2)
+    });
+  }
+  if(particles.length > 300) particles.length = 300;
+}
+
 function fireFlamethrower(dt){
   const baseX = player.x + Math.cos(player.angle) * 7;
   const baseY = player.y + Math.sin(player.angle) * 7;
