@@ -843,40 +843,41 @@ const sfx = {
 // LEVEL CONFIG (one unique boss per level)
 // ============================================================
 const LEVELS = [
+  // ---- Tier 1: L1-L5 — BRUISER (melee charger). Intro tier. ----
   { total:10, rate:1.1,  mix:[['grunt',1.0]],                                                  boss:'bruiser'  },
-  { total:14, rate:1.0,  mix:[['grunt',0.6],['runner',0.4]],                                   boss:'sniper'   },
-  { total:18, rate:0.85, mix:[['grunt',0.5],['runner',0.3],['tank',0.2]],                      boss:'splitter' },
-  { total:22, rate:0.75, mix:[['grunt',0.35],['runner',0.2],['tank',0.15],['shooter',0.15],['charger',0.15]],                          boss:'summoner' },
-  { total:24, rate:0.75, mix:[['grunt',0.3],['runner',0.2],['tank',0.15],['shooter',0.15],['charger',0.1],['exploder',0.1]],            boss:'overlord' },
-  // ---- New levels: 6-10 ----
-  { total:26, rate:0.7,  mix:[['grunt',0.2],['runner',0.25],['tank',0.15],['shooter',0.15],['charger',0.1],['exploder',0.1],['swarmer',0.05]], boss:'twin'     },
-  { total:30, rate:0.65, mix:[['grunt',0.15],['runner',0.25],['tank',0.15],['shooter',0.15],['charger',0.12],['exploder',0.1],['swarmer',0.08]], boss:'reaper'   },
-  { total:32, rate:0.6,  mix:[['runner',0.25],['tank',0.2],['shooter',0.2],['charger',0.12],['exploder',0.13],['swarmer',0.1]],         boss:'bomber'   },
-  { total:36, rate:0.55, mix:[['runner',0.2],['tank',0.2],['shooter',0.2],['charger',0.15],['exploder',0.13],['swarmer',0.12]],         boss:'phantom'  },
-  { total:40, rate:0.5,  mix:[['runner',0.18],['tank',0.18],['shooter',0.22],['charger',0.15],['exploder',0.15],['swarmer',0.12]],      boss:'nemesis'  },
-  // ---- New levels: 11-15 (same boss AI, unique names via bossName override) ----
-  { total:44, rate:0.48, mix:[['runner',0.18],['tank',0.18],['shooter',0.22],['charger',0.15],['exploder',0.15],['swarmer',0.12]],      boss:'twin',     bossName:'STORMCALLER' },
-  { total:48, rate:0.45, mix:[['runner',0.15],['tank',0.2],['shooter',0.22],['charger',0.15],['exploder',0.15],['swarmer',0.13]],       boss:'reaper',   bossName:'WARDEN'      },
-  { total:52, rate:0.43, mix:[['runner',0.15],['tank',0.2],['shooter',0.22],['charger',0.15],['exploder',0.15],['swarmer',0.13]],       boss:'bomber',   bossName:'IRONSIDES'   },
-  { total:56, rate:0.4,  mix:[['runner',0.12],['tank',0.22],['shooter',0.22],['charger',0.16],['exploder',0.15],['swarmer',0.13]],      boss:'phantom',  bossName:'VOIDWALKER'  },
-  { total:60, rate:0.38, mix:[['runner',0.12],['tank',0.2],['shooter',0.25],['charger',0.15],['exploder',0.15],['swarmer',0.13]],       boss:'nemesis',  bossName:'ARCHDEMON'   },
-  // ---- Endgame levels: 16-20 (boss AI reused; tougher spawn pressure + harder mixes) ----
-  { total:66, rate:0.36, mix:[['runner',0.1],['tank',0.22],['shooter',0.25],['charger',0.16],['exploder',0.15],['swarmer',0.12]],       boss:'twin',     bossName:'TEMPEST'     },
-  { total:72, rate:0.34, mix:[['runner',0.08],['tank',0.22],['shooter',0.25],['charger',0.17],['exploder',0.16],['swarmer',0.12]],      boss:'reaper',   bossName:'OBSIDIAN'    },
-  { total:78, rate:0.32, mix:[['runner',0.08],['tank',0.22],['shooter',0.25],['charger',0.18],['exploder',0.17],['swarmer',0.1]],       boss:'bomber',   bossName:'CATACLYSM'   },
-  { total:84, rate:0.3,  mix:[['runner',0.06],['tank',0.24],['shooter',0.26],['charger',0.18],['exploder',0.16],['swarmer',0.1]],       boss:'phantom',  bossName:'ABYSSAL'     },
-  { total:92, rate:0.28, mix:[['tank',0.26],['shooter',0.28],['charger',0.2],['exploder',0.16],['swarmer',0.1]],                         boss:'nemesis',  bossName:'GODKILLER'   },
-  // ---- Levels 21-24 (still 2x world; tougher spawn pressure, same boss AI pool) ----
-  { total:100, rate:0.27, mix:[['tank',0.24],['shooter',0.28],['charger',0.2],['exploder',0.18],['swarmer',0.1]],                        boss:'twin',     bossName:'SHADOWFIRE'  },
-  { total:108, rate:0.26, mix:[['tank',0.26],['shooter',0.28],['charger',0.2],['exploder',0.16],['swarmer',0.1]],                        boss:'reaper',   bossName:'NIGHTREAPER' },
-  { total:116, rate:0.25, mix:[['tank',0.26],['shooter',0.3],['charger',0.2],['exploder',0.14],['swarmer',0.1]],                         boss:'bomber',   bossName:'WORLDBREAKER'},
-  { total:124, rate:0.24, mix:[['tank',0.28],['shooter',0.3],['charger',0.2],['exploder',0.14],['swarmer',0.08]],                        boss:'phantom',  bossName:'SOULTAKER'   },
-  // ---- Levels 25-30 (3x world — bigger arena than L14-L20, endgame curve) ----
-  { total:140, rate:0.22, mix:[['tank',0.3],['shooter',0.3],['charger',0.22],['exploder',0.12],['swarmer',0.06]],                        boss:'nemesis',  bossName:'DOOMBRINGER' },
-  { total:150, rate:0.20, mix:[['tank',0.3],['shooter',0.32],['charger',0.22],['exploder',0.1],['swarmer',0.06]],                        boss:'twin',     bossName:'APOCALYPSE'  },
-  { total:160, rate:0.19, mix:[['tank',0.32],['shooter',0.32],['charger',0.22],['exploder',0.1],['swarmer',0.04]],                       boss:'reaper',   bossName:'DOOMHERALD'  },
-  { total:175, rate:0.18, mix:[['tank',0.32],['shooter',0.34],['charger',0.22],['exploder',0.1],['swarmer',0.02]],                       boss:'bomber',   bossName:'WORLDEATER'  },
-  { total:190, rate:0.17, mix:[['tank',0.34],['shooter',0.34],['charger',0.22],['exploder',0.1]],                                         boss:'phantom',  bossName:'VOIDLORD'    },
+  { total:14, rate:1.0,  mix:[['grunt',0.6],['runner',0.4]],                                   boss:'bruiser',  bossName:'RAMPAGER'    },
+  { total:18, rate:0.85, mix:[['grunt',0.5],['runner',0.3],['tank',0.2]],                      boss:'bruiser',  bossName:'JUGGERNAUT'  },
+  { total:22, rate:0.75, mix:[['grunt',0.35],['runner',0.2],['tank',0.15],['shooter',0.15],['charger',0.15]],                          boss:'bruiser',  bossName:'COLOSSUS'    },
+  { total:24, rate:0.75, mix:[['grunt',0.3],['runner',0.2],['tank',0.15],['shooter',0.15],['charger',0.1],['exploder',0.1]],            boss:'bruiser',  bossName:'BEHEMOTH'    },
+  // ---- Tier 2: L6-L10 — NEEDLE (sniper). Ranged pressure. ----
+  { total:26, rate:0.7,  mix:[['grunt',0.2],['runner',0.25],['tank',0.15],['shooter',0.15],['charger',0.1],['exploder',0.1],['swarmer',0.05]], boss:'sniper'  },
+  { total:30, rate:0.65, mix:[['grunt',0.15],['runner',0.25],['tank',0.15],['shooter',0.15],['charger',0.12],['exploder',0.1],['swarmer',0.08]], boss:'sniper',  bossName:'MARKSMAN'    },
+  { total:32, rate:0.6,  mix:[['runner',0.25],['tank',0.2],['shooter',0.2],['charger',0.12],['exploder',0.13],['swarmer',0.1]],         boss:'sniper',  bossName:'DEADEYE'     },
+  { total:36, rate:0.55, mix:[['runner',0.2],['tank',0.2],['shooter',0.2],['charger',0.15],['exploder',0.13],['swarmer',0.12]],         boss:'sniper',  bossName:'SHARPSHOT'   },
+  { total:40, rate:0.5,  mix:[['runner',0.18],['tank',0.18],['shooter',0.22],['charger',0.15],['exploder',0.15],['swarmer',0.12]],      boss:'sniper',  bossName:'HUNTSMAN'    },
+  // ---- Tier 3: L11-L15 — HYDRA (splitter). Cascading kills, multi-split mid-game. ----
+  { total:44, rate:0.48, mix:[['runner',0.18],['tank',0.18],['shooter',0.22],['charger',0.15],['exploder',0.15],['swarmer',0.12]],      boss:'splitter' },
+  { total:48, rate:0.45, mix:[['runner',0.15],['tank',0.2],['shooter',0.22],['charger',0.15],['exploder',0.15],['swarmer',0.13]],       boss:'splitter', bossName:'MULTIFORM'   },
+  { total:52, rate:0.43, mix:[['runner',0.15],['tank',0.2],['shooter',0.22],['charger',0.15],['exploder',0.15],['swarmer',0.13]],       boss:'splitter', bossName:'SUNDERER'    },
+  { total:56, rate:0.4,  mix:[['runner',0.12],['tank',0.22],['shooter',0.22],['charger',0.16],['exploder',0.15],['swarmer',0.13]],      boss:'splitter', bossName:'FRAGMENTER'  },
+  { total:60, rate:0.38, mix:[['runner',0.12],['tank',0.2],['shooter',0.25],['charger',0.15],['exploder',0.15],['swarmer',0.13]],       boss:'splitter', bossName:'SCION'       },
+  // ---- Tier 4: L16-L20 — CONJURER (summoner). Spawns adds; the arena fills up. ----
+  { total:66, rate:0.36, mix:[['runner',0.1],['tank',0.22],['shooter',0.25],['charger',0.16],['exploder',0.15],['swarmer',0.12]],       boss:'summoner' },
+  { total:72, rate:0.34, mix:[['runner',0.08],['tank',0.22],['shooter',0.25],['charger',0.17],['exploder',0.16],['swarmer',0.12]],      boss:'summoner', bossName:'NECROMANCER' },
+  { total:78, rate:0.32, mix:[['runner',0.08],['tank',0.22],['shooter',0.25],['charger',0.18],['exploder',0.17],['swarmer',0.1]],       boss:'summoner', bossName:'WARLOCK'     },
+  { total:84, rate:0.3,  mix:[['runner',0.06],['tank',0.24],['shooter',0.26],['charger',0.18],['exploder',0.16],['swarmer',0.1]],       boss:'summoner', bossName:'SHEPHERD'    },
+  { total:92, rate:0.28, mix:[['tank',0.26],['shooter',0.28],['charger',0.2],['exploder',0.16],['swarmer',0.1]],                         boss:'summoner', bossName:'ARCHDEMON'   },
+  // ---- Tier 5: L21-L25 — OVERLORD (3-phase boss). 2x arena (L25 jumps to 3x). ----
+  { total:100, rate:0.27, mix:[['tank',0.24],['shooter',0.28],['charger',0.2],['exploder',0.18],['swarmer',0.1]],                        boss:'overlord' },
+  { total:108, rate:0.26, mix:[['tank',0.26],['shooter',0.28],['charger',0.2],['exploder',0.16],['swarmer',0.1]],                        boss:'overlord', bossName:'TYRANT'      },
+  { total:116, rate:0.25, mix:[['tank',0.26],['shooter',0.3],['charger',0.2],['exploder',0.14],['swarmer',0.1]],                         boss:'overlord', bossName:'SOVEREIGN'   },
+  { total:124, rate:0.24, mix:[['tank',0.28],['shooter',0.3],['charger',0.2],['exploder',0.14],['swarmer',0.08]],                        boss:'overlord', bossName:'EMPEROR'     },
+  { total:140, rate:0.22, mix:[['tank',0.3],['shooter',0.3],['charger',0.22],['exploder',0.12],['swarmer',0.06]],                        boss:'overlord', bossName:'GODKING'     },
+  // ---- Tier 6: L26-L30 — NEMESIS (4-phase finale). 3x arena. ----
+  { total:150, rate:0.20, mix:[['tank',0.3],['shooter',0.32],['charger',0.22],['exploder',0.1],['swarmer',0.06]],                        boss:'nemesis'  },
+  { total:160, rate:0.19, mix:[['tank',0.32],['shooter',0.32],['charger',0.22],['exploder',0.1],['swarmer',0.04]],                       boss:'nemesis',  bossName:'ARCHFIEND'   },
+  { total:175, rate:0.18, mix:[['tank',0.32],['shooter',0.34],['charger',0.22],['exploder',0.1],['swarmer',0.02]],                       boss:'nemesis',  bossName:'WORLDEATER'  },
+  { total:190, rate:0.17, mix:[['tank',0.34],['shooter',0.34],['charger',0.22],['exploder',0.1]],                                         boss:'nemesis',  bossName:'VOIDLORD'    },
   { total:220, rate:0.16, mix:[['tank',0.36],['shooter',0.34],['charger',0.22],['exploder',0.08]],                                        boss:'nemesis',  bossName:'ANNIHILATOR' }
 ];
 
