@@ -939,8 +939,8 @@ const CHARACTERS = {
   tank: {
     name:'TANK', desc:'HEAVY · +20% DAMAGE · FLAMETHROWER (RMB)',
     color:'#27ae60', hp:12, speed:95, damageMult:1.2, startShield:4,
-    skills:{ x:'summon', c:'wall', b:'flameburst' },
-    skillLabels:{ x:'BLADE', c:'WALL', b:'BURST' }
+    skills:{ x:'summon', c:'wall', v:'vsummon' },
+    skillLabels:{ x:'BLADE', c:'WALL', v:'BLADE+' }
   }
 };
 let selectedChar = 'soldier';
@@ -959,7 +959,7 @@ const mouse = { x: W/2, y: H/2, down:false, rdown:false, clicked:false };
 // may still scroll itself to bring something into view.
 const GAMEPLAY_KEYS = new Set([
   'KeyW','KeyA','KeyS','KeyD',
-  'KeyX','KeyC','KeyB',
+  'KeyX','KeyC','KeyV',
   'Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'
 ]);
 window.addEventListener('keydown', e => {
@@ -1041,12 +1041,14 @@ function createPlayer(charKey){
     minigunTime:0, plasmaTime:0, homingTime:0,
     // Passive powerups (temporary buffs)
     speedTime:0, damageTime:0, magnetTime:0, scoreTime:0,
-    // Tank's B-key flameburst: ring of fire centered on the player. Set to 3s on cast.
+    // Tank's old B-key flameburst timer. The flameburst handler is now orphaned
+    // (V replaced it), but the field/timer is harmless and left for easy revival.
     flameburstTime:0,
-    // Special-skill cooldowns. X/C are class-specific (per CHARACTERS.skills).
-    // The "summon" skill (sword ally) is now bound to X for every class.
-    skillCd:{ x:0, c:0, b:0 },
-    skillCdMax:{ x:4, c:12, blink:5, wall:18, summon:25, flameburst:20 },
+    // Special-skill cooldowns. X/C are class-specific (per CHARACTERS.skills);
+    // the optional V slot is Tank-only today. The "summon" skill (sword ally) is
+    // bound to X for every class; "vsummon" is the Tank's faster V-key variant.
+    skillCd:{ x:0, c:0, v:0 },
+    skillCdMax:{ x:4, c:12, blink:5, wall:18, summon:25, vsummon:25, flameburst:20 },
     hitFlash:0, invuln:0, frame:0, frameT:0, dead:false
   };
 }
@@ -1226,6 +1228,21 @@ function triggerSkill(name, dx, dy, mag){
     const sa = createSwordAlly(player.x, player.y);
     entities.push(sa);
     emit(sa.x, sa.y, 24, '#f1c40f', 50, 160, 0.55);
+    emit(sa.x, sa.y, 12, '#fff', 30, 110, 0.4);
+    sfx.teleport();
+    return true;
+  }
+  if(name === 'vsummon'){
+    // Tank's V skill: release a sword-knight that swings ~1.5x faster than the
+    // X-summoned one (attackRate 0.55s -> ~0.37s). Same one-alive-at-a-time rule
+    // as 'summon', so re-casting either X or V replaces the current knight.
+    for(const e of entities){
+      if(e.type === 'sword_ally' && !e.dead){ e.dead = true; }
+    }
+    const sa = createSwordAlly(player.x, player.y);
+    sa.attackRate /= 1.5;
+    entities.push(sa);
+    emit(sa.x, sa.y, 26, '#f39c12', 55, 180, 0.6);
     emit(sa.x, sa.y, 12, '#fff', 30, 110, 0.4);
     sfx.teleport();
     return true;
@@ -1413,7 +1430,7 @@ function updatePlaying(dt){
   // ---- Special skills: X / C dispatched per-character ----
   if(player.skillCd.x > 0) player.skillCd.x -= dt;
   if(player.skillCd.c > 0) player.skillCd.c -= dt;
-  if(player.skillCd.b > 0) player.skillCd.b -= dt;
+  if(player.skillCd.v > 0) player.skillCd.v -= dt;
   if(player.flameburstTime > 0){
     player.flameburstTime -= dt;
     tickFlameburst(dt);
@@ -1425,8 +1442,8 @@ function updatePlaying(dt){
   if(keys['KeyC'] && player.skillCd.c <= 0){
     if(triggerSkill(charSkills.c, dx, dy, mag)) player.skillCd.c = player.skillCdMax[charSkills.c];
   }
-  if(keys['KeyB'] && player.skillCd.b <= 0 && charSkills.b){
-    if(triggerSkill(charSkills.b, dx, dy, mag)) player.skillCd.b = player.skillCdMax[charSkills.b];
+  if(keys['KeyV'] && player.skillCd.v <= 0 && charSkills.v){
+    if(triggerSkill(charSkills.v, dx, dy, mag)) player.skillCd.v = player.skillCdMax[charSkills.v];
   }
 
   // ---- Shooting / Weapon dispatch ----
@@ -1864,7 +1881,8 @@ function updateCompanion(dt){
 
   // Auto-fire at nearest enemy in range.
   c.fireCooldown -= dt;
-  let nearest = null, nd = 140*140;
+  // Detection/attack scope doubled from 140 to 280 (companion engages from 2x farther).
+  let nearest = null, nd = 280*280;
   for(const en of entities){
     if(en.type !== 'enemy' || en.dead) continue;
     const dd = dist2(c, en);
@@ -3228,13 +3246,13 @@ function drawSkillHUD(){
   const y = H - 30;
   const ch = CHARACTERS[player.char] || CHARACTERS.soldier;
   const skillColor = { dash:'#f1c40f', blink:'#f1c40f', slowmo:'#3498db', wall:'#27ae60',
-                       nuke:'#e74c3c', grenade:'#e67e22', summon:'#f1c40f', flameburst:'#e67e22' };
+                       nuke:'#e74c3c', grenade:'#e67e22', summon:'#f1c40f', vsummon:'#f39c12', flameburst:'#e67e22' };
   const skills = [
     { key:'X', label:ch.skillLabels.x, cd:player.skillCd.x, max:player.skillCdMax[ch.skills.x], color:skillColor[ch.skills.x] },
     { key:'C', label:ch.skillLabels.c, cd:player.skillCd.c, max:player.skillCdMax[ch.skills.c], color:skillColor[ch.skills.c] }
   ];
-  if(ch.skills.b){
-    skills.push({ key:'B', label:ch.skillLabels.b, cd:player.skillCd.b, max:player.skillCdMax[ch.skills.b], color:skillColor[ch.skills.b] });
+  if(ch.skills.v){
+    skills.push({ key:'V', label:ch.skillLabels.v, cd:player.skillCd.v, max:player.skillCdMax[ch.skills.v], color:skillColor[ch.skills.v] });
   }
   ctx.textAlign = 'left';
   let x = 6;
@@ -3401,7 +3419,7 @@ function drawCharacterSelect(){
     ctx.fillStyle = '#fff';
     ctx.fillText('X ' + ch.skillLabels.x, r.x + 12, r.y + 122);
     ctx.fillText('C ' + ch.skillLabels.c, r.x + 12, r.y + 131);
-    if(ch.skillLabels.b) ctx.fillText('B ' + ch.skillLabels.b, r.x + 12, r.y + 140);
+    if(ch.skillLabels.v) ctx.fillText('V ' + ch.skillLabels.v, r.x + 12, r.y + 140);
 
     ctx.textAlign = 'center';
   }
