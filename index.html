@@ -1152,6 +1152,15 @@ window.addEventListener('keydown', e => {
   if(e.code === 'Space' && !wasDown && state === STATE.PLAYING){
     paused = !paused;
   }
+  // Escape leaves the current run / setup screen and returns to the main menu
+  // (the "initial interface"). Leading edge only, from any state except MENU.
+  // Intentionally NOT in GAMEPLAY_KEYS: Escape doesn't scroll the page, and we
+  // don't want to suppress the browser's fullscreen-exit on Escape.
+  if(e.code === 'Escape' && !wasDown && state !== STATE.MENU){
+    state = STATE.MENU;
+    stateTime = 0;
+    paused = false;
+  }
 });
 window.addEventListener('keyup', e => {
   keys[e.code] = false;
@@ -4458,10 +4467,11 @@ function drawHowTo(){
     ['AIM',   'MOUSE'],
     ['SHOOT', 'CLICK/HOLD'],
     ['PAUSE', 'SPACE'],
+    ['MENU',  'ESC'],
   ];
   ctrl.forEach((l, i) => {
-    ctx.fillStyle = '#3498db'; ctx.fillText(l[0], 16 + i*118, 38);
-    ctx.fillStyle = '#fff';    ctx.fillText(l[1], 16 + i*118 + 32, 38);
+    ctx.fillStyle = '#3498db'; ctx.fillText(l[0], 16 + i*93, 38);
+    ctx.fillStyle = '#fff';    ctx.fillText(l[1], 16 + i*93 + 32, 38);
   });
 
   // Three columns: EQUIPMENT, POWERUPS, BOSSES

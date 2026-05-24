@@ -39,3 +39,7 @@ Each class has a distinct held-RMB secondary attack, dispatched per-frame in `up
 ## Pause (Space)
 
 A global `let paused = false;` (declared next to `slowMoTime`). During `STATE.PLAYING`, the **leading edge** of a Space keydown toggles `paused` (the keydown listener checks `!wasDown` to ignore key-repeat). While paused, `update()` skips `updatePlaying(dt)` so the whole tick freezes (timers, spawns, movement, skills). `draw()` still renders the frozen world + HUD and overlays `drawPause()` (dim + "PAUSED" banner). **Resume** is either another Space press or a click anywhere: the canvas `mousedown` handler returns early when `paused` so the resuming click doesn't also fire a shot. `paused` is reset to `false` in `startGame()` and `startLevel()` so it never persists across transitions.
+
+## Quit to menu (Escape)
+
+The keydown listener also handles **Escape** (leading edge): from **any state except `MENU`** it sets `state = STATE.MENU; stateTime = 0; paused = false;` — abandoning the current run / setup screen and returning to the "initial interface". No entity cleanup is needed because the next run resets `entities`/`particles` in `startSelectedRun`/`startLevel`. Escape is **intentionally NOT in `GAMEPLAY_KEYS`** (no `preventDefault`): it doesn't scroll the page, and suppressing it would block the browser's fullscreen-exit. Mirrors the existing LEAVE-to-menu paths in `handleLevelComplete`/`handleEndScreen`.
