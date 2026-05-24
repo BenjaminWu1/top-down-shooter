@@ -1088,7 +1088,7 @@ function saveCleared(){
 // class-unique slot (slowmo / wall); the optional V slot is Tank-only. ----
 const CHARACTERS = {
   soldier: {
-    name:'Dr.Syed', desc:'RAINFOREST WARRIOR · BLADE (RMB) · 5% LIFESTEAL',
+    name:'Dr.Syed', desc:'RAINFOREST WARRIOR · BLADE (RMB) · 2% LIFESTEAL',
     color:'#3498db', hp:10, speed:156, damageMult:1.25, startShield:0,
     skills:{ x:'sprint', c:'flameburst', v:'barrage', f:'heal', b:'invuln' },
     skillLabels:{ x:'SPRINT', c:'NAPALM', v:'BARRAGE', f:'HEAL', b:'INVINC' }
@@ -1636,13 +1636,13 @@ function triggerSkill(name, dx, dy, mag){
   return false;
 }
 
-// Syed's innate passive — LIFESTEAL: he recovers 5% of the damage HE deals to
+// Syed's innate passive — LIFESTEAL: he recovers 2% of the damage HE deals to
 // enemies, capped at maxHp. No-op for the other classes and for a dead player
 // (never revives). Call this at every site where SYED's own attack subtracts
 // enemy HP (pistol/powerup bullets, blade, NAPALM, BARRAGE/rocket blasts). Ally
 // damage (drone/bomber bullets) is intentionally excluded — only Syed's own hits
 // heal him — which is why explode()/bullet-collision gate on `fromPlayer`/`fromAlly`.
-const SOLDIER_LIFESTEAL = 0.05;
+const SOLDIER_LIFESTEAL = 0.02;
 function soldierLifesteal(dmg){
   if(player.char !== 'soldier' || dmg <= 0 || player.hp <= 0) return;
   player.hp = Math.min(player.maxHp, player.hp + dmg * SOLDIER_LIFESTEAL);
@@ -1876,6 +1876,11 @@ function updatePlaying(dt){
   if(player.maxEnergy > 0) player.energy = Math.min(player.maxEnergy, player.energy + 0.2 * dt);
   if(player.maxFuel   > 0) player.fuel   = Math.min(player.maxFuel,   player.fuel   + 0.1 * dt);
   if(player.maxPower  > 0) player.power  = Math.min(player.maxPower,  player.power  + 0.1 * dt);
+
+  // Xu Yihui's innate passive — HP REGEN: the mech slowly self-repairs at 0.5% of
+  // maxHp per second (capped at maxHp; never while dead). Scout only.
+  if(player.char === 'scout' && player.hp > 0)
+    player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.005 * dt);
 
   // ---- Tank's second normal attack: flamethrower (right mouse) ----
   if(player.char === 'tank' && mouse.rdown && player.fuel > 0){
@@ -2716,6 +2721,11 @@ function killEnemy(en){
   if(en._killed) return;
   en._killed = true;
   en.dead = true;
+  // Benjamin Wu's innate passive — FUEL STEAL: each kill refills 0.5 of his
+  // flamethrower fuel (the RMB resource), capped at maxFuel. Tank only (maxFuel
+  // is 0 for the others, so the Math.min keeps it a no-op for them anyway).
+  if(player.char === 'tank' && player.maxFuel > 0)
+    player.fuel = Math.min(player.maxFuel, player.fuel + 0.5);
   const scoreMult = player.scoreTime > 0 ? 2 : 1;
   score += en.score * scoreMult;
   emit(en.x, en.y, en.isBoss ? 40 : 14,
@@ -4311,12 +4321,14 @@ function drawCharacterSelect(){
     if(ch.skillLabels.v) sk.push(['V', ch.skillLabels.v]);
     for(const s of sk){ ctx.fillText(s[0] + ' ' + s[1], r.x + 12, sy); sy += 8; }
 
-    // Innate passive (Syed only): lifesteal. Sits below the 5 skill rows.
-    if(key === 'soldier'){
-      sy += 2;
-      ctx.fillStyle = '#2ecc71';
-      ctx.fillText('PASSIVE: 5% LIFESTEAL', r.x + 12, sy);
-    }
+    // Innate passive — each class has one. Sits below the 5 skill rows; 7px so the
+    // longer strings fit the card width even on the tank (its 5 stat rows push lowest).
+    sy += 2;
+    ctx.font = 'bold 7px monospace';
+    ctx.fillStyle = '#2ecc71';
+    if(key === 'soldier')    ctx.fillText('PASSIVE: 2% LIFESTEAL', r.x + 12, sy);
+    else if(key === 'scout') ctx.fillText('PASSIVE: 0.5%/s HP REGEN', r.x + 12, sy);
+    else if(key === 'tank')  ctx.fillText('PASSIVE: +0.5 FUEL/KILL', r.x + 12, sy);
 
     ctx.textAlign = 'center';
   }
