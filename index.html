@@ -1088,7 +1088,7 @@ function saveCleared(){
 // class-unique slot (slowmo / wall); the optional V slot is Tank-only. ----
 const CHARACTERS = {
   soldier: {
-    name:'Dr.Syed', desc:'RAINFOREST WARRIOR · BLADE (RMB) · AOE',
+    name:'Dr.Syed', desc:'RAINFOREST WARRIOR · BLADE (RMB) · 5% LIFESTEAL',
     color:'#3498db', hp:10, speed:156, damageMult:1.25, startShield:0,
     skills:{ x:'sprint', c:'flameburst', v:'barrage', f:'heal', b:'invuln' },
     skillLabels:{ x:'SPRINT', c:'NAPALM', v:'BARRAGE', f:'HEAL', b:'INVINC' }
@@ -1407,6 +1407,9 @@ function createBullet(x,y,angle,owner,opts={}){
     explodeRadius: opts.explodeRadius ?? 24,
     sprite: opts.sprite ?? (owner==='player' ? SPR.bullet_p : SPR.bullet_e),
     hitSet: opts.pierce ? new Set() : null,
+    // `fromAlly` marks an owner:'player' bullet that was actually fired by an ally
+    // (drone/bomber), so Syed's lifesteal passive doesn't credit him for it.
+    fromAlly: opts.fromAlly ?? false,
     dead:false
   };
 }
@@ -1469,7 +1472,7 @@ function triggerSkill(name, dx, dy, mag){
     // circular area of effect is clearly visible.
     const R = 70;
     const bd = 3 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
-    explode(player.x, player.y, R, bd);
+    explode(player.x, player.y, R, bd, true);
     // Expanding shockwave ring (visual only): grows from the player out to R.
     if(particles.length < 300) particles.push({
       x: player.x, y: player.y, vx: 0, vy: 0,
@@ -1633,7 +1636,19 @@ function triggerSkill(name, dx, dy, mag){
   return false;
 }
 
-function explode(x, y, radius, dmg){
+// Syed's innate passive — LIFESTEAL: he recovers 5% of the damage HE deals to
+// enemies, capped at maxHp. No-op for the other classes and for a dead player
+// (never revives). Call this at every site where SYED's own attack subtracts
+// enemy HP (pistol/powerup bullets, blade, NAPALM, BARRAGE/rocket blasts). Ally
+// damage (drone/bomber bullets) is intentionally excluded — only Syed's own hits
+// heal him — which is why explode()/bullet-collision gate on `fromPlayer`/`fromAlly`.
+const SOLDIER_LIFESTEAL = 0.05;
+function soldierLifesteal(dmg){
+  if(player.char !== 'soldier' || dmg <= 0 || player.hp <= 0) return;
+  player.hp = Math.min(player.maxHp, player.hp + dmg * SOLDIER_LIFESTEAL);
+}
+
+function explode(x, y, radius, dmg, fromPlayer){
   emit(x, y, 22, '#f39c12', 60, 180, 0.6);
   emit(x, y, 12, '#fff', 40, 150, 0.4);
   shakeTime = 0.25; shakeAmt = 5;
@@ -1646,6 +1661,7 @@ function explode(x, y, radius, dmg){
     if(dist2({x,y}, en) < radius*radius){
       en.hp -= dmg;
       en.hitFlash = 0.08;
+      if(fromPlayer) soldierLifesteal(dmg);
       if(en.hp <= 0) killEnemy(en);
     }
   }
@@ -1935,9 +1951,10 @@ function updatePlaying(dt){
         if(dist2(b, en) < dr*dr){
           en.hp -= b.dmg;
           en.hitFlash = 0.07;
+          if(!b.fromAlly) soldierLifesteal(b.dmg);
           emit(b.x, b.y, 4, '#fff', 30, 90, 0.25);
           if(b.explosive){
-            explode(b.x, b.y, b.explodeRadius, b.dmg);
+            explode(b.x, b.y, b.explodeRadius, b.dmg, !b.fromAlly);
             b.dead = true;
           } else if(b.pierce){
             b.hitSet.add(en);
@@ -2056,6 +2073,7 @@ function tickFlameburst(dt){
     if(dist2(player, en) < (radius + en.radius) * (radius + en.radius)){
       en.hp -= dps * dt;
       en.hitFlash = 0.06;
+      soldierLifesteal(dps * dt);
       if(en.hp <= 0) killEnemy(en);
     }
   }
@@ -2142,6 +2160,7 @@ function fireKatana(dt){
     if(Math.abs(diff) > KATANA_HALF) continue;
     en.hp -= dps * dt;
     en.hitFlash = 0.06;
+    soldierLifesteal(dps * dt);
     if(en.hp <= 0) killEnemy(en);
   }
   // Slash visual: bright steel streaks sweeping the obtuse front arc.
@@ -2380,7 +2399,7 @@ function updateCompanion(c, dt){
     if(c.fireCooldown <= 0){
       // Companion bullets are friendly to player (owner='player') so they share collision logic.
       entities.push(createBullet(c.x, c.y, c.angle, 'player', {
-        sprite: SPR.bullet_companion, speed: 260, dmg: 3, radius: 2, life: 1.5
+        sprite: SPR.bullet_companion, speed: 260, dmg: 3, radius: 2, life: 1.5, fromAlly: true
       }));
       c.fireCooldown = c.fireRate;
       emit(c.x, c.y, 1, '#aed6f1', 20, 60, 0.15);
@@ -2603,7 +2622,7 @@ function updateBomberAlly(s, dt){
         type:'bullet', owner:'player', x:s.x, y:s.y,
         vx:Math.cos(s.angle) * s.projSpeed, vy:Math.sin(s.angle) * s.projSpeed,
         angle:s.angle, radius:3, sprite:SPR.bullet_rocket,
-        dmg, life:1.1, isGrenade:true, explosive:true,
+        dmg, life:1.1, isGrenade:true, explosive:true, fromAlly:true,
         explodeRadius:s.explodeRadius, explodeDmg:dmg, dead:false
       });
       s.fireCooldown = s.fireRate;
@@ -3326,8 +3345,9 @@ function updateBullet(b, dt){
   }
   if(b.life <= 0 || b.x < -12 || b.x > worldW+12 || b.y < -12 || b.y > worldH+12){
     if(b.isGrenade && b.life <= 0){
-      // Detonate at end of fuse.
-      explode(b.x, b.y, b.explodeRadius || 32, b.explodeDmg || 3);
+      // Detonate at end of fuse. Credit Syed's lifesteal only for his own shells
+      // (player-owned, non-ally) — not the bomber ally's bombs or enemy grenades.
+      explode(b.x, b.y, b.explodeRadius || 32, b.explodeDmg || 3, b.owner === 'player' && !b.fromAlly);
     }
     b.dead = true;
   }
@@ -4290,6 +4310,13 @@ function drawCharacterSelect(){
     if(ch.skillLabels.b) sk.push(['B', ch.skillLabels.b]);
     if(ch.skillLabels.v) sk.push(['V', ch.skillLabels.v]);
     for(const s of sk){ ctx.fillText(s[0] + ' ' + s[1], r.x + 12, sy); sy += 8; }
+
+    // Innate passive (Syed only): lifesteal. Sits below the 5 skill rows.
+    if(key === 'soldier'){
+      sy += 2;
+      ctx.fillStyle = '#2ecc71';
+      ctx.fillText('PASSIVE: 5% LIFESTEAL', r.x + 12, sy);
+    }
 
     ctx.textAlign = 'center';
   }
