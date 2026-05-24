@@ -1079,13 +1079,13 @@ const CHARACTERS = {
     skillLabels:{ x:'SPRINT', c:'NAPALM', v:'BARRAGE', f:'HEAL', b:'BLAST' }
   },
   scout: {
-    name:'SCOUT', desc:'ASSASSIN · LASER (RMB) · BLINK + DASH',
+    name:'XU YIHUI', desc:'ASSASSIN · LASER (RMB) · BLINK + DASH',
     color:'#f1c40f', hp:7, speed:135, damageMult:1.1, startShield:0,
     skills:{ x:'sprint', c:'blink', v:'dash', f:'heal', b:'blast' },
     skillLabels:{ x:'SPRINT', c:'BLINK', v:'DASH', f:'HEAL', b:'BLAST' }
   },
   tank: {
-    name:'XU YIHUI', desc:'HEAVY · +20% DAMAGE · FLAMETHROWER (RMB)',
+    name:'BENJAMIN WU', desc:'HEAVY · +20% DAMAGE · FLAMETHROWER (RMB)',
     color:'#27ae60', hp:12, speed:95, damageMult:1.2, startShield:4,
     skills:{ x:'sprint', c:'wall', v:'vsummon', f:'heal', b:'blast' },
     skillLabels:{ x:'SPRINT', c:'WALL', v:'BLADE+', f:'HEAL', b:'BLAST' }
@@ -2090,7 +2090,8 @@ function fireFlamethrower(dt){
 // obtuse cone is drawn in drawPlayer. Range/half-angle are shared constants so
 // the damage check and the on-screen arc stay in lock-step.
 const KATANA_RANGE = 32;     // long katana reach
-const KATANA_HALF  = 1.2;    // ~68.75° half-arc => ~137° (obtuse) total slash
+const KATANA_HALF  = 0.9;    // ~51.6° half-arc => ~103° total slash — still obtuse,
+                             // and 3/4 of the prior 1.2-rad arc (scope cut to 3/4)
 function fireKatana(dt){
   const dps = 40 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
   for(const en of entities){
