@@ -1245,7 +1245,7 @@ function createPlayer(charKey){
     energy: charKey === 'soldier' ? 6 : 0,
     maxEnergy: charKey === 'soldier' ? 6 : 0,
     // Xu Yihui's laser "power": ~20 RMB volleys. Drained 1 per laser-beam volley
-    // (Scout only); self-regens 0.3/s (3x Tank fuel) and is topped up by the
+    // (Scout only); self-regens 0.6/s (6x Tank fuel) and is topped up by the
     // 'battery' pickup. Mirrors Soldier energy / Tank fuel.
     power: charKey === 'scout' ? 20 : 0,
     maxPower: charKey === 'scout' ? 20 : 0,
@@ -1872,10 +1872,10 @@ function updatePlaying(dt){
 
   // Class RMB resources slowly self-regen (capped at max) so none is fully
   // dependent on pickups: Syed's katana energy regens 0.2/s, Benjamin Wu's
-  // flamethrower fuel regens 0.1/s, Xu Yihui's laser power regens 0.3/s (3x).
+  // flamethrower fuel regens 0.1/s, Xu Yihui's laser power regens 0.6/s (6x fuel).
   if(player.maxEnergy > 0) player.energy = Math.min(player.maxEnergy, player.energy + 0.2 * dt);
   if(player.maxFuel   > 0) player.fuel   = Math.min(player.maxFuel,   player.fuel   + 0.1 * dt);
-  if(player.maxPower  > 0) player.power  = Math.min(player.maxPower,  player.power  + 0.3 * dt);
+  if(player.maxPower  > 0) player.power  = Math.min(player.maxPower,  player.power  + 0.6 * dt);
 
   // Xu Yihui's innate passive — HP REGEN: the mech slowly self-repairs at 0.5% of
   // maxHp per second (capped at maxHp; never while dead). Scout only.
@@ -4030,7 +4030,7 @@ function drawHUD(){
     ctx.fillText('ENERGY', 8, ey + 5);
   }
   // Power bar (Scout only) — fuels the laser beams (~20 volleys); refilled by
-  // 'battery'. Label only; self-regens 0.3/s. Shares the slot with FUEL/
+  // 'battery'. Label only; self-regens 0.6/s. Shares the slot with FUEL/
   // ENERGY (only one of the three maxes is ever > 0).
   if(player.maxPower > 0){
     const py = player.shieldHp > 0 ? 26 : 18;
