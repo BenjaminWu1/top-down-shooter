@@ -2,13 +2,15 @@
 
 [![Play online](https://img.shields.io/badge/play-online-2ea44f?style=for-the-badge)](https://benjaminwu1.github.io/top-down-shooter/)
 
-A single-file, browser-based top-down arena shooter with retro pixel art. Written in vanilla HTML/CSS/JS — no build step, no external assets, no dependencies. The entire game is `index.html`.
+A single-file, browser-based top-down arena shooter with retro pixel art. Written in vanilla HTML/CSS/JS — no build step, no external assets, no dependencies. **The entire game is `index.html`**: every sprite is an in-code pixel array and every sound effect is generated on the fly with the Web Audio API.
 
 ## Play
 
-**Online (no install):** https://benjaminwu1.github.io/top-down-shooter/
+**Online (no install, no account):** https://benjaminwu1.github.io/top-down-shooter/ — just open the link in any modern desktop browser (Chrome, Edge, Firefox, Safari).
 
-**Locally:** clone the repo and open [`index.html`](index.html) in any modern browser (Chrome, Edge, Firefox, Safari). Everything lives in the one file.
+**Locally:** clone the repo and open [`index.html`](index.html) directly in a browser. Everything lives in the one file.
+
+> It's a keyboard + mouse game, so it's meant for a computer rather than a phone.
 
 ## Controls
 
@@ -16,85 +18,92 @@ A single-file, browser-based top-down arena shooter with retro pixel art. Writte
 |---|---|
 | Move (8-directional) | `WASD` or Arrow Keys |
 | Aim | Mouse |
-| Shoot | Click or Hold |
-| Flamethrower (Tank) | Right mouse button |
-| Summon sword-knight (`BLADE`) | `X` |
-| Class skill | `C` |
-| Flame burst (Tank only, `BURST`) | `B` |
+| Primary attack | Left click (hold to keep firing) |
+| **Secondary attack** (class-specific) | **Right mouse button** (hold) |
+| Sprint — `X` | +30% move speed for 5 s |
+| Class skill — `C` | unique per class (see below) |
+| Heal — `F` | +1 HP |
+| Blast — `B` | circular AoE burst around you |
+| Ultimate — `V` | unique per class (see below) |
+| Pause / resume | `Space` (or click) |
+
+Run setup is: **pick a level → pick a character → pick 2 of 5 assistants → play.** High score is saved in your browser's `localStorage`.
 
 ## Characters
 
-Pick one of three classes at the start of a run:
+Choose one of three classes — each plays completely differently, with its own primary weapon, a held right-mouse secondary, and a five-slot skill kit.
 
-| Class | Profile | HP | Skills (`X` / `C` / `B`) |
+| Class | Profile | HP | Primary (LMB) | Secondary (RMB) |
+|---|---|---|---|---|
+| **Syed** | 21st-century rainforest warrior · +25% damage | 10 | Pistol | **Blade slash** — continuous, very high damage over a wide *obtuse* arc; runs on a ~6 s **energy** bar |
+| **Xu Yihui** | Blue cyberpunk mech · fast & fragile | 7 | Fast SMG | **3-line laser burst** — a fan of 3 piercing blue lasers every 0.3 s |
+| **Benjamin Wu** | U.S.-Army heavy · +20% damage · starts with shield | 12 (+4 shield) | Heavy slug | **Flamethrower** — sustained cone of fire; runs on a 12-unit **fuel** bar |
+
+### Skills
+
+Every class shares **X / F / B**; **C** and **V** are class-specific.
+
+| Slot | Syed | Xu Yihui | Benjamin Wu |
 |---|---|---|---|
-| **Soldier** | Balanced · +25% damage | 5 | Summon blade · Slow-mo · — |
-| **Scout** | Fragile but fast | 3 | Summon blade · Slow-mo · — |
-| **Tank** | Heavy · +20% damage · flamethrower · starts with shield + fuel | 12 | Summon blade · Wall (4 s invuln) · Flame burst |
+| `X` | **Sprint** — +30% move speed (5 s) | Sprint | Sprint |
+| `C` | **Napalm** — 3 s ring of fire | **Blink** — teleport to the cursor | **Wall** — 4 s full invulnerability |
+| `F` | **Heal** — +1 HP | Heal | Heal |
+| `B` | **Blast** — instant circular AoE | Blast | Blast |
+| `V` | **Barrage** — fan of 5 explosive shells | **Dash** — dodge with brief i-frames | **Blade+** — summon a fast sword-knight ally |
 
-- **`X` — Blade (all classes):** summons a melee sword-knight ally that fights alongside you. 25 s cooldown; one alive at a time.
-- **`C` — class skill:** Soldier & Scout get **Slow-Mo** (enemies crawl); Tank gets **Wall** (4 s of full invulnerability).
-- **`B` — Flame burst (Tank only):** a 3-second ring of fire around the Tank. 20 s cooldown.
+### The energy / fuel bar
 
-A persistent **blue drone companion** (6 HP) is always at your side — it auto-fires at the nearest enemy.
+Syed's blade and Benjamin Wu's flamethrower draw from a depletable bar shown top-left (no number — the fill is the gauge). Both **slowly self-regenerate (0.1/s)** and are topped up by class-specific pickups — a green **beverage** for Syed, a **fuel** canister for Benjamin Wu. Xu Yihui's laser instead runs on a short cooldown.
+
+## Assistants
+
+Before a run you pick **2 of 5** AI allies that fight at your side and are rebuilt each level:
+
+- **Drone** — floats nearby and auto-fires at the closest enemy.
+- **Brute** — tanky melee bruiser with a wide club swing.
+- **Nunchaku** — fast, high-damage close-range striker.
+- **Bomber** — lobs high-damage, large-radius bombs from behind you.
+- **Poison** — emits a continuous toxic aura that damages everything around it.
 
 ## Progression
 
-- **30 levels** grouped into **6 boss tiers of 5 levels each.** Each tier is built around one boss AI, but every level inside a tier has its own boss name and scaled HP/speed, so all 30 fights feel distinct.
-- The arena grows as you advance: levels 1–13 use the base 480×270 world, levels 14–24 a 2× world, and levels 25–30 a 3× world — the larger arenas scroll with a camera that follows you.
-- Non-boss enemies scale up in HP and speed every level.
+- **40 levels** grouped into **8 boss tiers of 5 levels each.** Each tier is built around one boss AI, but every level inside a tier has its own boss name and scaled HP/speed, so all 40 fights feel distinct.
+- The arena grows as you advance: levels **1–13** use the base 480×270 world, **14–24** a 2× world, and **25–40** a 3× world — the larger arenas scroll with a camera that follows you.
+- Both regular enemies and bosses scale up in HP and speed every level.
 
 ## Bosses
 
-| Tier | Levels | Boss AI | Names | Behavior |
+| Tier | Levels | Boss AI | Names (per level) | Behavior |
 |---|---|---|---|---|
 | 1 | 1–5 | **Bruiser** | Bruiser · Rampager · Juggernaut · Colossus · Behemoth | Chases + telegraphed charges + cross bursts |
 | 2 | 6–10 | **Needle** | Needle · Marksman · Deadeye · Sharpshot · Huntsman | Keeps distance, teleports, aimed sniper shots |
 | 3 | 11–15 | **Hydra** | Hydra · Multiform · Sunderer · Fragmenter · Scion | Ring bullets; splits into smaller copies on death |
 | 4 | 16–20 | **Conjurer** | Conjurer · Necromancer · Warlock · Shepherd · Archdemon | Summons adds + alternates ring blasts |
 | 5 | 21–25 | **Overlord** | Overlord · Tyrant · Sovereign · Emperor · Godking | 3-phase: radial burst → charging spread → summon adds |
-| 6 | 26–30 | **Nemesis** | Nemesis · Archfiend · Worldeater · Voidlord · Annihilator | 4-phase finale; L30 Annihilator is the toughest fight |
+| 6 | 26–30 | **Nemesis** | Nemesis · Archfiend · Worldeater · Voidlord · Annihilator | 4-phase onslaught |
+| 7 | 31–35 | **Reaper** | Reaper · Harvester · Soulreaper · Deathscythe · Oblivion | Dashes + ring slashes |
+| 8 | 36–40 | **Phantom** | Phantom · Wraith · Specter · Revenant · **Apocalypse** | Final tier; **L40 Apocalypse** is the last fight |
 
-## Equipment Pickups
+## Pickups
 
-Weapons and defenses that change how you fight:
+Enemies drop weapons, defenses, and buffs. The drop pool is tuned per class (Benjamin Wu can roll **fuel**, Syed can roll **beverage**).
 
-| Name | Effect |
-|---|---|
-| Health | +1 HP |
-| Spread | 3-bullet cone, 8 s |
-| Rapid | Half cooldown, 8 s |
-| Shield | Absorbs the next 3 hits |
-| Armor | Raises shield cap to 5, refills it, brief invulnerability |
-| Rocket | +6 explosive AOE rounds |
-| Laser | Piercing beam, 7 s |
-| Minigun | Rapid-fire bullets, 8 s |
-| Plasma | Bouncing, piercing shots, 8 s |
-| Homing | Seeking missiles, 8 s |
+**Equipment:** Health (+1 HP) · Spread (3-shot cone) · Rapid (half cooldown) · Shield (absorb hits) · Armor (raise shield cap + brief invuln) · Rocket (explosive AoE rounds) · Laser (piercing beam) · Minigun (rapid bullets) · Plasma (bouncing + piercing) · Homing (seeking missiles).
 
-## Powerups
+**Powerups:** Speed (+50% move) · Damage (2×) · Slow-Mo (enemies crawl) · Score ×2 · Magnet (pickups fly to you).
 
-Passive temporary buffs:
-
-| Name | Effect |
-|---|---|
-| Speed | +50% movement speed, 8 s |
-| Damage | 2× bullet damage, 8 s |
-| Slow-Mo | Enemies move at 40% speed, 5 s |
-| Score x2 | Double score on every kill, 10 s |
-| Magnet | Pickups fly toward you, 10 s |
-| Fuel | Refills the Tank's flamethrower fuel |
+**Class resources:** Fuel (Benjamin Wu's flamethrower) · Beverage (Syed's blade energy).
 
 ## Features
 
 - 480×270 pixel-perfect canvas, integer-scaled to your window
 - Hand-drawn pixel sprites encoded as in-code arrays
 - Procedural chiptune SFX via the Web Audio API
-- 3 playable classes, each with its own weapon and skills
-- 30 levels across 6 boss tiers, with growing scrolling arenas
-- A persistent companion drone and a summonable sword-knight ally
-- 10 equipment pickups and 6 powerups
-- Particle effects, hit-flash, invulnerability blinking
+- 3 distinct playable classes, each with a primary, a right-mouse secondary, and a 5-slot skill kit
+- Pick-2-of-5 assistant loadout + a summonable sword-knight
+- 40 levels across 8 boss tiers, with growing scrolling arenas
+- Equipment, powerups, and class-specific resource pickups
+- Particle effects, hit-flash, invulnerability blinking, pause
 - High score persisted in `localStorage`
 
 ## Project layout
