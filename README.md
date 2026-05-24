@@ -36,7 +36,7 @@ Choose one of three classes — each plays completely differently, with its own 
 | Class | Profile | HP | Primary (LMB) | Secondary (RMB) |
 |---|---|---|---|---|
 | **Syed** | 21st-century rainforest warrior · +25% damage | 10 | Pistol | **Blade slash** — continuous, very high damage over a wide *obtuse* arc; runs on a ~6 s **energy** bar |
-| **Xu Yihui** | Blue cyberpunk mech · fast & nimble | 9 | Fast SMG | **3× laser beams** — three instant straight-line beams that damage every enemy along each line at once, every 0.22 s |
+| **Xu Yihui** | Blue cyberpunk mech · fast & nimble | 9 | Fast SMG | **3× laser beams** — three instant straight-line beams that damage every enemy along each line at once; runs on a ~20-shot **power** bar (refilled by **battery**) |
 | **Benjamin Wu** | U.S.-Army heavy · +20% damage · starts with shield | 12 (+4 shield) | Heavy slug | **Flamethrower** — sustained cone of fire; runs on a 12-unit **fuel** bar |
 
 ### Skills
@@ -51,9 +51,13 @@ Every class shares **X / F / B**; **C** and **V** are class-specific.
 | `B` | **Blast** — instant circular AoE | Blast | Blast |
 | `V` | **Barrage** — fan of 5 explosive shells | **Dash** — dodge with brief i-frames | **Blade+** — summon a fast sword-knight ally |
 
-### The energy / fuel bar
+### The energy / fuel / power bar
 
-Syed's blade and Benjamin Wu's flamethrower draw from a depletable bar shown top-left (no number — the fill is the gauge). Both **slowly self-regenerate (0.1/s)** and are topped up by class-specific pickups — a green **beverage** for Syed, a **fuel** canister for Benjamin Wu. Xu Yihui's laser instead runs on a short cooldown.
+All three secondaries draw from a depletable bar shown top-left (no number — the fill is the gauge), and each slowly self-regenerates and is topped up by a class-specific pickup:
+
+- **Syed** — **energy** for the blade; regenerates **0.2/s** (fast), refilled by a green **beverage**.
+- **Xu Yihui** — **power** for the laser beams (~20 volleys, 1 per shot); regenerates **0.1/s**, refilled by a cyan **battery**.
+- **Benjamin Wu** — **fuel** for the flamethrower; regenerates **0.1/s**, refilled by a **fuel** canister.
 
 ## Assistants
 
@@ -92,7 +96,7 @@ Enemies drop weapons, defenses, and buffs. The drop pool is tuned per class (Ben
 
 **Powerups:** Speed (+50% move) · Damage (2×) · Slow-Mo (enemies crawl) · Score ×2 · Magnet (pickups fly to you).
 
-**Class resources:** Fuel (Benjamin Wu's flamethrower) · Beverage (Syed's blade energy).
+**Class resources:** Fuel (Benjamin Wu's flamethrower) · Beverage (Syed's blade energy) · Battery (Xu Yihui's laser power).
 
 ## Features
 
