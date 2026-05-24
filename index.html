@@ -486,6 +486,122 @@ const SPR = {
     ".4...4....",
     "44...44..."
   ]),
+  // Persistent brute henchman holding a wooden club ('6' light wood, '7' grip).
+  henchman_a: S({'.':null,'1':'#e0ac69','2':'#1a1a2a','3':'#c0392b','4':'#2c2c2c','6':'#c8923a','7':'#8a5a2a'}, [
+    "..1111..6.",
+    ".111111.6.",
+    ".122221.6.",
+    ".122221.7.",
+    "..1111..7.",
+    ".333333...",
+    "3333333...",
+    "3333333...",
+    ".33333....",
+    ".3...3....",
+    ".4...4....",
+    ".44.44...."
+  ]),
+  henchman_b: S({'.':null,'1':'#e0ac69','2':'#1a1a2a','3':'#c0392b','4':'#2c2c2c','6':'#c8923a','7':'#8a5a2a'}, [
+    "..1111..6.",
+    ".111111.6.",
+    ".122221.6.",
+    ".122221.7.",
+    "..1111..7.",
+    ".333333...",
+    "3333333...",
+    "3333333...",
+    ".33333....",
+    ".33.33....",
+    ".4...4....",
+    "44...44..."
+  ]),
+  // Nunchaku martial artist — white gi, red headband ('5'), wooden nunchaku ('6').
+  nunchaku_a: S({'.':null,'1':'#e0ac69','2':'#1a1a2a','3':'#ecf0f1','4':'#2c2c2c','5':'#c0392b','6':'#8a5a2a'}, [
+    "..5555....",
+    ".111111...",
+    ".122221...",
+    ".111111.6.",
+    ".333333.6.",
+    "3333333.6.",
+    "3333333...",
+    ".33333....",
+    ".3...3....",
+    ".4...4....",
+    ".4...4....",
+    ".44.44...."
+  ]),
+  nunchaku_b: S({'.':null,'1':'#e0ac69','2':'#1a1a2a','3':'#ecf0f1','4':'#2c2c2c','5':'#c0392b','6':'#8a5a2a'}, [
+    "..5555....",
+    ".111111...",
+    ".122221...",
+    ".111111...",
+    ".333333.6.",
+    "3333333.6.",
+    "3333333.6.",
+    ".33333....",
+    ".3...3....",
+    ".33.33....",
+    ".4...4....",
+    "44...44..."
+  ]),
+  // Bomber — navy jacket ('3'), holding a round black bomb ('8') with a lit fuse ('9'/'f').
+  bomber_a: S({'.':null,'1':'#e0ac69','2':'#1a1a2a','3':'#34495e','4':'#2c2c2c','8':'#1a1a1a','9':'#e67e22','f':'#f1c40f'}, [
+    "..1111....",
+    ".111111...",
+    ".122221...",
+    "..1111..f.",
+    ".333333.9.",
+    "3333333...",
+    "333333.88.",
+    "33333.888.",
+    ".3333.88..",
+    ".3...3....",
+    ".4...4....",
+    ".44.44...."
+  ]),
+  bomber_b: S({'.':null,'1':'#e0ac69','2':'#1a1a2a','3':'#34495e','4':'#2c2c2c','8':'#1a1a1a','9':'#e67e22','f':'#f1c40f'}, [
+    "..1111....",
+    ".111111...",
+    ".122221...",
+    "..1111..9.",
+    ".333333.f.",
+    "3333333...",
+    "333333.88.",
+    "33333.888.",
+    ".3333.88..",
+    ".33.33....",
+    ".4...4....",
+    "44...44..."
+  ]),
+  // Poison alchemist — green hood/robe ('g'), bright flask spark ('h').
+  poison_a: S({'.':null,'1':'#e0ac69','2':'#1a1a2a','4':'#2c2c2c','g':'#27ae60','h':'#2ecc71'}, [
+    "..gggg....",
+    ".g1111g...",
+    ".g1221g...",
+    "..1111....",
+    ".gggggg.h.",
+    "ggggggg.g.",
+    "ggggggg.g.",
+    ".ggggg....",
+    ".g...g....",
+    ".4...4....",
+    ".4...4....",
+    ".44.44...."
+  ]),
+  poison_b: S({'.':null,'1':'#e0ac69','2':'#1a1a2a','4':'#2c2c2c','g':'#27ae60','h':'#2ecc71'}, [
+    "..gggg....",
+    ".g1111g...",
+    ".g1221g...",
+    "..1111....",
+    ".gggggg.g.",
+    "ggggggg.g.",
+    "ggggggg.h.",
+    ".ggggg....",
+    ".g...g....",
+    ".44.44....",
+    ".4...4....",
+    "44...44..."
+  ]),
   // ---- New Bosses (L6-L10) ----
   twin: S({'.':null,'1':'#5d2a2a','2':'#e67e22','3':'#1c0a0a','e':'#fff','y':'#f1c40f','b':'#bdc3c7'}, [
     "...1111..1111...",
@@ -878,7 +994,19 @@ const LEVELS = [
   { total:160, rate:0.19, mix:[['tank',0.32],['shooter',0.32],['charger',0.22],['exploder',0.1],['swarmer',0.04]],                       boss:'nemesis',  bossName:'ARCHFIEND'   },
   { total:175, rate:0.18, mix:[['tank',0.32],['shooter',0.34],['charger',0.22],['exploder',0.1],['swarmer',0.02]],                       boss:'nemesis',  bossName:'WORLDEATER'  },
   { total:190, rate:0.17, mix:[['tank',0.34],['shooter',0.34],['charger',0.22],['exploder',0.1]],                                         boss:'nemesis',  bossName:'VOIDLORD'    },
-  { total:220, rate:0.16, mix:[['tank',0.36],['shooter',0.34],['charger',0.22],['exploder',0.08]],                                        boss:'nemesis',  bossName:'ANNIHILATOR' }
+  { total:220, rate:0.16, mix:[['tank',0.36],['shooter',0.34],['charger',0.22],['exploder',0.08]],                                        boss:'nemesis',  bossName:'ANNIHILATOR' },
+  // ---- Tier 7: L31-L35 — REAPER (high-speed dasher). 3x arena. Post-finale escalation. ----
+  { total:230, rate:0.155, mix:[['tank',0.36],['shooter',0.34],['charger',0.22],['exploder',0.08]],                                       boss:'reaper'  },
+  { total:245, rate:0.15,  mix:[['tank',0.38],['shooter',0.32],['charger',0.22],['exploder',0.08]],                                       boss:'reaper',  bossName:'HARVESTER'   },
+  { total:260, rate:0.145, mix:[['tank',0.38],['shooter',0.34],['charger',0.2],['exploder',0.08]],                                        boss:'reaper',  bossName:'SOULREAPER'  },
+  { total:280, rate:0.14,  mix:[['tank',0.4],['shooter',0.32],['charger',0.2],['exploder',0.08]],                                         boss:'reaper',  bossName:'DEATHSCYTHE' },
+  { total:300, rate:0.135, mix:[['tank',0.4],['shooter',0.34],['charger',0.18],['exploder',0.08]],                                        boss:'reaper',  bossName:'OBLIVION'    },
+  // ---- Tier 8: L36-L40 — PHANTOM (teleporting clone-summoner). 3x arena. Final tier. ----
+  { total:320, rate:0.13,  mix:[['tank',0.42],['shooter',0.32],['charger',0.18],['exploder',0.08]],                                       boss:'phantom' },
+  { total:345, rate:0.125, mix:[['tank',0.42],['shooter',0.34],['charger',0.16],['exploder',0.08]],                                       boss:'phantom', bossName:'WRAITH'      },
+  { total:370, rate:0.12,  mix:[['tank',0.44],['shooter',0.32],['charger',0.16],['exploder',0.08]],                                       boss:'phantom', bossName:'SPECTER'     },
+  { total:400, rate:0.115, mix:[['tank',0.44],['shooter',0.34],['charger',0.14],['exploder',0.08]],                                       boss:'phantom', bossName:'REVENANT'    },
+  { total:450, rate:0.11,  mix:[['tank',0.46],['shooter',0.34],['charger',0.14],['exploder',0.06]],                                       boss:'phantom', bossName:'APOCALYPSE'  }
 ];
 
 const BOSS_NAMES = {
@@ -888,16 +1016,16 @@ const BOSS_NAMES = {
   bomber:'BOMBARDIER', phantom:'PHANTOM', nemesis:'NEMESIS'
 };
 
-// Non-boss enemies scale up per level. 1.0 at level 1, ~2.52 at level 20, ~3.32 at level 30.
+// Non-boss enemies scale up per level. 1.0 at level 1, ~3.32 at level 30, ~4.12 at level 40.
 function enemyScale(){ return 1 + levelIdx * 0.08; }
 
 // ============================================================
 // STATE
 // ============================================================
-const STATE = { MENU:0, HOWTO:1, PLAYING:2, LEVEL_COMPLETE:3, GAME_OVER:4, VICTORY:5, CHARACTER_SELECT:6 };
+const STATE = { MENU:0, HOWTO:1, PLAYING:2, LEVEL_COMPLETE:3, GAME_OVER:4, VICTORY:5, CHARACTER_SELECT:6, ASSISTANT_SELECT:7 };
 let state = STATE.MENU;
 let player = null;
-let companion = null;
+let allies = [];              // the chosen assistant entities live in here (also in `entities`)
 let entities = [];
 let particles = [];
 let levelIdx = 0;
@@ -912,6 +1040,7 @@ let shakeAmt = 0;
 let stateTime = 0;
 let bossSpawnPulse = 0;
 let slowMoTime = 0;          // global powerup — slows enemies & enemy bullets
+let paused = false;          // Space pauses gameplay; Space or a click resumes
 
 // ---- Persistent cleared-level set ----
 let clearedLevels = (function(){
@@ -922,30 +1051,50 @@ function saveCleared(){
   localStorage.setItem('shooter_cleared', JSON.stringify([...clearedLevels]));
 }
 
-// ---- Character profiles (each replaces one of X/C/M with a class-unique skill) ----
+// ---- Character profiles. X (sprint) and F (heal) are universal; C is the
+// class-unique slot (slowmo / wall); the optional V slot is Tank-only. ----
 const CHARACTERS = {
   soldier: {
     name:'SOLDIER', desc:'BALANCED · +25% DAMAGE',
     color:'#3498db', hp:5, speed:90, damageMult:1.25, startShield:0,
-    skills:{ x:'summon', c:'slowmo' },
-    skillLabels:{ x:'BLADE', c:'SLOW' }
+    skills:{ x:'sprint', c:'slowmo', f:'heal', b:'blast' },
+    skillLabels:{ x:'SPRINT', c:'SLOW', f:'HEAL', b:'BLAST' }
   },
   scout: {
     name:'SCOUT', desc:'FRAGILE · FAST · BLINK',
     color:'#f1c40f', hp:3, speed:130, damageMult:1.0, startShield:0,
-    skills:{ x:'summon', c:'slowmo' },
-    skillLabels:{ x:'BLADE', c:'SLOW' }
+    skills:{ x:'sprint', c:'slowmo', f:'heal', b:'blast' },
+    skillLabels:{ x:'SPRINT', c:'SLOW', f:'HEAL', b:'BLAST' }
   },
   tank: {
-    name:'TANK', desc:'HEAVY · +20% DAMAGE · FLAMETHROWER (RMB)',
+    name:'BENJAMIN WU', desc:'HEAVY · +20% DAMAGE · FLAMETHROWER (RMB)',
     color:'#27ae60', hp:12, speed:95, damageMult:1.2, startShield:4,
-    skills:{ x:'summon', c:'wall', v:'vsummon' },
-    skillLabels:{ x:'BLADE', c:'WALL', v:'BLADE+' }
+    skills:{ x:'sprint', c:'wall', v:'vsummon', f:'heal', b:'blast' },
+    skillLabels:{ x:'SPRINT', c:'WALL', v:'BLADE+', f:'HEAL', b:'BLAST' }
   }
 };
 let selectedChar = 'soldier';
 let selectedLevel = 0;
 let lastClearedLevel = -1; // remembered for the LEAVE/CONTINUE screen
+
+// ---- Assistant roster ----
+// Every character picks exactly 2 of these on a screen between character-select
+// and the game. Each `key` maps to an entity factory (see createAssistant) and a
+// `type` used by the unified ally AI / collision / draw paths.
+const ASSISTANTS = {
+  drone:    { name:'DRONE',    type:'companion',   color:'#3498db', sprite:()=>SPR.companion_a,
+              tags:['AUTO-FIRE','RANGED'], lines:['HP 6','auto-fires at','nearest enemy','long range'] },
+  henchman: { name:'BRUTE',    type:'henchman',    color:'#c0392b', sprite:()=>SPR.henchman_a,
+              tags:['MELEE','TANKY'],     lines:['HP 14','wooden club','wide swing','normal dmg'] },
+  nunchaku: { name:'NUNCHAKU', type:'nunchaku',    color:'#ecf0f1', sprite:()=>SPR.nunchaku_a,
+              tags:['MELEE','STRIKER'],   lines:['HP 5','martial arts','medium reach','HIGH dmg'] },
+  bomber:   { name:'BOMBER',   type:'bomber_ally', color:'#e67e22', sprite:()=>SPR.bomber_a,
+              tags:['RANGED','AOE'],      lines:['HP 3','lobs bombs','LARGE blast','V.HIGH dmg'] },
+  poison:   { name:'POISON',   type:'poison_ally', color:'#27ae60', sprite:()=>SPR.poison_a,
+              tags:['AURA','DOT'],        lines:['HP 5','toxic cloud','wide range','constant dmg'] }
+};
+const ASSIST_ORDER = ['drone','henchman','nunchaku','bomber','poison'];
+let selectedAssistants = ['drone','henchman']; // chosen keys for the run (exactly 2)
 
 // ============================================================
 // INPUT
@@ -959,12 +1108,17 @@ const mouse = { x: W/2, y: H/2, down:false, rdown:false, clicked:false };
 // may still scroll itself to bring something into view.
 const GAMEPLAY_KEYS = new Set([
   'KeyW','KeyA','KeyS','KeyD',
-  'KeyX','KeyC','KeyV',
+  'KeyX','KeyC','KeyV','KeyF','KeyB',
   'Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'
 ]);
 window.addEventListener('keydown', e => {
+  const wasDown = keys[e.code];
   keys[e.code] = true;
   if(GAMEPLAY_KEYS.has(e.code)) e.preventDefault();
+  // Space toggles pause during play (leading edge only — ignore auto-repeat).
+  if(e.code === 'Space' && !wasDown && state === STATE.PLAYING){
+    paused = !paused;
+  }
 });
 window.addEventListener('keyup', e => {
   keys[e.code] = false;
@@ -976,9 +1130,11 @@ canvas.addEventListener('mousemove', e => {
   mouse.y = (e.clientY - r.top) * (H / r.height);
 });
 canvas.addEventListener('mousedown', e => {
+  initAudio();
+  // A click anywhere while paused just resumes — it shouldn't also fire a shot.
+  if(state === STATE.PLAYING && paused){ paused = false; return; }
   if(e.button === 2){ mouse.rdown = true; }
   else { mouse.down = true; mouse.clicked = true; }
-  initAudio();
 });
 window.addEventListener('mouseup', e => {
   if(e.button === 2){ mouse.rdown = false; }
@@ -1041,14 +1197,16 @@ function createPlayer(charKey){
     minigunTime:0, plasmaTime:0, homingTime:0,
     // Passive powerups (temporary buffs)
     speedTime:0, damageTime:0, magnetTime:0, scoreTime:0,
+    // X-skill sprint buff timer (+30% move speed for 5s). Stacks multiplicatively
+    // with the SPEED powerup via playerSpeedMult().
+    sprintTime:0,
     // Tank's old B-key flameburst timer. The flameburst handler is now orphaned
     // (V replaced it), but the field/timer is harmless and left for easy revival.
     flameburstTime:0,
-    // Special-skill cooldowns. X/C are class-specific (per CHARACTERS.skills);
-    // the optional V slot is Tank-only today. The "summon" skill (sword ally) is
-    // bound to X for every class; "vsummon" is the Tank's faster V-key variant.
-    skillCd:{ x:0, c:0, v:0 },
-    skillCdMax:{ x:4, c:12, blink:5, wall:18, summon:25, vsummon:25, flameburst:20 },
+    // Special-skill cooldowns. X (sprint), F (heal) and B (blast) are universal;
+    // C is class-specific (per CHARACTERS.skills); the optional V slot is Tank-only.
+    skillCd:{ x:0, c:0, v:0, f:0, b:0 },
+    skillCdMax:{ x:4, c:12, blink:5, wall:18, summon:25, vsummon:25, flameburst:20, sprint:20, heal:20, blast:20 },
     hitFlash:0, invuln:0, frame:0, frameT:0, dead:false
   };
 }
@@ -1085,12 +1243,14 @@ function createEnemy(kind, x, y){
   return base;
 }
 
+// Auto-fire drone. `hitInvuln`/`deathColor` are read by the unified damageAlly().
 function createCompanion(){
   return {
-    type:'companion', x:player ? player.x - 14 : W/2 - 14, y:player ? player.y : H/2,
+    type:'companion', assistKey:'drone', x:player ? player.x - 14 : W/2 - 14, y:player ? player.y : H/2,
     vx:0, vy:0, angle:0, radius:4,
     hp:6, maxHp:6,
     fireCooldown:0, fireRate:0.25,
+    hitInvuln:0.85, deathColor:'#3498db',
     hitFlash:0, invuln:0, frame:0, frameT:0, dead:false
   };
 }
@@ -1103,8 +1263,80 @@ function createSwordAlly(x, y){
     attackRange:24, attackArc:Math.PI * 2/3, // 120°
     attackCd:0, attackRate:0.55, swingTime:0, swingDmg:5,
     moveSpeed:74,
+    hitInvuln:0.4, deathColor:'#f1c40f',
     hitFlash:0, invuln:0.3, frame:0, frameT:0, dead:false
   };
+}
+
+// Club-wielding brute — thick HP, fast, a wide/long melee swing, normal damage.
+function createHenchman(){
+  return {
+    type:'henchman', assistKey:'henchman',
+    x: player ? player.x + 16 : W/2 + 16, y: player ? player.y : H/2,
+    vx:0, vy:0, angle:0, radius:6,
+    hp:14, maxHp:14,
+    attackRange:40, attackArc:Math.PI * 5/6, // ~150° wide, 40-unit reach (large scope)
+    attackCd:0, attackRate:0.5, swingTime:0, swingDmg:3, // normal damage
+    moveSpeed:130, leash:110, swingColor:'#c8923a',
+    hitInvuln:0.5, deathColor:'#c0392b',
+    hitFlash:0, invuln:0, frame:0, frameT:0, dead:false
+  };
+}
+
+// Nunchaku martial artist — HIGH damage, medium reach/arc, thin-ish HP, fast strikes.
+function createNunchaku(){
+  return {
+    type:'nunchaku', assistKey:'nunchaku',
+    x: player ? player.x + 16 : W/2 + 16, y: player ? player.y : H/2,
+    vx:0, vy:0, angle:0, radius:5,
+    hp:5, maxHp:5,
+    attackRange:30, attackArc:Math.PI * 0.6, // ~108° medium scope
+    attackCd:0, attackRate:0.4, swingTime:0, swingDmg:8, // high damage, quick
+    moveSpeed:138, leash:120, swingColor:'#ecf0f1',
+    hitInvuln:0.45, deathColor:'#ecf0f1',
+    hitFlash:0, invuln:0, frame:0, frameT:0, dead:false
+  };
+}
+
+// Bomber — lobs explosive bombs: VERY high damage, LARGE blast, fragile (3 HP).
+function createBomberAlly(){
+  return {
+    type:'bomber_ally', assistKey:'bomber',
+    x: player ? player.x - 16 : W/2 - 16, y: player ? player.y : H/2,
+    vx:0, vy:0, angle:0, radius:5,
+    hp:3, maxHp:3,
+    fireCooldown:0, fireRate:1.25, fireRange:210,
+    bombDmg:10, explodeRadius:48, projSpeed:185,
+    moveSpeed:120, leash:200,
+    hitInvuln:0.5, deathColor:'#e67e22',
+    hitFlash:0, invuln:0, frame:0, frameT:0, dead:false
+  };
+}
+
+// Poison alchemist — wide, continuous toxic aura that damages every enemy inside it.
+function createPoisonAlly(){
+  return {
+    type:'poison_ally', assistKey:'poison',
+    x: player ? player.x - 16 : W/2 - 16, y: player ? player.y : H/2,
+    vx:0, vy:0, angle:0, radius:5,
+    hp:5, maxHp:5,
+    auraRadius:50, dps:5, puffT:0,
+    moveSpeed:122, leash:130,
+    hitInvuln:0.5, deathColor:'#27ae60',
+    hitFlash:0, invuln:0, frame:0, frameT:0, dead:false
+  };
+}
+
+// Factory dispatch used by the selection flow and per-level refresh.
+function createAssistant(key){
+  switch(key){
+    case 'drone':    return createCompanion();
+    case 'henchman': return createHenchman();
+    case 'nunchaku': return createNunchaku();
+    case 'bomber':   return createBomberAlly();
+    case 'poison':   return createPoisonAlly();
+  }
+  return createCompanion();
 }
 
 function createBullet(x,y,angle,owner,opts={}){
@@ -1144,9 +1376,44 @@ function emit(x,y,count,color,sMin=20,sMax=80,life=0.5){
   }
 }
 
+// Combined player move-speed multiplier: SPEED powerup (1.5x) and the X-skill
+// sprint buff (1.3x) stack multiplicatively. Used by player movement and by the
+// allies that pace themselves to the player.
+function playerSpeedMult(){
+  let m = 1;
+  if(player.speedTime  > 0) m *= 1.5;
+  if(player.sprintTime > 0) m *= 1.3;
+  return m;
+}
+
 // Dispatch a skill by name. Returns true if the skill actually fired
 // (so the caller can charge cooldown only on successful use).
 function triggerSkill(name, dx, dy, mag){
+  if(name === 'sprint'){
+    // X skill: +30% move speed for 5s. Re-casting refreshes the timer.
+    player.sprintTime = Math.max(player.sprintTime, 5);
+    emit(player.x, player.y, 18, '#1abc9c', 40, 130, 0.4);
+    emit(player.x, player.y, 8, '#fff', 25, 90, 0.3);
+    sfx.teleport();
+    return true;
+  }
+  if(name === 'heal'){
+    // F skill: restore 1 HP (capped at maxHp). Only fires — and only charges its
+    // cooldown — when there's actually damage to heal.
+    if(player.hp >= player.maxHp) return false;
+    player.hp = Math.min(player.maxHp, player.hp + 1);
+    emit(player.x, player.y, 18, '#2ecc71', 35, 110, 0.5);
+    emit(player.x, player.y, 8, '#fff', 25, 90, 0.35);
+    sfx.shieldHit();
+    return true;
+  }
+  if(name === 'blast'){
+    // B skill: a small-radius AoE burst centered on the player, dealing normal
+    // damage to every enemy inside. explode() handles particles/shake/sfx.
+    const bd = 3 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
+    explode(player.x, player.y, 26, bd);
+    return true;
+  }
   if(name === 'dash'){
     let ax = dx, ay = dy;
     if(mag === 0){ ax = Math.cos(player.angle); ay = Math.sin(player.angle); }
@@ -1312,7 +1579,8 @@ function spawnBoss(kind){
   // Bosses scale per level so the same AI reused at higher levels actually
   // feels harder. HP +7%/level, speed +1.5%/level. At L1 (bruiser) this is a
   // no-op; at L30 (ANNIHILATOR) the nemesis ends up with ~515 HP / ~34 speed
-  // instead of the base 170 / 24.
+  // (base 170/24), and at L40 (APOCALYPSE) the phantom hits ~448 HP / ~48 speed
+  // (base 120/30).
   const hpScale = 1 + levelIdx * 0.07;
   const spdScale = 1 + levelIdx * 0.015;
   b.hp = Math.ceil(b.hp * hpScale);
@@ -1330,7 +1598,8 @@ function startLevel(idx){
   spawnTimer = 0.6;
   spawnedCount = 0;
   bossSpawned = false;
-  // World sizing: L1-L13 use the 1x viewport; L14-L24 use a 2x world; L25-L30
+  paused = false;
+  // World sizing: L1-L13 use the 1x viewport; L14-L24 use a 2x world; L25-L40
   // use a 3x world. View stays at W*H either way — a camera follows the player.
   let worldScale = 1;
   if(idx >= 24) worldScale = 3;
@@ -1338,19 +1607,13 @@ function startLevel(idx){
   worldW = W * worldScale;
   worldH = H * worldScale;
   camX = 0; camY = 0;
-  entities = entities.filter(e => e.type === 'player' || e.type === 'companion');
+  entities = entities.filter(e => e.type === 'player');
   particles = [];
   if(!player){ player = createPlayer(selectedChar); entities.push(player); }
   else { player.x = worldW/2; player.y = worldH/2; player.invuln = 1.2; }
-  // Refresh the companion each level: full HP, repositioned beside the player.
-  if(!companion || companion.dead){
-    companion = createCompanion();
-    entities.push(companion);
-  } else {
-    companion.hp = companion.maxHp;
-    companion.x = player.x - 14; companion.y = player.y;
-    companion.invuln = 1.2;
-  }
+  // Refresh the chosen assistants each level: keep survivors (full HP), recreate
+  // any that died, reposition all beside the player.
+  refreshAssistants();
   // Snap camera to centered-on-player so the first frame doesn't lerp from (0,0).
   camX = clamp(player.x - W/2, 0, Math.max(0, worldW - W));
   camY = clamp(player.y - H/2, 0, Math.max(0, worldH - H));
@@ -1374,12 +1637,31 @@ function updateCamera(dt){
 
 function startGame(){
   initAudio();
+  paused = false;
   score = 0;
   player = createPlayer();
-  companion = createCompanion();
-  entities = [player, companion];
+  entities = [player];
+  allies = [];
+  spawnSelectedAssistants();
   particles = [];
   startLevel(0);
+}
+
+// Rebuild `allies` from the chosen loadout at the start of each level: reuse any
+// that survived the previous level (refilled to full HP), recreate the dead ones,
+// and reposition every one beside the player.
+function refreshAssistants(){
+  const aliveByKey = {};
+  for(const a of allies){ if(a && !a.dead) aliveByKey[a.assistKey] = a; }
+  allies = [];
+  selectedAssistants.forEach((key, idx) => {
+    let a = aliveByKey[key];
+    if(a){ a.hp = a.maxHp; a.invuln = 1.2; }
+    else { a = createAssistant(key); }
+    positionAllyByPlayer(a, idx);
+    allies.push(a);
+    entities.push(a);
+  });
 }
 
 // ============================================================
@@ -1390,9 +1672,10 @@ function update(dt){
   if(bossSpawnPulse > 0) bossSpawnPulse -= dt;
   if(state === STATE.MENU || state === STATE.HOWTO) handleMenu();
   else if(state === STATE.CHARACTER_SELECT) handleCharacterSelect();
+  else if(state === STATE.ASSISTANT_SELECT) handleAssistantSelect();
   else if(state === STATE.LEVEL_COMPLETE) handleLevelComplete();
   else if(state === STATE.GAME_OVER || state === STATE.VICTORY) handleEndScreen();
-  else if(state === STATE.PLAYING) updatePlaying(dt);
+  else if(state === STATE.PLAYING){ if(!paused) updatePlaying(dt); }
   mouse.clicked = false;
 }
 
@@ -1400,11 +1683,12 @@ function updatePlaying(dt){
   // ---- Decay global & powerup timers ----
   if(slowMoTime > 0) slowMoTime -= dt;
   if(player.speedTime > 0)  player.speedTime  -= dt;
+  if(player.sprintTime > 0) player.sprintTime -= dt;
   if(player.damageTime > 0) player.damageTime -= dt;
   if(player.magnetTime > 0) player.magnetTime -= dt;
   if(player.scoreTime > 0)  player.scoreTime  -= dt;
 
-  // ---- Player movement (Speed powerup boosts it) ----
+  // ---- Player movement (SPEED powerup + X-skill sprint boost it) ----
   let dx=0, dy=0;
   if(keys['ArrowLeft']||keys['KeyA']) dx -= 1;
   if(keys['ArrowRight']||keys['KeyD']) dx += 1;
@@ -1412,7 +1696,7 @@ function updatePlaying(dt){
   if(keys['ArrowDown']||keys['KeyS']) dy += 1;
   const mag = Math.hypot(dx, dy);
   if(mag > 0){ dx /= mag; dy /= mag; }
-  const speedMult = player.speedTime > 0 ? 1.5 : 1;
+  const speedMult = playerSpeedMult();
   player.x += dx * player.speed * speedMult * dt;
   player.y += dy * player.speed * speedMult * dt;
   player.x = clamp(player.x, 8, worldW-8);
@@ -1427,10 +1711,12 @@ function updatePlaying(dt){
   // Aim from the cursor's WORLD position (mouse is in screen coords).
   player.angle = Math.atan2((mouse.y + camY) - player.y, (mouse.x + camX) - player.x);
 
-  // ---- Special skills: X / C dispatched per-character ----
+  // ---- Special skills: X (sprint) / C (class) / F (heal) / B (blast) / V (Tank) ----
   if(player.skillCd.x > 0) player.skillCd.x -= dt;
   if(player.skillCd.c > 0) player.skillCd.c -= dt;
   if(player.skillCd.v > 0) player.skillCd.v -= dt;
+  if(player.skillCd.f > 0) player.skillCd.f -= dt;
+  if(player.skillCd.b > 0) player.skillCd.b -= dt;
   if(player.flameburstTime > 0){
     player.flameburstTime -= dt;
     tickFlameburst(dt);
@@ -1441,6 +1727,12 @@ function updatePlaying(dt){
   }
   if(keys['KeyC'] && player.skillCd.c <= 0){
     if(triggerSkill(charSkills.c, dx, dy, mag)) player.skillCd.c = player.skillCdMax[charSkills.c];
+  }
+  if(keys['KeyF'] && player.skillCd.f <= 0 && charSkills.f){
+    if(triggerSkill(charSkills.f, dx, dy, mag)) player.skillCd.f = player.skillCdMax[charSkills.f];
+  }
+  if(keys['KeyB'] && player.skillCd.b <= 0 && charSkills.b){
+    if(triggerSkill(charSkills.b, dx, dy, mag)) player.skillCd.b = player.skillCdMax[charSkills.b];
   }
   if(keys['KeyV'] && player.skillCd.v <= 0 && charSkills.v){
     if(triggerSkill(charSkills.v, dx, dy, mag)) player.skillCd.v = player.skillCdMax[charSkills.v];
@@ -1470,9 +1762,6 @@ function updatePlaying(dt){
   if(player.invuln > 0) player.invuln -= dt;
   if(player.hitFlash > 0) player.hitFlash -= dt;
 
-  // ---- Companion AI ----
-  if(companion && !companion.dead) updateCompanion(dt);
-
   // ---- Enemy spawning ----
   if(spawnedCount < levelData.total){
     spawnTimer -= dt;
@@ -1501,12 +1790,12 @@ function updatePlaying(dt){
       updateBullet(e, bdt);
     }
     else if(e.type === 'pickup') updatePickup(e, dt);
+    else if(e.type === 'companion') updateCompanion(e, dt);
+    else if(e.type === 'henchman' || e.type === 'nunchaku') updateMeleeAlly(e, dt);
+    else if(e.type === 'bomber_ally') updateBomberAlly(e, dt);
+    else if(e.type === 'poison_ally') updatePoisonAlly(e, dt);
     else if(e.type === 'sword_ally') updateSwordAlly(e, dt);
     if(e.hitFlash > 0) e.hitFlash -= dt;
-  }
-  if(companion && !companion.dead){
-    if(companion.invuln > 0) companion.invuln -= dt;
-    if(companion.hitFlash > 0) companion.hitFlash -= dt;
   }
 
   // ---- Collisions ----
@@ -1536,19 +1825,15 @@ function updatePlaying(dt){
         }
       }
     } else {
-      // Enemy bullet — can hit player, companion, or summoned sword ally.
+      // Enemy bullet — can hit the player or any chosen ally.
       if(player.invuln <= 0){
         const dr = b.radius + player.radius;
         if(dist2(b, player) < dr*dr){ b.dead = true; damagePlayer(1); continue; }
       }
-      if(companion && !companion.dead && companion.invuln <= 0){
-        const dr = b.radius + companion.radius;
-        if(dist2(b, companion) < dr*dr){ b.dead = true; damageCompanion(1); continue; }
-      }
-      for(const s of entities){
-        if(s.type !== 'sword_ally' || s.dead || s.invuln > 0) continue;
-        const dr = b.radius + s.radius;
-        if(dist2(b, s) < dr*dr){ b.dead = true; damageSwordAlly(s, 1); break; }
+      for(const a of entities){
+        if(!isAlly(a) || a.dead || a.invuln > 0) continue;
+        const dr = b.radius + a.radius;
+        if(dist2(b, a) < dr*dr){ b.dead = true; damageAlly(a, 1); break; }
       }
     }
   }
@@ -1565,29 +1850,17 @@ function updatePlaying(dt){
       }
     }
   }
-  if(companion && !companion.dead && companion.invuln <= 0){
+  // Enemy bodies touching any chosen ally.
+  for(const a of entities){
+    if(!isAlly(a) || a.dead || a.invuln > 0) continue;
     for(const en of entities){
       if(en.type !== 'enemy' || en.dead) continue;
-      const dr = companion.radius + en.radius;
-      if(dist2(en, companion) < dr*dr){
-        damageCompanion(en.isBoss ? 2 : 1);
-        const a = Math.atan2(en.y - companion.y, en.x - companion.x);
-        en.x += Math.cos(a) * 10;
-        en.y += Math.sin(a) * 10;
-        break;
-      }
-    }
-  }
-  for(const s of entities){
-    if(s.type !== 'sword_ally' || s.dead || s.invuln > 0) continue;
-    for(const en of entities){
-      if(en.type !== 'enemy' || en.dead) continue;
-      const dr = s.radius + en.radius;
-      if(dist2(en, s) < dr*dr){
-        damageSwordAlly(s, en.isBoss ? 2 : 1);
-        const a = Math.atan2(en.y - s.y, en.x - s.x);
-        en.x += Math.cos(a) * 8;
-        en.y += Math.sin(a) * 8;
+      const dr = a.radius + en.radius;
+      if(dist2(en, a) < dr*dr){
+        damageAlly(a, en.isBoss ? 2 : 1);
+        const ang = Math.atan2(en.y - a.y, en.x - a.x);
+        en.x += Math.cos(ang) * 8;
+        en.y += Math.sin(ang) * 8;
         break;
       }
     }
@@ -1858,8 +2131,8 @@ function applyPickup(kind){
 // ============================================================
 // COMPANION (player's AI assistant)
 // ============================================================
-function updateCompanion(dt){
-  const c = companion;
+function updateCompanion(c, dt){
+  if(c.invuln > 0) c.invuln -= dt;
   // Float to a follow-point offset behind the player.
   const target = {
     x: player.x - Math.cos(player.angle) * 14,
@@ -1867,15 +2140,23 @@ function updateCompanion(dt){
   };
   const dx = target.x - c.x, dy = target.y - c.y;
   const d = Math.hypot(dx, dy);
-  const accel = 4.5;
+  const accel = 18;
   if(d > 0.5){
     c.vx += (dx / d) * accel * 60 * dt;
     c.vy += (dy / d) * accel * 60 * dt;
   }
   c.vx *= 0.86; c.vy *= 0.86;
+  // Cap the float speed so it can always at least match the player (with a small
+  // catch-up margin) — otherwise the old low accel left the drone trailing on the
+  // big 2x/3x arenas. Track the SPEED powerup too.
+  const pSpeed = player.speed * playerSpeedMult();
+  const maxV = Math.max(pSpeed * 1.35, 90);
+  const sp = Math.hypot(c.vx, c.vy);
+  if(sp > maxV){ c.vx = c.vx / sp * maxV; c.vy = c.vy / sp * maxV; }
   c.x += c.vx * dt; c.y += c.vy * dt;
-  c.x = clamp(c.x, 6, W - 6);
-  c.y = clamp(c.y, 6, H - 8);
+  // Clamp to the world, not the viewport, so it follows past the screen edge.
+  c.x = clamp(c.x, 6, worldW - 6);
+  c.y = clamp(c.y, 6, worldH - 8);
   c.frameT += dt;
   if(c.frameT > 0.18){ c.frameT = 0; c.frame = (c.frame + 1) % 2; }
 
@@ -1901,15 +2182,23 @@ function updateCompanion(dt){
   }
 }
 
-function damageCompanion(amount){
-  companion.hp -= amount;
-  companion.invuln = 0.85;
-  companion.hitFlash = 0.15;
-  emit(companion.x, companion.y, 6, '#e74c3c', 30, 90, 0.4);
+// Is `e` a friendly ally entity (can be hit by enemy bullets/melee)?
+function isAlly(e){
+  return e.type === 'companion' || e.type === 'henchman' || e.type === 'nunchaku'
+      || e.type === 'bomber_ally' || e.type === 'poison_ally' || e.type === 'sword_ally';
+}
+
+// Unified ally damage. Respects per-entity invuln window (`hitInvuln`) and death color.
+function damageAlly(a, amount){
+  if(a.invuln > 0) return;
+  a.hp -= amount;
+  a.invuln = a.hitInvuln || 0.5;
+  a.hitFlash = 0.15;
+  emit(a.x, a.y, 6, '#e74c3c', 30, 90, 0.4);
   sfx.hit();
-  if(companion.hp <= 0 && !companion.dead){
-    companion.dead = true;
-    emit(companion.x, companion.y, 20, '#3498db', 50, 160, 0.6);
+  if(a.hp <= 0 && !a.dead){
+    a.dead = true;
+    emit(a.x, a.y, 20, a.deathColor || '#fff', 50, 160, 0.6);
     sfx.enemyDeath();
   }
 }
@@ -1956,8 +2245,8 @@ function updateSwordAlly(s, dt){
     }
   }
 
-  s.x = clamp(s.x + s.vx * dt, 6, W - 6);
-  s.y = clamp(s.y + s.vy * dt, 6, H - 8);
+  s.x = clamp(s.x + s.vx * dt, 6, worldW - 6);
+  s.y = clamp(s.y + s.vy * dt, 6, worldH - 8);
   s.frameT += dt;
   if(s.frameT > 0.16){ s.frameT = 0; s.frame = (s.frame + 1) % 2; }
 }
@@ -1993,17 +2282,186 @@ function swordAllyAttack(s){
   }
 }
 
-function damageSwordAlly(s, amount){
-  if(s.invuln > 0) return;
-  s.hp -= amount;
-  s.invuln = 0.4;
-  s.hitFlash = 0.15;
-  emit(s.x, s.y, 5, '#e74c3c', 30, 90, 0.35);
-  sfx.hit();
-  if(s.hp <= 0 && !s.dead){
-    s.dead = true;
-    emit(s.x, s.y, 18, '#f1c40f', 50, 160, 0.55);
-    sfx.enemyDeath();
+// ---- Generic melee ally (henchman, nunchaku) ----
+// Chases the nearest enemy within its leash and swings in an arc; otherwise
+// escorts the player. Speed tracks the player so it never falls behind.
+function updateMeleeAlly(s, dt){
+  if(s.invuln > 0) s.invuln -= dt;
+  if(s.swingTime > 0) s.swingTime -= dt;
+  if(s.attackCd > 0) s.attackCd -= dt;
+  const pSpeed = player.speed * playerSpeedMult();
+  const moveSpeed = Math.max(s.moveSpeed, pSpeed * 1.15);
+
+  let target = null, td = Infinity;
+  for(const en of entities){
+    if(en.type !== 'enemy' || en.dead) continue;
+    const d2 = dist2(s, en);
+    if(d2 < td){ td = d2; target = en; }
+  }
+  const leash = s.leash || 110;
+  if(target && td < leash * leash){
+    const dx = target.x - s.x, dy = target.y - s.y;
+    const d = Math.hypot(dx, dy) || 0.001;
+    s.angle = Math.atan2(dy, dx);
+    const stopDist = s.attackRange - 8;
+    if(d > stopDist){
+      s.vx = (dx / d) * moveSpeed;
+      s.vy = (dy / d) * moveSpeed;
+    } else {
+      s.vx *= 0.6; s.vy *= 0.6;
+      if(s.attackCd <= 0){ meleeAllyAttack(s); s.attackCd = s.attackRate; s.swingTime = 0.2; }
+    }
+  } else {
+    const tx = player.x + Math.cos(player.angle + Math.PI / 2) * 16;
+    const ty = player.y + Math.sin(player.angle + Math.PI / 2) * 16;
+    const dx = tx - s.x, dy = ty - s.y;
+    const d = Math.hypot(dx, dy);
+    if(d > 6){
+      s.angle = Math.atan2(dy, dx);
+      const sp = d > 60 ? moveSpeed * 1.3 : moveSpeed;
+      s.vx = (dx / d) * sp;
+      s.vy = (dy / d) * sp;
+    } else { s.vx *= 0.5; s.vy *= 0.5; }
+  }
+  s.x = clamp(s.x + s.vx * dt, 6, worldW - 6);
+  s.y = clamp(s.y + s.vy * dt, 6, worldH - 8);
+  s.frameT += dt;
+  if(s.frameT > 0.16){ s.frameT = 0; s.frame = (s.frame + 1) % 2; }
+}
+
+function meleeAllyAttack(s){
+  const half = s.attackArc / 2;
+  const col = s.swingColor || '#fff';
+  let hit = false;
+  for(const en of entities){
+    if(en.type !== 'enemy' || en.dead) continue;
+    const dx = en.x - s.x, dy = en.y - s.y;
+    const d = Math.hypot(dx, dy);
+    if(d > s.attackRange + en.radius) continue;
+    let diff = Math.atan2(dy, dx) - s.angle;
+    while(diff > Math.PI) diff -= Math.PI * 2;
+    while(diff < -Math.PI) diff += Math.PI * 2;
+    if(Math.abs(diff) > half) continue;
+    en.hp -= s.swingDmg;
+    en.hitFlash = 0.08;
+    emit(en.x, en.y, 4, col, 30, 90, 0.25);
+    if(en.hp <= 0) killEnemy(en);
+    hit = true;
+  }
+  if(hit) sfx.hit();
+  for(let i = 0; i < 8; i++){
+    const a = s.angle - half + (i / 7) * s.attackArc;
+    const r = s.attackRange * (0.55 + Math.random() * 0.45);
+    particles.length < 300 && particles.push({
+      x: s.x + Math.cos(a) * r, y: s.y + Math.sin(a) * r,
+      vx: Math.cos(a) * 40, vy: Math.sin(a) * 40,
+      life: 0.24, maxLife: 0.24, color: col, size: 1
+    });
+  }
+}
+
+// ---- Bomber ally ----
+// Stays near the player (fragile) and lobs a high-damage, large-radius bomb at
+// the nearest enemy in range. The bomb explodes on contact OR at end of fuse.
+function updateBomberAlly(s, dt){
+  if(s.invuln > 0) s.invuln -= dt;
+  if(s.fireCooldown > 0) s.fireCooldown -= dt;
+  const pSpeed = player.speed * playerSpeedMult();
+  const moveSpeed = Math.max(s.moveSpeed, pSpeed * 1.15);
+  // Tuck in behind the player.
+  const tx = player.x - Math.cos(player.angle) * 18;
+  const ty = player.y - Math.sin(player.angle) * 18;
+  const dxp = tx - s.x, dyp = ty - s.y;
+  const dp = Math.hypot(dxp, dyp);
+  if(dp > 6){
+    const sp = dp > 60 ? moveSpeed * 1.3 : moveSpeed;
+    s.vx = (dxp / dp) * sp; s.vy = (dyp / dp) * sp;
+  } else { s.vx *= 0.5; s.vy *= 0.5; }
+  s.x = clamp(s.x + s.vx * dt, 6, worldW - 6);
+  s.y = clamp(s.y + s.vy * dt, 6, worldH - 8);
+  s.frameT += dt;
+  if(s.frameT > 0.16){ s.frameT = 0; s.frame = (s.frame + 1) % 2; }
+
+  let target = null, nd = s.fireRange * s.fireRange;
+  for(const en of entities){
+    if(en.type !== 'enemy' || en.dead) continue;
+    const dd = dist2(s, en);
+    if(dd < nd){ nd = dd; target = en; }
+  }
+  if(target){
+    s.angle = Math.atan2(target.y - s.y, target.x - s.x);
+    if(s.fireCooldown <= 0){
+      const dmg = s.bombDmg * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
+      // Raw bullet object (mirrors the Soldier grenade) so isGrenade/explodeDmg stick.
+      entities.push({
+        type:'bullet', owner:'player', x:s.x, y:s.y,
+        vx:Math.cos(s.angle) * s.projSpeed, vy:Math.sin(s.angle) * s.projSpeed,
+        angle:s.angle, radius:3, sprite:SPR.bullet_rocket,
+        dmg, life:1.1, isGrenade:true, explosive:true,
+        explodeRadius:s.explodeRadius, explodeDmg:dmg, dead:false
+      });
+      s.fireCooldown = s.fireRate;
+      emit(s.x, s.y, 4, '#e67e22', 30, 90, 0.25);
+      sfx.rocket();
+    }
+  }
+}
+
+// ---- Poison ally ----
+// Drifts onto the nearest enemy (else escorts the player) and exudes a wide,
+// continuous toxic aura that damages every enemy inside it each tick.
+function updatePoisonAlly(s, dt){
+  if(s.invuln > 0) s.invuln -= dt;
+  const pSpeed = player.speed * playerSpeedMult();
+  const moveSpeed = Math.max(s.moveSpeed, pSpeed * 1.1);
+
+  let target = null, td = Infinity;
+  for(const en of entities){
+    if(en.type !== 'enemy' || en.dead) continue;
+    const d2 = dist2(s, en);
+    if(d2 < td){ td = d2; target = en; }
+  }
+  const leash = s.leash || 130;
+  if(target && td < leash * leash){
+    const dx = target.x - s.x, dy = target.y - s.y;
+    const d = Math.hypot(dx, dy) || 0.001;
+    s.angle = Math.atan2(dy, dx);
+    if(d > s.auraRadius * 0.6){ s.vx = (dx / d) * moveSpeed; s.vy = (dy / d) * moveSpeed; }
+    else { s.vx *= 0.6; s.vy *= 0.6; }
+  } else {
+    const tx = player.x + Math.cos(player.angle + Math.PI / 2) * 18;
+    const ty = player.y + Math.sin(player.angle + Math.PI / 2) * 18;
+    const dx = tx - s.x, dy = ty - s.y;
+    const d = Math.hypot(dx, dy);
+    if(d > 6){ const sp = d > 60 ? moveSpeed * 1.3 : moveSpeed; s.vx = (dx / d) * sp; s.vy = (dy / d) * sp; }
+    else { s.vx *= 0.5; s.vy *= 0.5; }
+  }
+  s.x = clamp(s.x + s.vx * dt, 6, worldW - 6);
+  s.y = clamp(s.y + s.vy * dt, 6, worldH - 8);
+  s.frameT += dt;
+  if(s.frameT > 0.18){ s.frameT = 0; s.frame = (s.frame + 1) % 2; }
+
+  const dps = s.dps * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
+  for(const en of entities){
+    if(en.type !== 'enemy' || en.dead) continue;
+    const rr = s.auraRadius + en.radius;
+    if(dist2(s, en) < rr * rr){
+      en.hp -= dps * dt;
+      en.hitFlash = 0.05;
+      if(en.hp <= 0) killEnemy(en);
+    }
+  }
+  // Rising toxic puffs scattered through the aura.
+  s.puffT -= dt;
+  if(s.puffT <= 0){
+    s.puffT = 0.05;
+    const a = Math.random() * Math.PI * 2;
+    const r = s.auraRadius * Math.sqrt(Math.random());
+    particles.length < 300 && particles.push({
+      x: s.x + Math.cos(a) * r, y: s.y + Math.sin(a) * r,
+      vx: 0, vy: -6, life: 0.5, maxLife: 0.5,
+      color: Math.random() < 0.5 ? '#27ae60' : '#2ecc71', size: 1
+    });
   }
 }
 
@@ -2889,14 +3347,30 @@ function draw(){
     if(state === STATE.LEVEL_COMPLETE) drawLevelComplete();
     else if(state === STATE.GAME_OVER) drawGameOver();
     else if(state === STATE.VICTORY) drawVictory();
+    else if(state === STATE.PLAYING && paused) drawPause();
   } else {
     drawBackground(THEMES.menu, 0, W, H);
     if(state === STATE.MENU) drawMenu();
     else if(state === STATE.HOWTO) drawHowTo();
     else if(state === STATE.CHARACTER_SELECT) drawCharacterSelect();
+    else if(state === STATE.ASSISTANT_SELECT) drawAssistantSelect();
   }
 
   ctx.restore();
+}
+
+// Dim overlay + banner shown while the game is paused (Space). Screen-space.
+function drawPause(){
+  ctx.fillStyle = 'rgba(8,8,16,0.62)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#f1c40f';
+  ctx.font = 'bold 24px monospace';
+  ctx.fillText('PAUSED', W/2, H/2 - 4);
+  ctx.fillStyle = '#bdc3c7';
+  ctx.font = 'bold 8px monospace';
+  ctx.fillText('PRESS SPACE OR CLICK TO RESUME', W/2, H/2 + 16);
+  ctx.textAlign = 'left';
 }
 
 // World-space drawing only: entities and particles. HUD is screen-space and
@@ -2911,6 +3385,10 @@ function drawGame(){
     else if(e.type === 'pickup') drawPickupEntity(e);
     else if(e.type === 'companion') drawCompanion(e);
     else if(e.type === 'sword_ally') drawSwordAlly(e);
+    else if(e.type === 'henchman') drawHenchman(e);
+    else if(e.type === 'nunchaku') drawNunchaku(e);
+    else if(e.type === 'bomber_ally') drawBomberAlly(e);
+    else if(e.type === 'poison_ally') drawPoisonAlly(e);
   }
   for(const p of particles){
     const a = clamp(p.life / p.maxLife, 0, 1);
@@ -3060,6 +3538,37 @@ function drawSwordAlly(s){
   ctx.fillRect(Math.floor(s.x) - 5, Math.floor(s.y - sp.h/2) - 3, Math.floor(11 * (s.hp / s.maxHp)), 2);
 }
 
+function drawHenchman(s){
+  // Wooden swing arc renders behind the sprite.
+  if(s.swingTime > 0){
+    const half = s.attackArc / 2;
+    const t = clamp(s.swingTime / 0.2, 0, 1);
+    ctx.save();
+    ctx.fillStyle = 'rgba(200, 146, 58, ' + (0.16 + 0.30 * t) + ')';
+    ctx.beginPath();
+    ctx.moveTo(s.x, s.y);
+    ctx.arc(s.x, s.y, s.attackRange, s.angle - half, s.angle + half);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 235, 200, ' + (0.45 * t) + ')';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+  if(s.invuln > 0 && Math.floor(s.invuln * 20) % 2) return;
+  const sp = s.frame === 0 ? SPR.henchman_a : SPR.henchman_b;
+  if(s.hitFlash > 0){
+    drawSpriteTinted(sp, Math.floor(s.x - sp.w/2), Math.floor(s.y - sp.h/2), '#fff');
+  } else {
+    drawSpriteCentered(sp, s.x, s.y);
+  }
+  // HP pips above.
+  ctx.fillStyle = '#0a0a14';
+  ctx.fillRect(Math.floor(s.x) - 6, Math.floor(s.y - sp.h/2) - 3, 13, 2);
+  ctx.fillStyle = '#c0392b';
+  ctx.fillRect(Math.floor(s.x) - 6, Math.floor(s.y - sp.h/2) - 3, Math.floor(13 * (s.hp / s.maxHp)), 2);
+}
+
 function drawCompanion(c){
   if(c.invuln > 0 && Math.floor(c.invuln * 18) % 2) return;
   const sp = c.frame === 0 ? SPR.companion_a : SPR.companion_b;
@@ -3073,6 +3582,63 @@ function drawCompanion(c){
   ctx.fillRect(Math.floor(c.x) - 4, Math.floor(c.y - sp.h/2) - 3, 9, 2);
   ctx.fillStyle = '#3498db';
   ctx.fillRect(Math.floor(c.x) - 4, Math.floor(c.y - sp.h/2) - 3, Math.floor(9 * (c.hp / c.maxHp)), 2);
+}
+
+// Shared helper: draw an ally sprite (with hit-flash + invuln blink) and an HP bar.
+function drawAllySprite(s, sprA, sprB, pipColor, halfW){
+  if(s.invuln > 0 && Math.floor(s.invuln * 20) % 2) return;
+  const sp = s.frame === 0 ? sprA : sprB;
+  if(s.hitFlash > 0){
+    drawSpriteTinted(sp, Math.floor(s.x - sp.w/2), Math.floor(s.y - sp.h/2), '#fff');
+  } else {
+    drawSpriteCentered(sp, s.x, s.y);
+  }
+  const w = halfW * 2 + 1;
+  ctx.fillStyle = '#0a0a14';
+  ctx.fillRect(Math.floor(s.x) - halfW, Math.floor(s.y - sp.h/2) - 3, w, 2);
+  ctx.fillStyle = pipColor;
+  ctx.fillRect(Math.floor(s.x) - halfW, Math.floor(s.y - sp.h/2) - 3, Math.floor(w * (s.hp / s.maxHp)), 2);
+}
+
+function drawNunchaku(s){
+  // Quick white strike arc behind the sprite.
+  if(s.swingTime > 0){
+    const half = s.attackArc / 2;
+    const t = clamp(s.swingTime / 0.2, 0, 1);
+    ctx.save();
+    ctx.fillStyle = 'rgba(236, 240, 241, ' + (0.16 + 0.30 * t) + ')';
+    ctx.beginPath();
+    ctx.moveTo(s.x, s.y);
+    ctx.arc(s.x, s.y, s.attackRange, s.angle - half, s.angle + half);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, ' + (0.55 * t) + ')';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+  drawAllySprite(s, SPR.nunchaku_a, SPR.nunchaku_b, '#ecf0f1', 5);
+}
+
+function drawBomberAlly(s){
+  drawAllySprite(s, SPR.bomber_a, SPR.bomber_b, '#e67e22', 5);
+}
+
+function drawPoisonAlly(s){
+  // Translucent green aura ring (the actual damage zone).
+  if(s.invuln <= 0 || Math.floor(s.invuln * 20) % 2 === 0){
+    ctx.save();
+    const pulse = 0.10 + 0.05 * Math.sin(stateTime * 4);
+    ctx.fillStyle = 'rgba(39, 174, 96, ' + pulse + ')';
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.auraRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(46, 204, 113, 0.35)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+  drawAllySprite(s, SPR.poison_a, SPR.poison_b, '#27ae60', 5);
 }
 
 function drawBulletEntity(b){
@@ -3233,6 +3799,7 @@ function drawWeaponHUD(){
   }
   // Passive powerups
   if(player.speedTime > 0)  draw('SPEED', SPR.p_speed,  player.speedTime,  8,  '#e91e63');
+  if(player.sprintTime > 0) draw('SPRNT', SPR.p_speed,  player.sprintTime, 5,  '#1abc9c');
   if(player.damageTime > 0) draw('DMG',   SPR.p_damage, player.damageTime, 8,  '#e74c3c');
   if(slowMoTime > 0)        draw('SLOW',  SPR.p_slowmo, slowMoTime,        5,  '#3498db');
   if(player.scoreTime > 0)  draw('x2',    SPR.p_score,  player.scoreTime,  10, '#f1c40f');
@@ -3246,11 +3813,18 @@ function drawSkillHUD(){
   const y = H - 30;
   const ch = CHARACTERS[player.char] || CHARACTERS.soldier;
   const skillColor = { dash:'#f1c40f', blink:'#f1c40f', slowmo:'#3498db', wall:'#27ae60',
-                       nuke:'#e74c3c', grenade:'#e67e22', summon:'#f1c40f', vsummon:'#f39c12', flameburst:'#e67e22' };
+                       nuke:'#e74c3c', grenade:'#e67e22', summon:'#f1c40f', vsummon:'#f39c12', flameburst:'#e67e22',
+                       sprint:'#1abc9c', heal:'#2ecc71', blast:'#e67e22' };
   const skills = [
     { key:'X', label:ch.skillLabels.x, cd:player.skillCd.x, max:player.skillCdMax[ch.skills.x], color:skillColor[ch.skills.x] },
     { key:'C', label:ch.skillLabels.c, cd:player.skillCd.c, max:player.skillCdMax[ch.skills.c], color:skillColor[ch.skills.c] }
   ];
+  if(ch.skills.f){
+    skills.push({ key:'F', label:ch.skillLabels.f, cd:player.skillCd.f, max:player.skillCdMax[ch.skills.f], color:skillColor[ch.skills.f] });
+  }
+  if(ch.skills.b){
+    skills.push({ key:'B', label:ch.skillLabels.b, cd:player.skillCd.b, max:player.skillCdMax[ch.skills.b], color:skillColor[ch.skills.b] });
+  }
   if(ch.skills.v){
     skills.push({ key:'V', label:ch.skillLabels.v, cd:player.skillCd.v, max:player.skillCdMax[ch.skills.v], color:skillColor[ch.skills.v] });
   }
@@ -3288,10 +3862,10 @@ function drawMenu(){
 
   ctx.font = 'bold 32px monospace';
   ctx.fillStyle = '#3d1a4a';
-  ctx.fillText('PIXEL', W/2 + 2, 62);
+  ctx.fillText('WU QIONG', W/2 + 2, 62);
   ctx.fillText('SHOOTER', W/2 + 2, 96);
   ctx.fillStyle = '#e74c3c';
-  ctx.fillText('PIXEL', W/2, 60);
+  ctx.fillText('WU QIONG', W/2, 60);
   ctx.fillStyle = '#f1c40f';
   ctx.fillText('SHOOTER', W/2, 94);
 
@@ -3299,7 +3873,7 @@ function drawMenu(){
   ctx.fillStyle = '#bdc3c7';
   ctx.fillText('SELECT LEVEL  ·  ' + clearedLevels.size + ' / ' + LEVELS.length + ' CLEARED', W/2, 115);
 
-  // 6x5 level grid. Box color (green for cleared, blue for unbeaten) is the
+  // 8x5 level grid. Box color (green for cleared, blue for unbeaten) is the
   // sole cleared-state indicator now that the boxes are too short for a
   // second text line.
   for(let i = 0; i < LEVELS.length; i++){
@@ -3351,9 +3925,9 @@ function guideButtonRect(){ return { x: W - 64, y: 8, w: 56, h: 16 }; }
 
 // Geometry helper shared by drawMenu + handleMenu so click targets stay in sync.
 function levelBoxRect(i){
-  // 30 levels in a 6x5 grid. Boxes shrank slightly from 30x18 to 26x15
-  // so the whole grid still fits above the HIGH SCORE line at y=215.
-  const cols = 6, rows = 5;
+  // 40 levels in an 8x5 grid. 26x15 boxes still fit above the HIGH SCORE line
+  // at y=215; the 8-wide row spans 222px, centered with comfortable margins.
+  const cols = 8, rows = 5;
   const bw = 26, bh = 15, gap = 2;
   const totalW = cols * bw + (cols - 1) * gap;
   const xs = Math.floor((W - totalW) / 2);
@@ -3365,10 +3939,10 @@ function levelBoxRect(i){
 // ---- CHARACTER SELECT ----
 const CHAR_ORDER = ['soldier', 'scout', 'tank'];
 function charCardRect(i){
-  const cw = 130, ch = 150, gap = 10;
+  const cw = 130, ch = 172, gap = 10;
   const totalW = 3 * cw + 2 * gap;
   const xs = Math.floor((W - totalW) / 2);
-  return { x: xs + i * (cw + gap), y: 60, w: cw, h: ch };
+  return { x: xs + i * (cw + gap), y: 56, w: cw, h: ch };
 }
 function backButtonRect(){ return { x: 8, y: 8, w: 50, h: 16 }; }
 
@@ -3399,27 +3973,26 @@ function drawCharacterSelect(){
     // Sprite preview (each class has its own sprite)
     drawSpriteCentered(playerSprites(key).a, r.x + r.w / 2, r.y + 44);
 
-    // Stats
+    // Stats — laid out sequentially so optional rows (DMG/SHIELD/FUEL) never overlap.
     ctx.font = 'bold 8px monospace';
-    ctx.fillStyle = '#bdc3c7';
     ctx.textAlign = 'left';
-    ctx.fillText('HP   : ' + ch.hp, r.x + 12, r.y + 75);
-    ctx.fillText('SPEED: ' + ch.speed, r.x + 12, r.y + 86);
-    if(ch.damageMult > 1) ctx.fillText('DMG  : x' + ch.damageMult, r.x + 12, r.y + 97);
-    if(ch.startShield)    ctx.fillText('SHIELD: ' + ch.startShield, r.x + 12, r.y + 97);
-    if(key === 'tank'){
-      ctx.fillStyle = '#e67e22';
-      ctx.fillText('FUEL : 8 (RMB FLAME)', r.x + 12, r.y + 102);
-      ctx.fillStyle = '#bdc3c7';
-    }
+    const stats = [['HP   : ' + ch.hp, '#bdc3c7'], ['SPEED: ' + ch.speed, '#bdc3c7']];
+    if(ch.damageMult > 1) stats.push(['DMG  : x' + ch.damageMult, '#bdc3c7']);
+    if(ch.startShield)    stats.push(['SHIELD: ' + ch.startShield, '#bdc3c7']);
+    if(key === 'tank')    stats.push(['FUEL : 12 (RMB)', '#e67e22']);
+    let sy = r.y + 70;
+    for(const st of stats){ ctx.fillStyle = st[1]; ctx.fillText(st[0], r.x + 12, sy); sy += 9; }
 
-    // Skill map
+    // Skill map — same sequential layout, scales to however many slots exist.
+    sy += 3;
     ctx.fillStyle = '#7f8c8d';
-    ctx.fillText('SKILLS', r.x + 12, r.y + 112);
+    ctx.fillText('SKILLS', r.x + 12, sy); sy += 9;
     ctx.fillStyle = '#fff';
-    ctx.fillText('X ' + ch.skillLabels.x, r.x + 12, r.y + 122);
-    ctx.fillText('C ' + ch.skillLabels.c, r.x + 12, r.y + 131);
-    if(ch.skillLabels.v) ctx.fillText('V ' + ch.skillLabels.v, r.x + 12, r.y + 140);
+    const sk = [['X', ch.skillLabels.x], ['C', ch.skillLabels.c]];
+    if(ch.skillLabels.f) sk.push(['F', ch.skillLabels.f]);
+    if(ch.skillLabels.b) sk.push(['B', ch.skillLabels.b]);
+    if(ch.skillLabels.v) sk.push(['V', ch.skillLabels.v]);
+    for(const s of sk){ ctx.fillText(s[0] + ' ' + s[1], r.x + 12, sy); sy += 8; }
 
     ctx.textAlign = 'center';
   }
@@ -3438,7 +4011,7 @@ function drawCharacterSelect(){
 
   ctx.font = 'bold 7px monospace';
   ctx.fillStyle = '#5d6d7e';
-  ctx.fillText('CLICK A CHARACTER TO BEGIN', W/2, H - 14);
+  ctx.fillText('CLICK A CHARACTER — THEN PICK 2 ASSISTANTS', W/2, H - 14);
 }
 
 function handleCharacterSelect(){
@@ -3451,9 +4024,122 @@ function handleCharacterSelect(){
     const r = charCardRect(i);
     if(clickedRect(r.x, r.y, r.w, r.h)){
       selectedChar = CHAR_ORDER[i];
-      startSelectedRun();
+      // Character chosen → pick assistants next.
+      state = STATE.ASSISTANT_SELECT; stateTime = 0;
       return;
     }
+  }
+}
+
+// ---- Assistant selection screen (pick exactly 2 of the 5-strong roster) ----
+function assistCardRect(i){
+  const cw = 84, ch = 150, gap = 6;
+  const n = ASSIST_ORDER.length;
+  const totalW = n * cw + (n - 1) * gap;
+  const xs = Math.floor((W - totalW) / 2);
+  return { x: xs + i * (cw + gap), y: 56, w: cw, h: ch };
+}
+function assistStartRect(){ const w = 120, h = 22; return { x: Math.floor((W - w) / 2), y: H - 30, w, h }; }
+
+function drawAssistantSelect(){
+  ctx.fillStyle = '#0c0c18';
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 14px monospace';
+  ctx.fillStyle = '#f1c40f';
+  ctx.fillText('CHOOSE 2 ASSISTANTS', W / 2, 28);
+  const ready = selectedAssistants.length === 2;
+  ctx.font = 'bold 8px monospace';
+  ctx.fillStyle = ready ? '#2ecc71' : '#bdc3c7';
+  ctx.fillText(selectedAssistants.length + ' / 2 SELECTED' + (ready ? '  —  READY' : ''), W / 2, 44);
+
+  for(let i = 0; i < ASSIST_ORDER.length; i++){
+    const key = ASSIST_ORDER[i];
+    const a = ASSISTANTS[key];
+    const r = assistCardRect(i);
+    const chosen = selectedAssistants.includes(key);
+    const hov = clickedRect(r.x, r.y, r.w, r.h);
+    ctx.fillStyle = chosen ? '#16261a' : (hov ? '#1c2433' : '#141822');
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = chosen ? '#2ecc71' : a.color;
+    ctx.lineWidth = (chosen || hov) ? 2 : 1;
+    ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+
+    ctx.fillStyle = a.color;
+    ctx.font = 'bold 10px monospace';
+    ctx.fillText(a.name, r.x + r.w / 2, r.y + 16);
+
+    drawSpriteCentered(a.sprite(), r.x + r.w / 2, r.y + 40);
+
+    ctx.font = 'bold 6px monospace';
+    ctx.fillStyle = '#7f8c8d';
+    ctx.fillText(a.tags.join(' · '), r.x + r.w / 2, r.y + 62);
+
+    ctx.font = 'bold 7px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#bdc3c7';
+    a.lines.forEach((ln, j) => ctx.fillText(ln, r.x + 8, r.y + 78 + j * 11));
+    ctx.textAlign = 'center';
+
+    if(chosen){
+      ctx.fillStyle = '#2ecc71';
+      ctx.font = 'bold 8px monospace';
+      ctx.fillText('PICKED', r.x + r.w / 2, r.y + r.h - 8);
+    }
+  }
+
+  // START button (only active with exactly 2 chosen)
+  const sb = assistStartRect();
+  const hovS = clickedRect(sb.x, sb.y, sb.w, sb.h);
+  ctx.fillStyle = ready ? (hovS ? '#27ae60' : '#1e6840') : '#2a2a33';
+  ctx.fillRect(sb.x, sb.y, sb.w, sb.h);
+  ctx.strokeStyle = ready ? '#2ecc71' : '#444';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(sb.x + 0.5, sb.y + 0.5, sb.w - 1, sb.h - 1);
+  ctx.fillStyle = ready ? '#fff' : '#666';
+  ctx.font = 'bold 11px monospace';
+  ctx.fillText(ready ? 'START' : 'PICK 2 TO START', sb.x + sb.w / 2, sb.y + 15);
+
+  // Back button
+  const bb = backButtonRect();
+  const hovB = clickedRect(bb.x, bb.y, bb.w, bb.h);
+  ctx.fillStyle = hovB ? '#34495e' : '#1a242f';
+  ctx.fillRect(bb.x, bb.y, bb.w, bb.h);
+  ctx.strokeStyle = '#7f8c8d';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(bb.x + 0.5, bb.y + 0.5, bb.w - 1, bb.h - 1);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 8px monospace';
+  ctx.fillText('< BACK', bb.x + bb.w / 2, bb.y + 11);
+}
+
+function handleAssistantSelect(){
+  if(!mouse.clicked) return;
+  const bb = backButtonRect();
+  if(clickedRect(bb.x, bb.y, bb.w, bb.h)){
+    state = STATE.CHARACTER_SELECT; stateTime = 0; return;
+  }
+  for(let i = 0; i < ASSIST_ORDER.length; i++){
+    const r = assistCardRect(i);
+    if(clickedRect(r.x, r.y, r.w, r.h)){
+      const key = ASSIST_ORDER[i];
+      const idx = selectedAssistants.indexOf(key);
+      if(idx >= 0){
+        selectedAssistants.splice(idx, 1);
+      } else if(selectedAssistants.length < 2){
+        selectedAssistants.push(key);
+      } else {
+        // Already 2 picked — swap out the oldest so a click always does something.
+        selectedAssistants.shift();
+        selectedAssistants.push(key);
+      }
+      if(sfx.pickup) sfx.pickup();
+      return;
+    }
+  }
+  const sb = assistStartRect();
+  if(selectedAssistants.length === 2 && clickedRect(sb.x, sb.y, sb.w, sb.h)){
+    startSelectedRun();
   }
 }
 
@@ -3461,10 +4147,29 @@ function startSelectedRun(){
   initAudio();
   score = 0;
   player = createPlayer(selectedChar);
-  companion = createCompanion();
-  entities = [player, companion];
+  entities = [player];
+  allies = [];
+  spawnSelectedAssistants();
   particles = [];
   startLevel(selectedLevel);
+}
+
+// Instantiate the chosen assistants around the player and register them.
+function spawnSelectedAssistants(){
+  allies = [];
+  selectedAssistants.forEach((key, idx) => {
+    const a = createAssistant(key);
+    positionAllyByPlayer(a, idx);
+    allies.push(a);
+    entities.push(a);
+  });
+}
+
+// Place an ally just to the side of the player (alternating left/right).
+function positionAllyByPlayer(a, idx){
+  const off = idx === 0 ? -16 : 16;
+  a.x = (player ? player.x : W / 2) + off;
+  a.y = (player ? player.y : H / 2);
 }
 
 function drawHowTo(){
@@ -3476,13 +4181,14 @@ function drawHowTo(){
   ctx.font = 'bold 7px monospace';
   ctx.textAlign = 'left';
   const ctrl = [
-    ['MOVE',  'WASD / ARROWS'],
+    ['MOVE',  'WASD'],
     ['AIM',   'MOUSE'],
-    ['SHOOT', 'CLICK or HOLD'],
+    ['SHOOT', 'CLICK/HOLD'],
+    ['PAUSE', 'SPACE'],
   ];
   ctrl.forEach((l, i) => {
-    ctx.fillStyle = '#3498db'; ctx.fillText(l[0], 16 + i*120, 38);
-    ctx.fillStyle = '#fff';    ctx.fillText(l[1], 16 + i*120 + 32, 38);
+    ctx.fillStyle = '#3498db'; ctx.fillText(l[0], 16 + i*118, 38);
+    ctx.fillStyle = '#fff';    ctx.fillText(l[1], 16 + i*118 + 32, 38);
   });
 
   // Three columns: EQUIPMENT, POWERUPS, BOSSES
@@ -3527,10 +4233,12 @@ function drawHowTo(){
     ctx.fillStyle = p[3];    ctx.fillText(p[1], colX[1] + 9, yy);
     ctx.fillStyle = '#bdc3c7'; ctx.fillText(p[2], colX[1] + 50, yy);
   });
-  // Companion blurb under the powerups list
-  drawSprite(SPR.companion_a, colX[1], 72 + 5*10 + 5);
-  ctx.fillStyle = '#aed6f1'; ctx.fillText('ALLY', colX[1] + 9, 72 + 5*10 + 10);
-  ctx.fillStyle = '#bdc3c7'; ctx.fillText('auto-fires, 6 HP', colX[1] + 35, 72 + 5*10 + 10);
+  // Assistant blurb under the powerups list — full details on the pick-2 screen.
+  ctx.fillStyle = '#2ecc71'; ctx.fillText('ASSISTANTS', colX[1], 72 + 5*10 + 8);
+  ctx.fillStyle = '#bdc3c7';
+  ctx.fillText('pick 2 each run:', colX[1], 72 + 6*10 + 6);
+  ctx.fillText('drone/brute/nunchaku', colX[1], 72 + 7*10 + 4);
+  ctx.fillText('bomber/poison', colX[1], 72 + 8*10 + 2);
 
   const bosses = [
     ['L1 BRUISER',     'charge + cross'],
@@ -3660,8 +4368,8 @@ function loop(t){
       console.warn('[shooter] entity count overflow:', entities.length, '— pruning');
       entities = entities.filter(e => !e.dead);
       if(entities.length > 400){
-        const keep = entities.filter(e => e.type === 'player' || e.type === 'companion');
-        const rest = entities.filter(e => e.type !== 'player' && e.type !== 'companion').slice(-380);
+        const keep = entities.filter(e => e.type === 'player' || isAlly(e));
+        const rest = entities.filter(e => !(e.type === 'player' || isAlly(e))).slice(-380);
         entities = keep.concat(rest);
       }
     }
