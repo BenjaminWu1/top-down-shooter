@@ -36,7 +36,7 @@ Choose one of three classes — each plays completely differently, with its own 
 
 | Class | Profile | HP | Primary (LMB) | Secondary (RMB) |
 |---|---|---|---|---|
-| **Dr. Syed** | 21st-century rainforest warrior · +25% damage | 10 | Pistol | **Blade slash** — continuous, very high damage over a wide *obtuse* arc; runs on a ~6 s **energy** bar |
+| **Dr.Syed** | 21st-century rainforest warrior · +25% damage | 10 | Pistol | **Blade slash** — continuous, very high damage over a wide *obtuse* arc; runs on a ~6 s **energy** bar |
 | **Xu Yihui** | Blue cyberpunk mech · fast & nimble | 9 | Fast SMG | **3× laser beams** — three instant straight-line beams that damage every enemy along each line at once; runs on a ~20-shot **power** bar (refilled by **battery**) |
 | **Benjamin Wu** | U.S.-Army heavy · +20% damage · starts with shield | 12 (+4 shield) | Heavy slug | **Flamethrower** — sustained cone of fire; runs on a 12-unit **fuel** bar |
 
@@ -44,7 +44,7 @@ Choose one of three classes — each plays completely differently, with its own 
 
 Every class shares **X / F / B**; **C** and **V** are class-specific.
 
-| Slot | Dr. Syed | Xu Yihui | Benjamin Wu |
+| Slot | Dr.Syed | Xu Yihui | Benjamin Wu |
 |---|---|---|---|
 | `X` | **Sprint** — +30% move speed (5 s) | Sprint | Sprint |
 | `C` | **Napalm** — 3 s ring of fire | **Blink** — teleport to the cursor | **Wall** — 4 s full invulnerability |
@@ -56,7 +56,7 @@ Every class shares **X / F / B**; **C** and **V** are class-specific.
 
 All three secondaries draw from a depletable bar shown top-left (no number — the fill is the gauge), and each slowly self-regenerates and is topped up by a class-specific pickup:
 
-- **Dr. Syed** — **energy** for the blade; regenerates **0.2/s** (fast), refilled by a green **beverage**.
+- **Dr.Syed** — **energy** for the blade; regenerates **0.2/s** (fast), refilled by a green **beverage**.
 - **Xu Yihui** — **power** for the laser beams (~20 volleys, 1 per shot); regenerates **0.1/s**, refilled by a cyan **battery**.
 - **Benjamin Wu** — **fuel** for the flamethrower; regenerates **0.1/s**, refilled by a **fuel** canister.
 
@@ -91,13 +91,13 @@ Before a run you pick **2 of 5** AI allies that fight at your side and are rebui
 
 ## Pickups
 
-Enemies drop weapons, defenses, and buffs. The drop pool is tuned per class (Benjamin Wu can roll **fuel**, Dr. Syed can roll **beverage**).
+Enemies drop weapons, defenses, and buffs. The drop pool is tuned per class (Benjamin Wu can roll **fuel**, Dr.Syed can roll **beverage**).
 
 **Equipment:** Health (+1 HP) · Spread (3-shot cone) · Rapid (half cooldown) · Shield (absorb hits) · Armor (raise shield cap + brief invuln) · Rocket (explosive AoE rounds) · Laser (piercing beam) · Minigun (rapid bullets) · Plasma (bouncing + piercing) · Homing (seeking missiles).
 
 **Powerups:** Speed (+50% move) · Damage (2×) · Slow-Mo (enemies crawl) · Score ×2 · Magnet (pickups fly to you).
 
-**Class resources:** Fuel (Benjamin Wu's flamethrower) · Beverage (Dr. Syed's blade energy) · Battery (Xu Yihui's laser power).
+**Class resources:** Fuel (Benjamin Wu's flamethrower) · Beverage (Dr.Syed's blade energy) · Battery (Xu Yihui's laser power).
 
 ## Features
 
