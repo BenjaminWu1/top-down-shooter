@@ -1090,8 +1090,8 @@ const CHARACTERS = {
   soldier: {
     name:'Dr.Syed', desc:'RAINFOREST WARRIOR · BLADE (RMB) · AOE',
     color:'#3498db', hp:10, speed:156, damageMult:1.25, startShield:0,
-    skills:{ x:'sprint', c:'flameburst', v:'barrage', f:'heal', b:'blast' },
-    skillLabels:{ x:'SPRINT', c:'NAPALM', v:'BARRAGE', f:'HEAL', b:'BLAST' }
+    skills:{ x:'sprint', c:'flameburst', v:'barrage', f:'heal', b:'invuln' },
+    skillLabels:{ x:'SPRINT', c:'NAPALM', v:'BARRAGE', f:'HEAL', b:'INVINC' }
   },
   scout: {
     name:'Xu Yihui', desc:'CYBER MECH · 3× LASER BEAM (RMB) · BLINK+DASH',
@@ -1261,7 +1261,7 @@ function createPlayer(charKey){
     // C is class-specific (per CHARACTERS.skills); each class now also fills the V
     // slot (Soldier barrage / Scout dash / Tank vsummon).
     skillCd:{ x:0, c:0, v:0, f:0, b:0 },
-    skillCdMax:{ x:4, c:12, blink:5, dash:3.5, wall:18, summon:25, vsummon:25, flameburst:20, barrage:24, sprint:20, heal:20, blast:20 },
+    skillCdMax:{ x:4, c:12, blink:5, dash:3.5, wall:18, summon:25, vsummon:25, flameburst:20, barrage:24, sprint:20, heal:20, blast:20, invuln:20 },
     hitFlash:0, invuln:0, frame:0, frameT:0, dead:false
   };
 }
@@ -1463,10 +1463,10 @@ function triggerSkill(name, dx, dy, mag){
     return true;
   }
   if(name === 'blast'){
-    // B skill: a CIRCLE damage burst centered on the player. Every enemy inside
-    // the radius instantly takes normal damage. explode() applies the damage +
-    // fire particles + sfx; we add an expanding ring so the circular area of
-    // effect is clearly visible.
+    // B skill (Scout/Tank): a CIRCLE damage burst centered on the player. Every
+    // enemy inside the radius instantly takes normal damage. explode() applies
+    // the damage + fire particles + sfx; we add an expanding ring so the
+    // circular area of effect is clearly visible.
     const R = 70;
     const bd = 3 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
     explode(player.x, player.y, R, bd);
@@ -1476,6 +1476,21 @@ function triggerSkill(name, dx, dy, mag){
       life: 0.4, maxLife: 0.4, color: '#7fe9ff',
       ring: true, r0: 8, r1: R
     });
+    return true;
+  }
+  if(name === 'invuln'){
+    // Dr.Syed's B skill: 2 seconds of full invincibility (20 s cooldown).
+    // Mirrors the Tank's `wall` but shorter. The player sprite blinks while
+    // invuln > 0, so the immunity is visible in-game.
+    player.invuln = Math.max(player.invuln, 2);
+    emit(player.x, player.y, 24, '#7fe9ff', 40, 130, 0.6);
+    emit(player.x, player.y, 10, '#fff', 25, 90, 0.4);
+    if(particles.length < 300) particles.push({
+      x: player.x, y: player.y, vx: 0, vy: 0,
+      life: 0.4, maxLife: 0.4, color: '#7fe9ff',
+      ring: true, r0: 8, r1: 40
+    });
+    sfx.shieldHit();
     return true;
   }
   if(name === 'dash'){
@@ -4094,7 +4109,7 @@ function drawSkillHUD(){
   const skillColor = { dash:'#f1c40f', blink:'#f1c40f', slowmo:'#3498db', wall:'#27ae60',
                        nuke:'#e74c3c', grenade:'#e67e22', summon:'#f1c40f', vsummon:'#f39c12', flameburst:'#e67e22',
                        barrage:'#e67e22',
-                       sprint:'#1abc9c', heal:'#2ecc71', blast:'#e67e22' };
+                       sprint:'#1abc9c', heal:'#2ecc71', blast:'#e67e22', invuln:'#7fe9ff' };
   const skills = [
     { key:'X', label:ch.skillLabels.x, cd:player.skillCd.x, max:player.skillCdMax[ch.skills.x], color:skillColor[ch.skills.x] },
     { key:'C', label:ch.skillLabels.c, cd:player.skillCd.c, max:player.skillCdMax[ch.skills.c], color:skillColor[ch.skills.c] }
