@@ -1408,10 +1408,19 @@ function triggerSkill(name, dx, dy, mag){
     return true;
   }
   if(name === 'blast'){
-    // B skill: a small-radius AoE burst centered on the player, dealing normal
-    // damage to every enemy inside. explode() handles particles/shake/sfx.
+    // B skill: a CIRCLE damage burst centered on the player. Every enemy inside
+    // the radius instantly takes normal damage. explode() applies the damage +
+    // fire particles + sfx; we add an expanding ring so the circular area of
+    // effect is clearly visible.
+    const R = 70;
     const bd = 3 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
-    explode(player.x, player.y, 26, bd);
+    explode(player.x, player.y, R, bd);
+    // Expanding shockwave ring (visual only): grows from the player out to R.
+    if(particles.length < 300) particles.push({
+      x: player.x, y: player.y, vx: 0, vy: 0,
+      life: 0.4, maxLife: 0.4, color: '#7fe9ff',
+      ring: true, r0: 8, r1: R
+    });
     return true;
   }
   if(name === 'dash'){
@@ -3393,8 +3402,19 @@ function drawGame(){
   for(const p of particles){
     const a = clamp(p.life / p.maxLife, 0, 1);
     ctx.globalAlpha = a;
-    ctx.fillStyle = p.color;
-    ctx.fillRect(Math.floor(p.x), Math.floor(p.y), p.size, p.size);
+    if(p.ring){
+      // Expanding shockwave outline (e.g. the B-blast circle AoE): the radius
+      // grows from r0 -> r1 as the particle ages, tracing the damage area.
+      const r = p.r0 + (p.r1 - p.r0) * (1 - a);
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = p.color;
+      ctx.fillRect(Math.floor(p.x), Math.floor(p.y), p.size, p.size);
+    }
   }
   ctx.globalAlpha = 1;
 }
