@@ -85,33 +85,36 @@ const SPR = {
     "..3......3.."
   ]),
   // ---- Soldier: olive/military helmet, tan face, green uniform ----
-  player_soldier_a: S({'.':null,'1':'#3a5a2a','2':'#4f6b32','3':'#1a1a1a','4':'#d4a673','5':'#7a4a1f'}, [
-    "....1111....",
-    "...144441...",
-    "...144441...",
-    "....4444....",
-    "..2222222...",
-    ".22255522...",
-    ".222222222..",
-    ".222222222..",
-    "..22222222..",
-    "...3....3...",
-    "...3....3...",
-    "..33....33.."
+  // Syed — a samurai: steel kabuto with gold crest (1/7), skin face (4), crimson
+  // armor (2), dark hakama legs (3), holding a long silver katana (blade 5, dark
+  // handle 6, gold tsuba 7) raised diagonally to the upper-right.
+  player_soldier_a: S({'.':null,'1':'#3a4a5a','2':'#9b2d28','3':'#1a1a2a','4':'#d4a673','5':'#e8eef2','6':'#2b2b2b','7':'#e1b12c'}, [
+    "....11....5.",
+    "...1771..5..",
+    "...1441.5...",
+    "....44.5....",
+    "..222227....",
+    ".2222226....",
+    ".2222226....",
+    ".2222222....",
+    "..222222....",
+    "...3..3.....",
+    "..33..33....",
+    ".33....33..."
   ]),
-  player_soldier_b: S({'.':null,'1':'#3a5a2a','2':'#4f6b32','3':'#1a1a1a','4':'#d4a673','5':'#7a4a1f'}, [
-    "....1111....",
-    "...144441...",
-    "...144441...",
-    "....4444....",
-    "..2222222...",
-    ".22255522...",
-    ".222222222..",
-    ".222222222..",
-    "..22222222..",
-    "...33..33...",
-    "..33....33..",
-    "..3......3.."
+  player_soldier_b: S({'.':null,'1':'#3a4a5a','2':'#9b2d28','3':'#1a1a2a','4':'#d4a673','5':'#e8eef2','6':'#2b2b2b','7':'#e1b12c'}, [
+    "....11....5.",
+    "...1771..5..",
+    "...1441.5...",
+    "....44.5....",
+    "..222227....",
+    ".2222226....",
+    ".2222226....",
+    ".2222222....",
+    "..222222....",
+    "...33.33....",
+    "..33...33...",
+    "..3.....3..."
   ]),
   // ---- Scout: red bandana, yellow vest, lean frame ----
   player_scout_a: S({'.':null,'1':'#c0392b','2':'#f1c40f','3':'#5a3a1f','4':'#fff1c1','5':'#7a4a1f'}, [
@@ -1070,7 +1073,7 @@ function saveCleared(){
 // class-unique slot (slowmo / wall); the optional V slot is Tank-only. ----
 const CHARACTERS = {
   soldier: {
-    name:'SOLDIER', desc:'DEMOLITIONIST · KNIFE (RMB) · AOE',
+    name:'SYED', desc:'SAMURAI · KATANA (RMB) · AOE',
     color:'#3498db', hp:10, speed:92, damageMult:1.25, startShield:0,
     skills:{ x:'sprint', c:'flameburst', v:'barrage', f:'heal', b:'blast' },
     skillLabels:{ x:'SPRINT', c:'NAPALM', v:'BARRAGE', f:'HEAL', b:'BLAST' }
@@ -1082,7 +1085,7 @@ const CHARACTERS = {
     skillLabels:{ x:'SPRINT', c:'BLINK', v:'DASH', f:'HEAL', b:'BLAST' }
   },
   tank: {
-    name:'BENJAMIN WU', desc:'HEAVY · +20% DAMAGE · FLAMETHROWER (RMB)',
+    name:'XU YIHUI', desc:'HEAVY · +20% DAMAGE · FLAMETHROWER (RMB)',
     color:'#27ae60', hp:12, speed:95, damageMult:1.2, startShield:4,
     skills:{ x:'sprint', c:'wall', v:'vsummon', f:'heal', b:'blast' },
     skillLabels:{ x:'SPRINT', c:'WALL', v:'BLADE+', f:'HEAL', b:'BLAST' }
@@ -1212,9 +1215,9 @@ function createPlayer(charKey){
     minigunTime:0, plasmaTime:0, homingTime:0,
     // Scout's right-mouse 3-line laser cooldown.
     laserCd:0,
-    // Soldier knife-slash energy: ~6 s of continuous slashing. Like Tank's fuel
-    // it never auto-regens — refilled by the 'beverage' pickup (+1 s each).
-    // Drained by dt while RMB held, so it is float-precise (well under 0.1 s).
+    // Syed's katana energy: ~6 s of continuous slashing. Drained by dt while RMB
+    // held (float-precise); slowly self-regens 0.1/s and is topped up by the
+    // 'beverage' pickup (+1 s each). Mirrors Tank fuel (which also regens 0.1/s).
     energy: charKey === 'soldier' ? 6 : 0,
     maxEnergy: charKey === 'soldier' ? 6 : 0,
     // Passive powerups (temporary buffs)
@@ -1807,17 +1810,22 @@ function updatePlaying(dt){
     fireWeapon(mx, my);
   }
 
+  // Syed's katana energy and Xu Yihui's flamethrower fuel both slowly self-regen
+  // at 0.1 / second (capped at max), so neither is fully dependent on pickups.
+  if(player.maxEnergy > 0) player.energy = Math.min(player.maxEnergy, player.energy + 0.1 * dt);
+  if(player.maxFuel   > 0) player.fuel   = Math.min(player.maxFuel,   player.fuel   + 0.1 * dt);
+
   // ---- Tank's second normal attack: flamethrower (right mouse) ----
   if(player.char === 'tank' && mouse.rdown && player.fuel > 0){
     player.fuel = Math.max(0, player.fuel - dt);
     fireFlamethrower(dt);
   }
-  // ---- Soldier's secondary: continuous knife slash (right mouse) ----
-  // High-DPS melee over a very small area; drains `energy` (~6 s total) while
-  // held. No auto-regen — refilled by the 'beverage' pickup (+1 s each).
+  // ---- Syed's secondary: continuous katana slash (right mouse) ----
+  // Very-high-DPS melee swept over a wide obtuse arc; drains `energy` while held.
+  // Slowly self-regens (above) + refilled by the 'beverage' pickup (+1 s each).
   if(player.char === 'soldier' && mouse.rdown && player.energy > 0){
     player.energy = Math.max(0, player.energy - dt);
-    fireKnife(dt);
+    fireKatana(dt);
   }
   // ---- Scout's secondary: 3-line piercing blue laser burst (right mouse) ----
   // A small-scale fan of THREE piercing blue laser bolts fired as a single
@@ -2076,36 +2084,37 @@ function fireFlamethrower(dt){
   if(particles.length > 300) particles.length = 300;
 }
 
-// Soldier's right-mouse secondary: a high-DPS continuous knife slash over a very
-// small area in front of the player. Mirrors fireFlamethrower's cone-damage loop
-// but with a tiny range and much higher DPS — the short `energy` pool is what
-// balances it. Called every frame while RMB is held and energy remains.
-function fireKnife(dt){
-  const range = 24;        // very small area — point-blank melee
-  const halfAngle = 1.0;   // ~57° half-arc (a ~115° slash arc in front)
-  const dps = 26 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
+// Syed's right-mouse secondary: a VERY-high-DPS continuous KATANA slash swept
+// across a wide OBTUSE arc in front of the player. Mirrors fireFlamethrower's
+// cone-damage loop. The short `energy` pool is the balance lever; the visible
+// obtuse cone is drawn in drawPlayer. Range/half-angle are shared constants so
+// the damage check and the on-screen arc stay in lock-step.
+const KATANA_RANGE = 32;     // long katana reach
+const KATANA_HALF  = 1.2;    // ~68.75° half-arc => ~137° (obtuse) total slash
+function fireKatana(dt){
+  const dps = 40 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
   for(const en of entities){
     if(en.type !== 'enemy' || en.dead) continue;
     const dx = en.x - player.x, dy = en.y - player.y;
     const d = Math.hypot(dx, dy);
-    if(d > range + en.radius) continue;
+    if(d > KATANA_RANGE + en.radius) continue;
     let diff = Math.atan2(dy, dx) - player.angle;
     while(diff >  Math.PI) diff -= 2 * Math.PI;
     while(diff < -Math.PI) diff += 2 * Math.PI;
-    if(Math.abs(diff) > halfAngle) continue;
+    if(Math.abs(diff) > KATANA_HALF) continue;
     en.hp -= dps * dt;
     en.hitFlash = 0.06;
     if(en.hp <= 0) killEnemy(en);
   }
-  // Slash visual: bright steel streaks sweeping the small front arc.
-  for(let i = 0; i < 2; i++){
-    const a = player.angle + (Math.random() - 0.5) * halfAngle * 2;
-    const rr = range * (0.55 + Math.random() * 0.45);
+  // Slash visual: bright steel streaks sweeping the obtuse front arc.
+  for(let i = 0; i < 3; i++){
+    const a = player.angle + (Math.random() - 0.5) * KATANA_HALF * 2;
+    const rr = KATANA_RANGE * (0.5 + Math.random() * 0.5);
     particles.push({
       x: player.x + Math.cos(a) * rr, y: player.y + Math.sin(a) * rr,
-      vx: Math.cos(a + 1.4) * 36, vy: Math.sin(a + 1.4) * 36,   // tangential streak
+      vx: Math.cos(a + 1.4) * 40, vy: Math.sin(a + 1.4) * 40,   // tangential streak
       life: 0.1 + Math.random() * 0.06, maxLife: 0.16,
-      color: i ? '#ffffff' : '#cfd8dc', size: 1 + Math.floor(Math.random() * 2)
+      color: i % 2 ? '#ffffff' : '#cfd8dc', size: 1 + Math.floor(Math.random() * 2)
     });
   }
   if(particles.length > 300) particles.length = 300;
@@ -2651,15 +2660,15 @@ function killEnemy(en){
     // dedicated pool so the fuel canister occupies a real slice of the distribution.
     let kinds, weights;
     if(player && player.char === 'tank'){
-      // Fuel weight bumped from 0.13 to 0.20 so Tank can sustain the flamethrower
-      // more reliably. Health/slowmo/score2x/rocket/magnet shaved to keep sum = 1.0.
+      // Fuel at HIGH-MEDIUM frequency (0.12, down from 0.20) — the flamethrower
+      // now also self-regens 0.1/s. Weights sum to exactly 1.0.
       kinds   = ['health','fuel','spread','rapid','shield','armor','rocket','laser','minigun','plasma','homing','speed','damage','slowmo','score2x','magnet'];
-      weights = [ 0.10,   0.20,  0.07,    0.07,    0.06,    0.06,   0.04,    0.05,   0.05,     0.05,    0.05,    0.05,   0.05,    0.03,    0.02,     0.05    ];
+      weights = [ 0.14,   0.12,  0.07,    0.07,    0.06,    0.06,   0.05,    0.05,   0.05,     0.05,    0.05,    0.05,   0.05,    0.04,    0.03,     0.06    ];
     } else if(player && player.char === 'soldier'){
-      // Soldier mirrors the Tank's structure with a high-frequency 'beverage'
-      // (0.20) refilling the knife's energy. Weights sum to exactly 1.0.
+      // Beverage at HIGH-MEDIUM frequency (0.12, down from 0.20) refilling Syed's
+      // katana energy, which also self-regens 0.1/s. Weights sum to exactly 1.0.
       kinds   = ['health','beverage','spread','rapid','shield','armor','rocket','laser','minigun','plasma','homing','speed','damage','slowmo','score2x','magnet'];
-      weights = [ 0.10,   0.20,      0.07,    0.07,   0.06,    0.06,   0.05,    0.05,   0.05,     0.05,    0.04,    0.04,   0.05,    0.03,    0.02,     0.06    ];
+      weights = [ 0.14,   0.12,      0.07,    0.07,   0.06,    0.06,   0.05,    0.05,   0.05,     0.05,    0.05,    0.05,   0.05,    0.04,    0.03,     0.06    ];
     } else {
       kinds   = ['health','spread','rapid','shield','armor','rocket','laser','minigun','plasma','homing','speed','damage','slowmo','score2x','magnet'];
       weights = [ 0.16,   0.08,    0.08,   0.07,    0.07,   0.06,    0.06,   0.06,     0.06,    0.05,    0.05,   0.06,    0.05,    0.03,     0.06    ];
@@ -3534,6 +3543,23 @@ function drawGame(){
 
 function drawPlayer(p){
   if(p.invuln > 0 && Math.floor(p.invuln * 18) % 2) return;
+  // Syed's katana: render the wide OBTUSE slash arc while RMB held + energy left,
+  // so the attack's obtuse angle is visible in-game (drawn under the sprite).
+  if(p.char === 'soldier' && mouse.rdown && p.energy > 0){
+    ctx.save();
+    ctx.fillStyle = 'rgba(232,238,242,0.16)';
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.arc(p.x, p.y, KATANA_RANGE, p.angle - KATANA_HALF, p.angle + KATANA_HALF);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, KATANA_RANGE, p.angle - KATANA_HALF, p.angle + KATANA_HALF);
+    ctx.stroke();
+    ctx.restore();
+  }
   const pair = playerSprites(p.char);
   const sp = p.frame === 0 ? pair.a : pair.b;
   if(p.hitFlash > 0){
