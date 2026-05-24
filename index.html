@@ -2721,11 +2721,11 @@ function killEnemy(en){
   if(en._killed) return;
   en._killed = true;
   en.dead = true;
-  // Benjamin Wu's innate passive — FUEL STEAL: each kill refills 0.5 of his
+  // Benjamin Wu's innate passive — FUEL STEAL: each kill refills 0.2 of his
   // flamethrower fuel (the RMB resource), capped at maxFuel. Tank only (maxFuel
   // is 0 for the others, so the Math.min keeps it a no-op for them anyway).
   if(player.char === 'tank' && player.maxFuel > 0)
-    player.fuel = Math.min(player.maxFuel, player.fuel + 0.5);
+    player.fuel = Math.min(player.maxFuel, player.fuel + 0.2);
   const scoreMult = player.scoreTime > 0 ? 2 : 1;
   score += en.score * scoreMult;
   emit(en.x, en.y, en.isBoss ? 40 : 14,
@@ -4328,7 +4328,7 @@ function drawCharacterSelect(){
     ctx.fillStyle = '#2ecc71';
     if(key === 'soldier')    ctx.fillText('PASSIVE: 2% LIFESTEAL', r.x + 12, sy);
     else if(key === 'scout') ctx.fillText('PASSIVE: 0.5%/s HP REGEN', r.x + 12, sy);
-    else if(key === 'tank')  ctx.fillText('PASSIVE: +0.5 FUEL/KILL', r.x + 12, sy);
+    else if(key === 'tank')  ctx.fillText('PASSIVE: +0.2 FUEL/KILL', r.x + 12, sy);
 
     ctx.textAlign = 'center';
   }
