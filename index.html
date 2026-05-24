@@ -1805,20 +1805,24 @@ function updatePlaying(dt){
     triggerSkill('grenade', 0, 0, 0);   // reuse the existing grenade handler
     player.grenadeCd = 0.7;
   }
-  // ---- Scout's secondary: piercing blue laser (right mouse) ----
-  // A held beam of fast blue laser bolts that PIERCE every enemy in their path
-  // (pierce:true -> uses hitSet, doesn't die on hit). Great for lining up a row
-  // of enemies; fired on a short laserCd so it reads as a continuous beam.
+  // ---- Scout's secondary: 3-line piercing blue laser burst (right mouse) ----
+  // A small-scale fan of THREE piercing blue laser bolts fired as a single
+  // discrete burst (NOT a continuous beam). Each bolt pierces every enemy in its
+  // short lane (pierce:true -> uses hitSet) and applies its full medium-high
+  // damage immediately on contact. Gated behind a 0.3s laserCd, so it fires in
+  // distinct releases rather than a steady stream.
   if(player.char === 'scout' && mouse.rdown && player.laserCd <= 0){
     const lMult = (player.damageTime > 0 ? 2 : 1) * (player.damageMult || 1);
     const lx = player.x + Math.cos(player.angle) * 9;
     const ly = player.y + Math.sin(player.angle) * 9;
-    entities.push(createBullet(lx, ly, player.angle, 'player', {
-      dmg: 1.1 * lMult, speed: 360, pierce: true,
-      sprite: SPR.bullet_laser_blue, radius: 2, life: 1.1
-    }));
-    player.laserCd = 0.12;
-    emit(lx, ly, 3, '#4fc3f7', 30, 120, 0.16);
+    for(const off of [-0.18, 0, 0.18]){
+      entities.push(createBullet(lx, ly, player.angle + off, 'player', {
+        dmg: 2 * lMult, speed: 420, pierce: true,
+        sprite: SPR.bullet_laser_blue, radius: 2, life: 0.35
+      }));
+    }
+    player.laserCd = 0.3;
+    emit(lx, ly, 5, '#4fc3f7', 40, 140, 0.18);
     sfx.laser();
   }
 
