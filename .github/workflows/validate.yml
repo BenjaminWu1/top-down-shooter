@@ -1,0 +1,25 @@
+name: validate
+
+# Runs the dependency-free static validator (tools/validate.py) on every push
+# and PR to main. It checks the game's documented invariants (mix weights and
+# drop pools sum to 1.0, LEVELS count / boss tiers, character-skill wiring) plus
+# a brace-balance syntax smoke-check. This is a pass/fail SIGNAL only -- it does
+# NOT gate the GitHub Pages deploy (Pages serves main independently), so a red
+# check never takes the live site down; it just surfaces a broken invariant.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run static validator
+        run: python tools/validate.py

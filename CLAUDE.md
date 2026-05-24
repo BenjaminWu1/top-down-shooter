@@ -12,12 +12,21 @@ A browser-based top-down arena shooter. **The entire game lives in `index.html`*
 
 ## Running / "Building"
 
-There is no build, test, or lint tooling. To run the game:
+There is no build step and no JS runtime is required to play. To run the game:
 
 - **Local:** open `index.html` directly in a browser (no server needed).
 - **Deploy:** push to `main` — GitHub Pages serves `index.html` from the repo root.
 
 When iterating, reload the browser tab; there is no hot reload.
+
+## Validation
+
+There is one optional, dependency-free static validator: **`tools/validate.py`** (pure Python 3 stdlib — Python is installed; Node is **not**). It is a *linter for the game's documented invariants*, not a runtime/behavioral test (it cannot catch gameplay/AI/draw bugs — manual browser reload is still the only check for those).
+
+- **Run it:** `python tools/validate.py` (from anywhere — it resolves `index.html` relative to its own location). Windows convenience wrapper: `tools\validate.bat`. Exits non-zero if any check FAILs.
+- **What it checks:** C1 exactly one `<script>` block · C2 brace/paren/bracket balance (a *heuristic* syntax smoke-check, after stripping comments/strings — not a full JS parser) · C3 `LEVELS` has 40 entries · **C4 every level `mix` sums to 1.0** · **C5 all three `killEnemy` drop pools sum to 1.0** (kinds/weights aligned) · C6 boss tiers form 8 contiguous blocks of 5 in the documented order + every boss kind is in `BOSS_NAMES` · C7 each character's `skills`/`skillLabels` cover the `{x,c,f,b,v}` slots and every skill name has a `skillCdMax` entry · C8 (WARN-only) `GAMEPLAY_KEYS` covers every `keys['…']` code read. C4/C5 guard the two invariants this codebase has actually regressed before (unreachable `mix` entries; the "fuel never drops" bug).
+- **CI:** `.github/workflows/validate.yml` runs it on push/PR to `main` (GitHub's Python, no local install). It is a **signal only** — it does not gate the Pages deploy, so a red check never takes the live site down.
+- **When you change `LEVELS`, the drop pools, the skill set, or `GAMEPLAY_KEYS`, run the validator** before committing; if you add a new invariant worth guarding, add a `check(...)` to `tools/validate.py`.
 
 ## Git workflow
 
@@ -131,6 +140,7 @@ A global `let paused = false;` (declared next to `slowMoTime`). During `STATE.PL
 
 These changes are recent enough to be worth recording so future passes don't unintentionally regress them:
 
+- **Added dependency-free validation tooling (`tools/validate.py`) + CI.** First test/lint tooling in the repo. Pure Python 3 stdlib (Python is installed; Node is **not**, which is why a JS test harness wasn't used — and the single-file/no-deps design makes one a poor fit anyway). It is a *static invariant linter*, not a runtime test: brace-balance smoke-check + the numeric invariants that have regressed before (every `mix` sums to 1.0, all 3 drop pools sum to 1.0) plus LEVELS-count/boss-tiers/skill-wiring/GAMEPLAY_KEYS coverage. Verified green on current `index.html` and confirmed (negative test) to FAIL on a broken mix + broken pool. `tools/validate.bat` is a Windows wrapper; `.github/workflows/validate.yml` runs it on push/PR to `main` (signal only — does not gate Pages deploy). See the *Validation* section above. Run it after editing `LEVELS`/drop pools/skills/`GAMEPLAY_KEYS`.
 - **Scout RMB → three straight-line HITSCAN laser beams + overall Scout buff.** The Scout's old RMB (a fan of three *travelling, piercing* blue laser bolts) was replaced by `fireLaserBeams()`: three **instant straight-line beams** fanned around the aim that damage *every* enemy on each beam's line **simultaneously** (point-to-segment distance test, `dmg 3 × damageMult`, `LASER_BEAM_HALF 4` thickness). **Scope unchanged**: `LASER_BEAM_LEN 147` (= the old bolt's `speed 420 × life 0.35`) and `±LASER_BEAM_SPREAD 0.18` rad match the old burst's reach/spread exactly. Cooldown tightened `0.3 → 0.22 s`. Rendered as three fading lines via a new `{beam:true, x, y, angle, len}` particle (drawn as a translucent wide glow + bright thin core in the particle loop, handled *before* the `p.ring` branch). The old `SPR.bullet_laser_blue` sprite is now orphaned. **Overall Scout buff in the same pass**: `hp 7→9`, `speed 135→148`, `damageMult 1.1→1.25`, mobility cooldowns `blink 7→5` / `dash 5→3.5`, and the SMG LMB nudged up (`dmg 0.7→0.85`, `speed 340→360`, `cd 0.07→0.06`). Desc updated to `CYBER MECH · 3× LASER BEAM (RMB) · BLINK+DASH`. See the *Right-mouse secondaries* section.
 - **All three player sprites redrawn (theme overhaul).** `player_soldier_a/_b` (Syed) → a 21st-century **rainforest warrior**: camo bandana/fatigues, an AK47 across the chest, a dagger at the waist (palette: camo greens 1/2, tan 3, skin 4, gunmetal 5, wood/handle 6, blade 7). `player_scout_a/_b` (Xu Yihui) → a **blue cyberpunk mech**: blue shell 1/2, cyan visor+core 4, navy joints 3, gunmetal pods 5, **left bullet-launcher muzzle 6 (orange), right laser-launcher muzzle 7 (cyan)**. `player_tank_a/_b` (Benjamin Wu) → a **U.S.-Army flamethrower soldier**: dark uniform 1/2, skin 4, dark rifle across chest 5, back-mounted flamethrower tanks (orange 6 + red pilot 7), dark boots 3. Sprite keys are unchanged (`player_<key>_a/_b`), so `playerSprites()` and the character cards pick them up automatically. Descs updated (Syed `SAMURAI·KATANA` → `RAINFOREST WARRIOR·BLADE`, Xu Yihui `ASSASSIN` → `CYBER MECH`). The melee function/consts stay named `fireKatana`/`KATANA_*` (legacy) even though the flavor is now a jungle-warrior blade.
 - **Katana scope cut + name shuffle.** Syed's katana arc was reduced to **3/4** of its previous coverage — `KATANA_HALF 1.2 → 0.9` rad (~137° → ~103°, still obtuse; since the swept sector area is linear in the half-angle at fixed `KATANA_RANGE`, this is exactly a 3/4 scope cut). Names reshuffled: char2 (`scout`) is now **Xu Yihui** and char3 (`tank`) reverted to **Benjamin Wu** (display names only; keys unchanged). The older bullets below predate these tweaks.

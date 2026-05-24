@@ -36,7 +36,7 @@ Choose one of three classes — each plays completely differently, with its own 
 | Class | Profile | HP | Primary (LMB) | Secondary (RMB) |
 |---|---|---|---|---|
 | **Syed** | 21st-century rainforest warrior · +25% damage | 10 | Pistol | **Blade slash** — continuous, very high damage over a wide *obtuse* arc; runs on a ~6 s **energy** bar |
-| **Xu Yihui** | Blue cyberpunk mech · fast & fragile | 7 | Fast SMG | **3-line laser burst** — a fan of 3 piercing blue lasers every 0.3 s |
+| **Xu Yihui** | Blue cyberpunk mech · fast & nimble | 9 | Fast SMG | **3× laser beams** — three instant straight-line beams that damage every enemy along each line at once, every 0.22 s |
 | **Benjamin Wu** | U.S.-Army heavy · +20% damage · starts with shield | 12 (+4 shield) | Heavy slug | **Flamethrower** — sustained cone of fire; runs on a 12-unit **fuel** bar |
 
 ### Skills
@@ -106,13 +106,28 @@ Enemies drop weapons, defenses, and buffs. The drop pool is tuned per class (Ben
 - Particle effects, hit-flash, invulnerability blinking, pause
 - High score persisted in `localStorage`
 
+## Development
+
+The game itself needs no tooling — just open `index.html`. There is one optional, **dependency-free** static validator (`tools/validate.py`, Python 3 standard library only) that lints the game's documented invariants rather than its runtime behavior:
+
+```sh
+python tools/validate.py      # or, on Windows: tools\validate.bat
+```
+
+It checks that every level's spawn `mix` and all three enemy drop pools sum to exactly 1.0, that there are 40 levels in 8 boss tiers, that each character's skills are wired to cooldowns, and that the script's brackets balance — then exits non-zero if anything is off. The same script runs in CI on every push/PR to `main` (`.github/workflows/validate.yml`); it's a pass/fail signal and does **not** gate the live-site deploy. It is *not* a substitute for playtesting — gameplay, AI, and rendering bugs still need a browser reload to catch.
+
 ## Project layout
 
 ```
 top-down-shooter/
-├── index.html   ← the whole game (HTML/CSS/JS, sprites, audio)
+├── index.html              ← the whole game (HTML/CSS/JS, sprites, audio)
+├── tools/
+│   ├── validate.py         ← dependency-free invariant validator
+│   └── validate.bat        ← Windows wrapper
+├── .github/workflows/
+│   └── validate.yml        ← CI: runs the validator on push/PR
 ├── README.md
-├── CLAUDE.md    ← architecture notes for contributors
+├── CLAUDE.md               ← architecture notes for contributors
 └── .gitignore
 ```
 
