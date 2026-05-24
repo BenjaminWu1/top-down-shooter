@@ -839,6 +839,12 @@ const SPR = {
     "23332",
     "11111"
   ]),
+  // Blue piercing-laser beam — Scout's right-mouse secondary.
+  bullet_laser_blue: S({'.':null,'1':'#2e86de','2':'#74c0fc','3':'#fff'}, [
+    "11111",
+    "23332",
+    "11111"
+  ]),
   bullet_rocket: S({'.':null,'1':'#7f8c8d','2':'#e67e22','3':'#fff'}, [
     ".11..",
     "11223",
@@ -1056,13 +1062,13 @@ function saveCleared(){
 const CHARACTERS = {
   soldier: {
     name:'SOLDIER', desc:'DEMOLITIONIST · GRENADES (RMB) · AOE',
-    color:'#3498db', hp:7, speed:92, damageMult:1.25, startShield:0,
+    color:'#3498db', hp:10, speed:92, damageMult:1.25, startShield:0,
     skills:{ x:'sprint', c:'flameburst', v:'barrage', f:'heal', b:'blast' },
     skillLabels:{ x:'SPRINT', c:'NAPALM', v:'BARRAGE', f:'HEAL', b:'BLAST' }
   },
   scout: {
-    name:'SCOUT', desc:'ASSASSIN · BURST (RMB) · BLINK + DASH',
-    color:'#f1c40f', hp:4, speed:135, damageMult:1.1, startShield:0,
+    name:'SCOUT', desc:'ASSASSIN · LASER (RMB) · BLINK + DASH',
+    color:'#f1c40f', hp:7, speed:135, damageMult:1.1, startShield:0,
     skills:{ x:'sprint', c:'blink', v:'dash', f:'heal', b:'blast' },
     skillLabels:{ x:'SPRINT', c:'BLINK', v:'DASH', f:'HEAL', b:'BLAST' }
   },
@@ -1196,8 +1202,8 @@ function createPlayer(charKey){
     // New equipment timers (Minigun / Plasma / Homing missiles)
     minigunTime:0, plasmaTime:0, homingTime:0,
     // Right-mouse secondary-attack cooldowns: Soldier grenade-launcher,
-    // Scout close-range pellet burst (Tank's flamethrower uses fuel instead).
-    grenadeCd:0, burstCd:0,
+    // Scout piercing laser (Tank's flamethrower uses fuel instead).
+    grenadeCd:0, laserCd:0,
     // Passive powerups (temporary buffs)
     speedTime:0, damageTime:0, magnetTime:0, scoreTime:0,
     // X-skill sprint buff timer (+30% move speed for 5s). Stacks multiplicatively
@@ -1781,7 +1787,7 @@ function updatePlaying(dt){
   if(player.plasmaTime > 0) player.plasmaTime -= dt;
   if(player.homingTime > 0) player.homingTime -= dt;
   if(player.grenadeCd > 0) player.grenadeCd -= dt;
-  if(player.burstCd > 0) player.burstCd -= dt;
+  if(player.laserCd > 0) player.laserCd -= dt;
 
   if(mouse.down && player.fireCooldown <= 0){
     const mx = player.x + Math.cos(player.angle) * 9;
@@ -1799,19 +1805,21 @@ function updatePlaying(dt){
     triggerSkill('grenade', 0, 0, 0);   // reuse the existing grenade handler
     player.grenadeCd = 0.7;
   }
-  // ---- Scout's secondary: close-range pellet burst (right mouse) ----
-  if(player.char === 'scout' && mouse.rdown && player.burstCd <= 0){
-    const bMult = (player.damageTime > 0 ? 2 : 1) * (player.damageMult || 1);
-    const bx = player.x + Math.cos(player.angle) * 9;
-    const by = player.y + Math.sin(player.angle) * 9;
-    for(const off of [-0.18, 0, 0.18]){
-      entities.push(createBullet(bx, by, player.angle + off, 'player', {
-        dmg: 1.4 * bMult, speed: 300, radius: 2, life: 0.35
-      }));
-    }
-    player.burstCd = 0.5;
-    emit(bx, by, 4, '#f1c40f', 40, 130, 0.18);
-    sfx.shoot();
+  // ---- Scout's secondary: piercing blue laser (right mouse) ----
+  // A held beam of fast blue laser bolts that PIERCE every enemy in their path
+  // (pierce:true -> uses hitSet, doesn't die on hit). Great for lining up a row
+  // of enemies; fired on a short laserCd so it reads as a continuous beam.
+  if(player.char === 'scout' && mouse.rdown && player.laserCd <= 0){
+    const lMult = (player.damageTime > 0 ? 2 : 1) * (player.damageMult || 1);
+    const lx = player.x + Math.cos(player.angle) * 9;
+    const ly = player.y + Math.sin(player.angle) * 9;
+    entities.push(createBullet(lx, ly, player.angle, 'player', {
+      dmg: 1.1 * lMult, speed: 360, pierce: true,
+      sprite: SPR.bullet_laser_blue, radius: 2, life: 1.1
+    }));
+    player.laserCd = 0.12;
+    emit(lx, ly, 3, '#4fc3f7', 30, 120, 0.16);
+    sfx.laser();
   }
 
   if(player.invuln > 0) player.invuln -= dt;
@@ -3488,9 +3496,9 @@ function drawPlayer(p){
   else if(p.rapidTime > 0){ gunCol = '#a04000'; tipCol = '#e67e22'; }
   // Tank firing the flamethrower: dark nozzle + red-orange tip
   if(p.char === 'tank' && mouse.rdown && p.fuel > 0){ gunCol = '#1a1a1a'; tipCol = '#e74c3c'; }
-  // Soldier grenade launcher / Scout pellet burst: light the barrel while RMB held
+  // Soldier grenade launcher / Scout laser: light the barrel while RMB held
   if(p.char === 'soldier' && mouse.rdown && p.grenadeCd <= 0){ gunCol = '#5d4037'; tipCol = '#e67e22'; }
-  if(p.char === 'scout' && mouse.rdown){ gunCol = '#7d6608'; tipCol = '#f1c40f'; }
+  if(p.char === 'scout' && mouse.rdown){ gunCol = '#1b4f72'; tipCol = '#4fc3f7'; }  // blue laser barrel
   if(p.damageTime > 0){ tipCol = '#e74c3c'; }  // Damage buff: red barrel tip
   ctx.fillStyle = gunCol;
   ctx.fillRect(0, -1, 8, 3);
