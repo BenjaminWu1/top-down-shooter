@@ -1,0 +1,41 @@
+# Gameplay systems
+
+> Imported by `../CLAUDE.md` via `@docs/systems.md`. Part of the project guidance — keep in sync with the code.
+
+## Input & focus
+
+Letter keys (especially W/A/S/D/X/C/F/B/V and Space) used to allow browser default actions, which on some setups (notably Windows 11 / Chinese IME, certain Chrome focus modes) would scroll the page even with `overflow:hidden` set on `<body>`. The skill HUD lives near the bottom of the canvas, so any scroll pushed it out of view and the player thought the game was frozen. The current input layer defends against this in four places:
+
+1. **`GAMEPLAY_KEYS` Set** — every key the game listens for is in this set, and the global keydown/keyup handlers `preventDefault()` for anything in it.
+2. **Canvas is focusable** — `canvas.tabIndex = -1`, `outline:none`, focused on every mousedown and on `window.load`. Keys route through a focused canvas which has no default scroll behavior.
+3. **Hard scroll-lock** — a `window.scroll` listener immediately snaps `scrollTo(0, 0)` if anything (browser auto-scroll-into-view, virtual keyboards, extensions) tries to move the document.
+4. **`Cmd/Ctrl + scroll` is not touched** — only key-driven scrolling is suppressed.
+
+When adding a new gameplay key, **also add it to `GAMEPLAY_KEYS`**, or the bug returns.
+
+## Special skills (X / C / F / B / V)
+
+Each character in `CHARACTERS` has a `skills:{x, c, f, b, v}` map and a matching `skillLabels`. **X / F / B are universal** (all three classes share them); **C and V are both class-specific** — all three classes now fill the V slot too. Every key dispatches through `triggerSkill(name, dx, dy, mag)` which returns `true` on successful fire so the per-key cooldown only charges on success. Cooldown maximums live in `player.skillCdMax` (`sprint:20`, `heal:20`, `blast:20`, `vsummon:25`, `wall:18`, `blink:7`, `dash:5`, `flameburst:20`, `barrage:24`, `slowmo` via the `c:12` default, …). The lookup is **by skill name**, not by key, so e.g. X's cooldown comes from `skillCdMax['sprint']` (20), not the unused `x:4` entry.
+
+- **X is `sprint`** (label `SPRINT`, 20 s cooldown): sets `player.sprintTime = 5`, a +30% move-speed buff. `playerSpeedMult()` combines it with the SPEED powerup (1.5×) multiplicatively, and is used by both player movement and the allies that pace themselves to the player. Shows a `SPRNT` buff timer in `drawWeaponHUD`.
+- **C is class-specific**: Soldier `flameburst` (label `NAPALM` — 3 s fire ring via `tickFlameburst`, 20 s cd), Scout `blink` (teleport to cursor, 0.45 s i-frames, 7 s cd), Tank `wall` (4 s full invuln, 18 s cd).
+- **F is `heal`** (label `HEAL`, 20 s cooldown): restores 1 HP capped at `maxHp`. Returns `false` (and so charges no cooldown) when already at full HP, so it never wastes the cooldown.
+- **B is `blast`** (label `BLAST`, 20 s cooldown): a **circle-damage** AoE burst (radius 70) centered on the player via the shared `explode()` primitive — every enemy inside the radius instantly takes normal damage (`3 × damageMult`, doubled by the DAMAGE powerup). It also spawns an expanding cyan **shockwave ring** particle (`{ring:true, r0, r1}`, rendered as a growing `ctx.arc` stroke in the particle draw loop) so the circular area of effect is visible.
+- **V is class-specific**: Soldier `barrage` (label `BARRAGE` — fan of 5 staggered grenade-shells, 24 s cd), Scout `dash` (directional dodge w/ 0.35 s i-frames, 5 s cd), Tank `vsummon` (label `BLADE+`, 25 s cd — the one-alive-at-a-time sword knight, `attackRate /= 1.5`; the only way to summon a `sword_ally`).
+
+`drawSkillHUD()` pushes chips in order X, C, F, B, then V (V only when `ch.skills.v` exists — now always true). Chip colors come from the `skillColor` map (which includes `barrage`, `dash`, `blink`, `flameburst`). The character-select card lists the same slots, laid out sequentially (`sy` accumulator) so optional rows never overlap; the card is 172 px tall and fits five skills for every class (Soldier/Scout have only 3 stat rows — HP/SPEED/DMG, no SHIELD/FUEL — so they have *more* slack than the tank card). Each key's `updatePlaying` dispatch is gated on its `charSkills.<k>` entry, so adding/removing a slot on a class is purely a data change in `CHARACTERS`.
+
+The old M-slot was removed. Of the spare `triggerSkill` handlers, `dash`/`blink`/`flameburst` are now **wired** (Scout V / Scout C / Soldier C). `grenade`, `nuke`, and `summon` remain implemented but **unreferenced** (`grenade` was briefly Soldier's RMB before it became the knife slash — its bullet *shape* is still mirrored inline by the `barrage` V handler; `summon` was X's old sword-summon, superseded by `vsummon`); leave them for future characters.
+
+## Right-mouse secondaries (RMB)
+
+Each class has a distinct held-RMB secondary attack, dispatched per-frame in `updatePlaying` right after the movement/shoot block (next to each other, mirroring structure):
+- **Benjamin Wu (Tank)** — `fireFlamethrower(dt)` while `fuel > 0` (drains `player.fuel`).
+- **Syed (Soldier)** — continuous **blade slash** via `fireKatana(dt)` (function/const names `fireKatana`/`KATANA_*` are legacy — the sprite is now a rainforest warrior with a dagger, not a katana): a VERY-high-DPS melee swept over a wide **obtuse** arc (`KATANA_RANGE 32`, `KATANA_HALF 0.9` rad ⇒ ~103° total — still obtuse, 3/4 of the original 137° after a scope cut, `dps 40 × damageMult`). It drains `player.energy` (a ~6 s pool, like Tank's fuel) while RMB is held and `energy > 0`. `drawPlayer` renders the obtuse arc as a translucent steel sector (using the same `KATANA_RANGE`/`KATANA_HALF` consts, so the visual and the damage check stay in lock-step) — this is how the obtuse angle is *manifested in-game*. Refilled by the **`beverage`** pickup (+1 s each, Soldier-only) and a slow 0.1/s self-regen (below).
+- **Scout** — THREE straight-line **hitscan laser beams** via `fireLaserBeams()` (no longer travelling projectiles): on each release the mech fires three straight beams fanned around the aim (`±LASER_BEAM_SPREAD 0.18` rad + one dead-center). Each beam is a line segment from the muzzle out to `LASER_BEAM_LEN 147` (= the old bolt's `speed 420 × life 0.35`, so the **scope is unchanged**). It is HITSCAN — a point-to-segment distance test damages **every enemy whose center lies within `LASER_BEAM_HALF 4` + its radius of the beam line simultaneously**, the same frame the beam fires (`dmg 3 × damageMult`). Gated behind a `player.laserCd` **0.22 s** cooldown so it pulses in distinct releases while RMB is held. Rendered as three fading straight lines (a `{beam:true, x, y, angle, len}` particle drawn as a translucent wide glow + bright thin core in the particle loop) — this is how the "three lines" are manifested in-game. Blue muzzle particles + blue barrel reticle while RMB held. (The old `SPR.bullet_laser_blue` sprite is now orphaned.)
+
+`laserCd` is decayed alongside the weapon timers; Syed `energy` and Benjamin Wu `fuel` are drained inside their own RMB blocks, and **both slowly self-regen 0.1/s** (capped at max) in `updatePlaying` just before the RMB blocks — so neither class is fully dependent on `beverage`/`fuel` drops (which were dialed back to high-medium frequency, weight 0.12, as a result). `drawPlayer` has per-class RMB reticle-color branches so the barrel lights while RMB is held. **HUD:** Syed's energy shows as a label-only **ENERGY** bar in `drawHUD` (mirrors the **FUEL** bar — bar fill only, no numeric value); only one of `maxFuel`/`maxEnergy` is ever >0 so the two bars share the same screen slot.
+
+## Pause (Space)
+
+A global `let paused = false;` (declared next to `slowMoTime`). During `STATE.PLAYING`, the **leading edge** of a Space keydown toggles `paused` (the keydown listener checks `!wasDown` to ignore key-repeat). While paused, `update()` skips `updatePlaying(dt)` so the whole tick freezes (timers, spawns, movement, skills). `draw()` still renders the frozen world + HUD and overlays `drawPause()` (dim + "PAUSED" banner). **Resume** is either another Space press or a click anywhere: the canvas `mousedown` handler returns early when `paused` so the resuming click doesn't also fire a shot. `paused` is reset to `false` in `startGame()` and `startLevel()` so it never persists across transitions.

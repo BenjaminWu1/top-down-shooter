@@ -126,8 +126,12 @@ top-down-shooter/
 │   └── validate.bat        ← Windows wrapper
 ├── .github/workflows/
 │   └── validate.yml        ← CI: runs the validator on push/PR
+├── docs/                   ← contributor notes (imported by CLAUDE.md via @import)
+│   ├── architecture.md     ← index.html walkthrough + coordinate system
+│   ├── systems.md          ← input, skills, RMB secondaries, pause
+│   └── session-changes.md  ← changelog of recent design decisions
 ├── README.md
-├── CLAUDE.md               ← architecture notes for contributors
+├── CLAUDE.md               ← entry point: essentials + @imports the docs/ files
 └── .gitignore
 ```
 
