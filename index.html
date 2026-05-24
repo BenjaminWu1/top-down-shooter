@@ -699,6 +699,15 @@ const SPR = {
     "334433",
     "344443"
   ]),
+  // Supplement-beverage / energy drink (refills Soldier's knife energy; Soldier-only drop).
+  p_beverage: S({'.':null,'1':'#2ecc71','2':'#1e8449','3':'#fff','4':'#145a32'}, [
+    "..33..",
+    ".1111.",
+    ".1331.",
+    ".1111.",
+    ".1221.",
+    ".4444."
+  ]),
   p_health: S({'.':null,'1':'#fff','2':'#e74c3c'}, [
     ".2222.",
     "221122",
@@ -1061,7 +1070,7 @@ function saveCleared(){
 // class-unique slot (slowmo / wall); the optional V slot is Tank-only. ----
 const CHARACTERS = {
   soldier: {
-    name:'SOLDIER', desc:'DEMOLITIONIST · GRENADES (RMB) · AOE',
+    name:'SOLDIER', desc:'DEMOLITIONIST · KNIFE (RMB) · AOE',
     color:'#3498db', hp:10, speed:92, damageMult:1.25, startShield:0,
     skills:{ x:'sprint', c:'flameburst', v:'barrage', f:'heal', b:'blast' },
     skillLabels:{ x:'SPRINT', c:'NAPALM', v:'BARRAGE', f:'HEAL', b:'BLAST' }
@@ -1201,9 +1210,13 @@ function createPlayer(charKey){
     maxFuel: charKey === 'tank' ? 12 : 0,
     // New equipment timers (Minigun / Plasma / Homing missiles)
     minigunTime:0, plasmaTime:0, homingTime:0,
-    // Right-mouse secondary-attack cooldowns: Soldier grenade-launcher,
-    // Scout piercing laser (Tank's flamethrower uses fuel instead).
-    grenadeCd:0, laserCd:0,
+    // Scout's right-mouse 3-line laser cooldown.
+    laserCd:0,
+    // Soldier knife-slash energy: ~6 s of continuous slashing. Like Tank's fuel
+    // it never auto-regens — refilled by the 'beverage' pickup (+1 s each).
+    // Drained by dt while RMB held, so it is float-precise (well under 0.1 s).
+    energy: charKey === 'soldier' ? 6 : 0,
+    maxEnergy: charKey === 'soldier' ? 6 : 0,
     // Passive powerups (temporary buffs)
     speedTime:0, damageTime:0, magnetTime:0, scoreTime:0,
     // X-skill sprint buff timer (+30% move speed for 5s). Stacks multiplicatively
@@ -1786,7 +1799,6 @@ function updatePlaying(dt){
   if(player.minigunTime > 0) player.minigunTime -= dt;
   if(player.plasmaTime > 0) player.plasmaTime -= dt;
   if(player.homingTime > 0) player.homingTime -= dt;
-  if(player.grenadeCd > 0) player.grenadeCd -= dt;
   if(player.laserCd > 0) player.laserCd -= dt;
 
   if(mouse.down && player.fireCooldown <= 0){
@@ -1800,10 +1812,12 @@ function updatePlaying(dt){
     player.fuel = Math.max(0, player.fuel - dt);
     fireFlamethrower(dt);
   }
-  // ---- Soldier's secondary: grenade launcher (right mouse) ----
-  if(player.char === 'soldier' && mouse.rdown && player.grenadeCd <= 0){
-    triggerSkill('grenade', 0, 0, 0);   // reuse the existing grenade handler
-    player.grenadeCd = 0.7;
+  // ---- Soldier's secondary: continuous knife slash (right mouse) ----
+  // High-DPS melee over a very small area; drains `energy` (~6 s total) while
+  // held. No auto-regen — refilled by the 'beverage' pickup (+1 s each).
+  if(player.char === 'soldier' && mouse.rdown && player.energy > 0){
+    player.energy = Math.max(0, player.energy - dt);
+    fireKnife(dt);
   }
   // ---- Scout's secondary: 3-line piercing blue laser burst (right mouse) ----
   // A small-scale fan of THREE piercing blue laser bolts fired as a single
@@ -2062,6 +2076,41 @@ function fireFlamethrower(dt){
   if(particles.length > 300) particles.length = 300;
 }
 
+// Soldier's right-mouse secondary: a high-DPS continuous knife slash over a very
+// small area in front of the player. Mirrors fireFlamethrower's cone-damage loop
+// but with a tiny range and much higher DPS — the short `energy` pool is what
+// balances it. Called every frame while RMB is held and energy remains.
+function fireKnife(dt){
+  const range = 24;        // very small area — point-blank melee
+  const halfAngle = 1.0;   // ~57° half-arc (a ~115° slash arc in front)
+  const dps = 26 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
+  for(const en of entities){
+    if(en.type !== 'enemy' || en.dead) continue;
+    const dx = en.x - player.x, dy = en.y - player.y;
+    const d = Math.hypot(dx, dy);
+    if(d > range + en.radius) continue;
+    let diff = Math.atan2(dy, dx) - player.angle;
+    while(diff >  Math.PI) diff -= 2 * Math.PI;
+    while(diff < -Math.PI) diff += 2 * Math.PI;
+    if(Math.abs(diff) > halfAngle) continue;
+    en.hp -= dps * dt;
+    en.hitFlash = 0.06;
+    if(en.hp <= 0) killEnemy(en);
+  }
+  // Slash visual: bright steel streaks sweeping the small front arc.
+  for(let i = 0; i < 2; i++){
+    const a = player.angle + (Math.random() - 0.5) * halfAngle * 2;
+    const rr = range * (0.55 + Math.random() * 0.45);
+    particles.push({
+      x: player.x + Math.cos(a) * rr, y: player.y + Math.sin(a) * rr,
+      vx: Math.cos(a + 1.4) * 36, vy: Math.sin(a + 1.4) * 36,   // tangential streak
+      life: 0.1 + Math.random() * 0.06, maxLife: 0.16,
+      color: i ? '#ffffff' : '#cfd8dc', size: 1 + Math.floor(Math.random() * 2)
+    });
+  }
+  if(particles.length > 300) particles.length = 300;
+}
+
 function fireWeapon(mx, my){
   // Priority: rocket > laser > homing > plasma > spread > minigun > default.
   // Rapid halves cooldown; Damage powerup doubles bullet damage (incl. rockets).
@@ -2193,6 +2242,7 @@ function applyPickup(kind){
   else if(kind === 'score2x') player.scoreTime  = Math.max(player.scoreTime, 10);
   else if(kind === 'magnet')  player.magnetTime = Math.max(player.magnetTime,10);
   else if(kind === 'fuel')    player.fuel       = Math.min(player.maxFuel, player.fuel + 3);
+  else if(kind === 'beverage') player.energy    = Math.min(player.maxEnergy, player.energy + 1);
 }
 
 // ============================================================
@@ -2605,6 +2655,11 @@ function killEnemy(en){
       // more reliably. Health/slowmo/score2x/rocket/magnet shaved to keep sum = 1.0.
       kinds   = ['health','fuel','spread','rapid','shield','armor','rocket','laser','minigun','plasma','homing','speed','damage','slowmo','score2x','magnet'];
       weights = [ 0.10,   0.20,  0.07,    0.07,    0.06,    0.06,   0.04,    0.05,   0.05,     0.05,    0.05,    0.05,   0.05,    0.03,    0.02,     0.05    ];
+    } else if(player && player.char === 'soldier'){
+      // Soldier mirrors the Tank's structure with a high-frequency 'beverage'
+      // (0.20) refilling the knife's energy. Weights sum to exactly 1.0.
+      kinds   = ['health','beverage','spread','rapid','shield','armor','rocket','laser','minigun','plasma','homing','speed','damage','slowmo','score2x','magnet'];
+      weights = [ 0.10,   0.20,      0.07,    0.07,   0.06,    0.06,   0.05,    0.05,   0.05,     0.05,    0.04,    0.04,   0.05,    0.03,    0.02,     0.06    ];
     } else {
       kinds   = ['health','spread','rapid','shield','armor','rocket','laser','minigun','plasma','homing','speed','damage','slowmo','score2x','magnet'];
       weights = [ 0.16,   0.08,    0.08,   0.07,    0.07,   0.06,    0.06,   0.06,     0.06,    0.05,    0.05,   0.06,    0.05,    0.03,     0.06    ];
@@ -3500,8 +3555,8 @@ function drawPlayer(p){
   else if(p.rapidTime > 0){ gunCol = '#a04000'; tipCol = '#e67e22'; }
   // Tank firing the flamethrower: dark nozzle + red-orange tip
   if(p.char === 'tank' && mouse.rdown && p.fuel > 0){ gunCol = '#1a1a1a'; tipCol = '#e74c3c'; }
-  // Soldier grenade launcher / Scout laser: light the barrel while RMB held
-  if(p.char === 'soldier' && mouse.rdown && p.grenadeCd <= 0){ gunCol = '#5d4037'; tipCol = '#e67e22'; }
+  // Soldier knife slash / Scout laser: light the barrel while RMB held
+  if(p.char === 'soldier' && mouse.rdown && p.energy > 0){ gunCol = '#7f8c8d'; tipCol = '#ecf0f1'; }  // steel knife
   if(p.char === 'scout' && mouse.rdown){ gunCol = '#1b4f72'; tipCol = '#4fc3f7'; }  // blue laser barrel
   if(p.damageTime > 0){ tipCol = '#e74c3c'; }  // Damage buff: red barrel tip
   ctx.fillStyle = gunCol;
@@ -3746,7 +3801,8 @@ function drawPickupEntity(p){
     minigun: SPR.p_minigun, plasma: SPR.p_plasma, homing: SPR.p_homing,
     speed: SPR.p_speed,   damage: SPR.p_damage, slowmo: SPR.p_slowmo,
     score2x: SPR.p_score, magnet: SPR.p_magnet,
-    fuel: SPR.p_fuel,     armor: SPR.p_armor
+    fuel: SPR.p_fuel,     armor: SPR.p_armor,
+    beverage: SPR.p_beverage
   };
   const sp = sprMap[p.kind];
   if(!sp) return;
@@ -3757,7 +3813,8 @@ function drawPickupEntity(p){
     minigun:'#bdc3c7', plasma:'#3498db', homing:'#e91e63',
     speed:'#e91e63',  damage:'#e74c3c', slowmo:'#3498db',
     score2x:'#f1c40f', magnet:'#e74c3c',
-    fuel:'#e67e22',   armor:'#3498db'
+    fuel:'#e67e22',   armor:'#3498db',
+    beverage:'#2ecc71'
   };
   ctx.fillStyle = glowColors[p.kind] || '#fff';
   ctx.globalAlpha = 0.2 + 0.2 * Math.sin(stateTime * 8);
@@ -3801,6 +3858,21 @@ function drawHUD(){
     ctx.fillStyle = '#fff';
     ctx.textAlign = 'left';
     ctx.fillText('FUEL', 8, fy + 5);
+  }
+  // Energy bar (Soldier only) — powers the knife slash; refilled by 'beverage'.
+  // Label only, no numeric value (the bar fill conveys the ~6 s charge).
+  if(player.maxEnergy > 0){
+    const ey = player.shieldHp > 0 ? 26 : 18;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(6, ey, 66, 6);
+    ctx.fillStyle = '#0b2e1a';
+    ctx.fillRect(7, ey + 1, 64, 4);
+    ctx.fillStyle = '#2ecc71';
+    ctx.fillRect(7, ey + 1, Math.floor(64 * (player.energy / player.maxEnergy)), 4);
+    ctx.font = 'bold 6px monospace';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'left';
+    ctx.fillText('ENERGY', 8, ey + 5);
   }
 
   // Score & level (top-right)
@@ -4062,6 +4134,7 @@ function drawCharacterSelect(){
     if(ch.damageMult > 1) stats.push(['DMG  : x' + ch.damageMult, '#bdc3c7']);
     if(ch.startShield)    stats.push(['SHIELD: ' + ch.startShield, '#bdc3c7']);
     if(key === 'tank')    stats.push(['FUEL : 12 (RMB)', '#e67e22']);
+    if(key === 'soldier') stats.push(['ENERGY: 6 (RMB)', '#2ecc71']);
     let sy = r.y + 70;
     for(const st of stats){ ctx.fillStyle = st[1]; ctx.fillText(st[0], r.x + 12, sy); sy += 9; }
 
