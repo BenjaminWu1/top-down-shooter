@@ -1084,8 +1084,8 @@ const CHARACTERS = {
     skillLabels:{ x:'SPRINT', c:'NAPALM', v:'BARRAGE', f:'HEAL', b:'BLAST' }
   },
   scout: {
-    name:'XU YIHUI', desc:'CYBER MECH · LASER (RMB) · BLINK+DASH',
-    color:'#f1c40f', hp:7, speed:135, damageMult:1.1, startShield:0,
+    name:'XU YIHUI', desc:'CYBER MECH · 3× LASER BEAM (RMB) · BLINK+DASH',
+    color:'#f1c40f', hp:9, speed:148, damageMult:1.25, startShield:0,
     skills:{ x:'sprint', c:'blink', v:'dash', f:'heal', b:'blast' },
     skillLabels:{ x:'SPRINT', c:'BLINK', v:'DASH', f:'HEAL', b:'BLAST' }
   },
@@ -1218,7 +1218,7 @@ function createPlayer(charKey){
     maxFuel: charKey === 'tank' ? 12 : 0,
     // New equipment timers (Minigun / Plasma / Homing missiles)
     minigunTime:0, plasmaTime:0, homingTime:0,
-    // Scout's right-mouse 3-line laser cooldown.
+    // Scout's right-mouse 3-beam laser cooldown.
     laserCd:0,
     // Syed's katana energy: ~6 s of continuous slashing. Drained by dt while RMB
     // held (float-precise); slowly self-regens 0.1/s and is topped up by the
@@ -1237,7 +1237,7 @@ function createPlayer(charKey){
     // C is class-specific (per CHARACTERS.skills); each class now also fills the V
     // slot (Soldier barrage / Scout dash / Tank vsummon).
     skillCd:{ x:0, c:0, v:0, f:0, b:0 },
-    skillCdMax:{ x:4, c:12, blink:7, dash:5, wall:18, summon:25, vsummon:25, flameburst:20, barrage:24, sprint:20, heal:20, blast:20 },
+    skillCdMax:{ x:4, c:12, blink:5, dash:3.5, wall:18, summon:25, vsummon:25, flameburst:20, barrage:24, sprint:20, heal:20, blast:20 },
     hitFlash:0, invuln:0, frame:0, frameT:0, dead:false
   };
 }
@@ -1832,25 +1832,15 @@ function updatePlaying(dt){
     player.energy = Math.max(0, player.energy - dt);
     fireKatana(dt);
   }
-  // ---- Scout's secondary: 3-line piercing blue laser burst (right mouse) ----
-  // A small-scale fan of THREE piercing blue laser bolts fired as a single
-  // discrete burst (NOT a continuous beam). Each bolt pierces every enemy in its
-  // short lane (pierce:true -> uses hitSet) and applies its full medium-high
-  // damage immediately on contact. Gated behind a 0.3s laserCd, so it fires in
-  // distinct releases rather than a steady stream.
+  // ---- Scout's secondary: THREE straight-line laser BEAMS (right mouse) ----
+  // Instant hitscan beams (NOT travelling projectiles): on each release the mech
+  // fires three straight laser beams fanned around the aim. Every enemy lying on a
+  // beam's line takes its full damage SIMULTANEOUSLY the instant the beam fires
+  // (see fireLaserBeams). Gated behind laserCd so it pulses in distinct releases
+  // while RMB is held.
   if(player.char === 'scout' && mouse.rdown && player.laserCd <= 0){
-    const lMult = (player.damageTime > 0 ? 2 : 1) * (player.damageMult || 1);
-    const lx = player.x + Math.cos(player.angle) * 9;
-    const ly = player.y + Math.sin(player.angle) * 9;
-    for(const off of [-0.18, 0, 0.18]){
-      entities.push(createBullet(lx, ly, player.angle + off, 'player', {
-        dmg: 2 * lMult, speed: 420, pierce: true,
-        sprite: SPR.bullet_laser_blue, radius: 2, life: 0.35
-      }));
-    }
-    player.laserCd = 0.3;
-    emit(lx, ly, 5, '#4fc3f7', 40, 140, 0.18);
-    sfx.laser();
+    fireLaserBeams();
+    player.laserCd = 0.22;
   }
 
   if(player.invuln > 0) player.invuln -= dt;
@@ -2126,6 +2116,47 @@ function fireKatana(dt){
   if(particles.length > 300) particles.length = 300;
 }
 
+// Scout RMB: THREE instant straight-line laser beams. Each beam is a line segment
+// from the mech's muzzle out to LASER_BEAM_LEN, fanned at ±LASER_BEAM_SPREAD around
+// the aim (plus one dead-center). It is HITSCAN, not a projectile: every enemy
+// whose center lies within LASER_BEAM_HALF (+ its radius) of a beam line takes the
+// beam's full damage on the same frame it fires (point-to-segment distance test) —
+// so all monsters caught in a beam are hit simultaneously. The beam scope (length +
+// spread) is unchanged from the old 3-bolt burst this replaces.
+const LASER_BEAM_LEN = 147;      // = old bolt speed(420) * life(0.35): scope unchanged
+const LASER_BEAM_HALF = 4;       // beam half-thickness used for the hit test
+const LASER_BEAM_SPREAD = 0.18;  // fan offset per side (unchanged from old burst)
+function fireLaserBeams(){
+  const dmg = 3 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
+  const lx = player.x + Math.cos(player.angle) * 9;
+  const ly = player.y + Math.sin(player.angle) * 9;
+  for(const off of [-LASER_BEAM_SPREAD, 0, LASER_BEAM_SPREAD]){
+    const a = player.angle + off;
+    const cx = Math.cos(a), cy = Math.sin(a);
+    // Damage every enemy lying on this beam line — all at once, the frame it fires.
+    for(const en of entities){
+      if(en.type !== 'enemy' || en.dead) continue;
+      let t = (en.x - lx) * cx + (en.y - ly) * cy;   // project enemy onto the beam
+      t = clamp(t, 0, LASER_BEAM_LEN);
+      const px = lx + cx * t, py = ly + cy * t;       // nearest point on the beam
+      const dx = en.x - px, dy = en.y - py;
+      const reach = LASER_BEAM_HALF + en.radius;
+      if(dx*dx + dy*dy <= reach*reach){
+        en.hp -= dmg;
+        en.hitFlash = 0.08;
+        if(en.hp <= 0) killEnemy(en);
+      }
+    }
+    // Beam visual: a straight line from muzzle along the beam, flashing then fading.
+    if(particles.length < 300) particles.push({
+      beam:true, x:lx, y:ly, angle:a, len:LASER_BEAM_LEN,
+      vx:0, vy:0, color:'#4fc3f7', life:0.14, maxLife:0.14
+    });
+  }
+  emit(lx, ly, 6, '#4fc3f7', 40, 150, 0.18);
+  sfx.laser();
+}
+
 function fireWeapon(mx, my){
   // Priority: rocket > laser > homing > plasma > spread > minigun > default.
   // Rapid halves cooldown; Damage powerup doubles bullet damage (incl. rockets).
@@ -2205,9 +2236,9 @@ function fireWeapon(mx, my){
     // but each shot is weak — rewards landing many hits, punishes spray-at-range.
     // (AoE for Scout comes from the rocket/spread pickups, not the base weapon.)
     entities.push(createBullet(mx, my, player.angle, 'player', {
-      dmg: 0.7 * dmgMult, speed: 340, radius: 2, life: 1.0
+      dmg: 0.85 * dmgMult, speed: 360, radius: 2, life: 1.0
     }));
-    player.fireCooldown = 0.07 * rapidFactor;
+    player.fireCooldown = 0.06 * rapidFactor;
     emit(mx, my, 2, '#f1c40f', 30, 110, 0.14);
     sfx.shoot();
     return;
@@ -3530,7 +3561,23 @@ function drawGame(){
   for(const p of particles){
     const a = clamp(p.life / p.maxLife, 0, 1);
     ctx.globalAlpha = a;
-    if(p.ring){
+    if(p.beam){
+      // Scout's straight laser beam: a line from the muzzle along its angle,
+      // fading as it ages. Drawn as a translucent wide glow + a bright thin core
+      // so the three beams read as solid beams of light, not projectiles.
+      const ex = p.x + Math.cos(p.angle) * p.len;
+      const ey = p.y + Math.sin(p.angle) * p.len;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = a * 0.4;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(ex, ey); ctx.stroke();
+      ctx.strokeStyle = '#eaffff';
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = a;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(ex, ey); ctx.stroke();
+      ctx.lineCap = 'butt';
+    } else if(p.ring){
       // Expanding shockwave outline (e.g. the B-blast circle AoE): the radius
       // grows from r0 -> r1 as the particle ages, tracing the damage area.
       const r = p.r0 + (p.r1 - p.r0) * (1 - a);
