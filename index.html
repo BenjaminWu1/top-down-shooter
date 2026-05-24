@@ -1055,16 +1055,16 @@ function saveCleared(){
 // class-unique slot (slowmo / wall); the optional V slot is Tank-only. ----
 const CHARACTERS = {
   soldier: {
-    name:'SOLDIER', desc:'BALANCED · +25% DAMAGE',
-    color:'#3498db', hp:5, speed:90, damageMult:1.25, startShield:0,
-    skills:{ x:'sprint', c:'slowmo', f:'heal', b:'blast' },
-    skillLabels:{ x:'SPRINT', c:'SLOW', f:'HEAL', b:'BLAST' }
+    name:'SOLDIER', desc:'DEMOLITIONIST · GRENADES (RMB) · AOE',
+    color:'#3498db', hp:7, speed:92, damageMult:1.25, startShield:0,
+    skills:{ x:'sprint', c:'flameburst', v:'barrage', f:'heal', b:'blast' },
+    skillLabels:{ x:'SPRINT', c:'NAPALM', v:'BARRAGE', f:'HEAL', b:'BLAST' }
   },
   scout: {
-    name:'SCOUT', desc:'FRAGILE · FAST · BLINK',
-    color:'#f1c40f', hp:3, speed:130, damageMult:1.0, startShield:0,
-    skills:{ x:'sprint', c:'slowmo', f:'heal', b:'blast' },
-    skillLabels:{ x:'SPRINT', c:'SLOW', f:'HEAL', b:'BLAST' }
+    name:'SCOUT', desc:'ASSASSIN · BURST (RMB) · BLINK + DASH',
+    color:'#f1c40f', hp:4, speed:135, damageMult:1.1, startShield:0,
+    skills:{ x:'sprint', c:'blink', v:'dash', f:'heal', b:'blast' },
+    skillLabels:{ x:'SPRINT', c:'BLINK', v:'DASH', f:'HEAL', b:'BLAST' }
   },
   tank: {
     name:'BENJAMIN WU', desc:'HEAVY · +20% DAMAGE · FLAMETHROWER (RMB)',
@@ -1195,6 +1195,9 @@ function createPlayer(charKey){
     maxFuel: charKey === 'tank' ? 12 : 0,
     // New equipment timers (Minigun / Plasma / Homing missiles)
     minigunTime:0, plasmaTime:0, homingTime:0,
+    // Right-mouse secondary-attack cooldowns: Soldier grenade-launcher,
+    // Scout close-range pellet burst (Tank's flamethrower uses fuel instead).
+    grenadeCd:0, burstCd:0,
     // Passive powerups (temporary buffs)
     speedTime:0, damageTime:0, magnetTime:0, scoreTime:0,
     // X-skill sprint buff timer (+30% move speed for 5s). Stacks multiplicatively
@@ -1204,9 +1207,10 @@ function createPlayer(charKey){
     // (V replaced it), but the field/timer is harmless and left for easy revival.
     flameburstTime:0,
     // Special-skill cooldowns. X (sprint), F (heal) and B (blast) are universal;
-    // C is class-specific (per CHARACTERS.skills); the optional V slot is Tank-only.
+    // C is class-specific (per CHARACTERS.skills); each class now also fills the V
+    // slot (Soldier barrage / Scout dash / Tank vsummon).
     skillCd:{ x:0, c:0, v:0, f:0, b:0 },
-    skillCdMax:{ x:4, c:12, blink:5, wall:18, summon:25, vsummon:25, flameburst:20, sprint:20, heal:20, blast:20 },
+    skillCdMax:{ x:4, c:12, blink:7, dash:5, wall:18, summon:25, vsummon:25, flameburst:20, barrage:24, sprint:20, heal:20, blast:20 },
     hitFlash:0, invuln:0, frame:0, frameT:0, dead:false
   };
 }
@@ -1539,6 +1543,27 @@ function triggerSkill(name, dx, dy, mag){
     sfx.rocket();
     return true;
   }
+  if(name === 'barrage'){
+    // Soldier's V: lob a fan of 5 grenade-style shells with staggered fuses, so
+    // the blasts walk across an arc instead of stacking into one giant nuke.
+    // Reuses the exact bullet shape from the 'grenade' handler (isGrenade +
+    // explosive -> detonates on contact OR at end of fuse).
+    const gd = 3 * (player.damageMult || 1);
+    for(let i = 0; i < 5; i++){
+      const a = player.angle + (i - 2) * 0.16;   // ~9° between shells, ~37° fan
+      entities.push({
+        type:'bullet', owner:'player', x:player.x, y:player.y,
+        vx:Math.cos(a) * 170, vy:Math.sin(a) * 170,
+        angle:a, radius:3, sprite:SPR.bullet_rocket,
+        dmg:gd, life:rand(0.45, 0.75), isGrenade:true,
+        explosive:true, explodeRadius:30, explodeDmg:gd, dead:false
+      });
+    }
+    emit(player.x, player.y, 14, '#e67e22', 40, 130, 0.35);
+    shakeTime = 0.18; shakeAmt = 3;
+    sfx.rocket();
+    return true;
+  }
   return false;
 }
 
@@ -1720,7 +1745,7 @@ function updatePlaying(dt){
   // Aim from the cursor's WORLD position (mouse is in screen coords).
   player.angle = Math.atan2((mouse.y + camY) - player.y, (mouse.x + camX) - player.x);
 
-  // ---- Special skills: X (sprint) / C (class) / F (heal) / B (blast) / V (Tank) ----
+  // ---- Special skills: X (sprint) / C (class) / F (heal) / B (blast) / V (class) ----
   if(player.skillCd.x > 0) player.skillCd.x -= dt;
   if(player.skillCd.c > 0) player.skillCd.c -= dt;
   if(player.skillCd.v > 0) player.skillCd.v -= dt;
@@ -1755,6 +1780,8 @@ function updatePlaying(dt){
   if(player.minigunTime > 0) player.minigunTime -= dt;
   if(player.plasmaTime > 0) player.plasmaTime -= dt;
   if(player.homingTime > 0) player.homingTime -= dt;
+  if(player.grenadeCd > 0) player.grenadeCd -= dt;
+  if(player.burstCd > 0) player.burstCd -= dt;
 
   if(mouse.down && player.fireCooldown <= 0){
     const mx = player.x + Math.cos(player.angle) * 9;
@@ -1766,6 +1793,25 @@ function updatePlaying(dt){
   if(player.char === 'tank' && mouse.rdown && player.fuel > 0){
     player.fuel = Math.max(0, player.fuel - dt);
     fireFlamethrower(dt);
+  }
+  // ---- Soldier's secondary: grenade launcher (right mouse) ----
+  if(player.char === 'soldier' && mouse.rdown && player.grenadeCd <= 0){
+    triggerSkill('grenade', 0, 0, 0);   // reuse the existing grenade handler
+    player.grenadeCd = 0.7;
+  }
+  // ---- Scout's secondary: close-range pellet burst (right mouse) ----
+  if(player.char === 'scout' && mouse.rdown && player.burstCd <= 0){
+    const bMult = (player.damageTime > 0 ? 2 : 1) * (player.damageMult || 1);
+    const bx = player.x + Math.cos(player.angle) * 9;
+    const by = player.y + Math.sin(player.angle) * 9;
+    for(const off of [-0.18, 0, 0.18]){
+      entities.push(createBullet(bx, by, player.angle + off, 'player', {
+        dmg: 1.4 * bMult, speed: 300, radius: 2, life: 0.35
+      }));
+    }
+    player.burstCd = 0.5;
+    emit(bx, by, 4, '#f1c40f', 40, 130, 0.18);
+    sfx.shoot();
   }
 
   if(player.invuln > 0) player.invuln -= dt;
@@ -2079,15 +2125,15 @@ function fireWeapon(mx, my){
 
   // ---- Class default (no powerup active) ----
   if(player.char === 'scout'){
-    // Artillery: slow-firing AoE shell with long range, small blast on impact.
+    // Assassin SMG: fast, light, low-damage bullets. High sustained DPS up close,
+    // but each shot is weak — rewards landing many hits, punishes spray-at-range.
+    // (AoE for Scout comes from the rocket/spread pickups, not the base weapon.)
     entities.push(createBullet(mx, my, player.angle, 'player', {
-      dmg: 1 * dmgMult, speed: 175,
-      sprite: SPR.bullet_rocket, radius: 3, life: 2.8,
-      explosive: true, explodeRadius: 22
+      dmg: 0.7 * dmgMult, speed: 340, radius: 2, life: 1.0
     }));
-    player.fireCooldown = 0.55 * rapidFactor;
-    emit(mx, my, 4, '#e67e22', 30, 100, 0.22);
-    sfx.rocket();
+    player.fireCooldown = 0.07 * rapidFactor;
+    emit(mx, my, 2, '#f1c40f', 30, 110, 0.14);
+    sfx.shoot();
     return;
   }
   if(player.char === 'tank'){
@@ -3442,6 +3488,9 @@ function drawPlayer(p){
   else if(p.rapidTime > 0){ gunCol = '#a04000'; tipCol = '#e67e22'; }
   // Tank firing the flamethrower: dark nozzle + red-orange tip
   if(p.char === 'tank' && mouse.rdown && p.fuel > 0){ gunCol = '#1a1a1a'; tipCol = '#e74c3c'; }
+  // Soldier grenade launcher / Scout pellet burst: light the barrel while RMB held
+  if(p.char === 'soldier' && mouse.rdown && p.grenadeCd <= 0){ gunCol = '#5d4037'; tipCol = '#e67e22'; }
+  if(p.char === 'scout' && mouse.rdown){ gunCol = '#7d6608'; tipCol = '#f1c40f'; }
   if(p.damageTime > 0){ tipCol = '#e74c3c'; }  // Damage buff: red barrel tip
   ctx.fillStyle = gunCol;
   ctx.fillRect(0, -1, 8, 3);
@@ -3834,6 +3883,7 @@ function drawSkillHUD(){
   const ch = CHARACTERS[player.char] || CHARACTERS.soldier;
   const skillColor = { dash:'#f1c40f', blink:'#f1c40f', slowmo:'#3498db', wall:'#27ae60',
                        nuke:'#e74c3c', grenade:'#e67e22', summon:'#f1c40f', vsummon:'#f39c12', flameburst:'#e67e22',
+                       barrage:'#e67e22',
                        sprint:'#1abc9c', heal:'#2ecc71', blast:'#e67e22' };
   const skills = [
     { key:'X', label:ch.skillLabels.x, cd:player.skillCd.x, max:player.skillCdMax[ch.skills.x], color:skillColor[ch.skills.x] },
