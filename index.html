@@ -1682,6 +1682,22 @@ function explode(x, y, radius, dmg, fromPlayer){
 // ============================================================
 // SPAWNING & LEVEL FLOW
 // ============================================================
+// Occasionally promote a freshly-spawned regular into an ELITE "mini-boss":
+// tougher (3x HP), bigger (1.6x radius, ~1.5x sprite), worth 4x score, slightly
+// slower. Chance climbs with level (~2% at L1 -> capped 18% from ~L40) so the
+// late game is peppered with mini-bosses. Bosses and throwaway swarmers are
+// never promoted. drawEnemy renders a pulsing gold halo around elites.
+function maybeElite(e){
+  if(!e || e.isBoss) return;
+  if(Math.random() < Math.min(0.18, 0.02 + levelIdx * 0.004)){
+    e.elite = true;
+    e.hp = e.maxHp = Math.ceil(e.maxHp * 3);
+    e.radius = Math.round(e.radius * 1.6);
+    e.score = e.score * 4;
+    e.speed *= 0.9;
+  }
+}
+
 function spawnEnemyAtEdge(kind){
   const edge = Math.floor(Math.random()*4);
   const m = 14;
@@ -1696,7 +1712,9 @@ function spawnEnemyAtEdge(kind){
       entities.push(createEnemy(kind, x + rand(-8, 8), y + rand(-8, 8)));
     }
   } else {
-    entities.push(createEnemy(kind, x, y));
+    const e = createEnemy(kind, x, y);
+    maybeElite(e);
+    entities.push(e);
   }
 }
 
@@ -2768,8 +2786,10 @@ function killEnemy(en){
       entities.push(e2);
     }
   }
-  // Random drop from non-boss (9 equipment + 5 powerups, weighted)
-  if(!en.isBoss && Math.random() < 0.22){
+  // Random drop from non-boss (9 equipment + 5 powerups, weighted). Elite
+  // mini-bosses drop far more often (only the gate changes — the pool weights
+  // stay summed to 1.0 so validator C5 is unaffected).
+  if(!en.isBoss && Math.random() < (en.elite ? 0.55 : 0.22)){
     // Drop pool. Weights MUST sum to 1.0 for the pickWeighted loop below to
     // give every entry its intended share — appending after the sum reaches 1.0
     // means the appended item never drops (the previous fuel bug). Tank uses a
@@ -3793,18 +3813,32 @@ function drawEnemy(e){
     ctx.stroke();
     ctx.globalAlpha = 1;
   }
+  // Elite "mini-boss" aura: a pulsing gold ring at the enlarged hit radius.
+  if(e.elite){
+    ctx.strokeStyle = '#f1c40f';
+    ctx.globalAlpha = 0.45 + 0.35 * Math.sin(stateTime * 6);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(Math.floor(e.x), Math.floor(e.y), e.radius + 2, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  // Elites draw ~1.5x bigger so the sprite roughly matches the enlarged hitbox.
+  if(e.elite){ ctx.save(); ctx.translate(e.x, e.y); ctx.scale(1.5, 1.5); ctx.translate(-e.x, -e.y); }
   if(e.hitFlash > 0){
     drawSpriteTinted(sp, Math.floor(e.x - sp.w/2), Math.floor(e.y - sp.h/2), '#fff');
   } else {
     drawSpriteCentered(sp, e.x, e.y);
   }
-  // HP bar for multi-HP non-boss
+  if(e.elite) ctx.restore();
+  // HP bar for multi-HP non-boss (gold + wider + lifted for elites)
   if(e.maxHp > 1 && e.hp < e.maxHp && !e.isBoss){
-    const w = sp.w;
+    const w = e.elite ? Math.round(sp.w * 1.5) : sp.w;
+    const topY = (e.elite ? Math.floor(e.y - (sp.h * 1.5) / 2) : Math.floor(e.y - sp.h / 2)) - 3;
     ctx.fillStyle = '#222';
-    ctx.fillRect(Math.floor(e.x - w/2), Math.floor(e.y - sp.h/2) - 3, w, 2);
-    ctx.fillStyle = '#e74c3c';
-    ctx.fillRect(Math.floor(e.x - w/2), Math.floor(e.y - sp.h/2) - 3, Math.floor(w * (e.hp / e.maxHp)), 2);
+    ctx.fillRect(Math.floor(e.x - w/2), topY, w, 2);
+    ctx.fillStyle = e.elite ? '#f1c40f' : '#e74c3c';
+    ctx.fillRect(Math.floor(e.x - w/2), topY, Math.floor(w * (e.hp / e.maxHp)), 2);
   }
 }
 
