@@ -1546,9 +1546,7 @@ function triggerSkill(name, dx, dy, mag){
     for(const en of targets){
       if(!en || en.dead) continue;
       try {
-        en.hp = (typeof en.hp === 'number' ? en.hp : 1) - (en.isBoss ? 12 : 999);
-        en.hitFlash = 0.12;
-        if(en.hp <= 0) killEnemy(en);
+        damageEnemy(en, en.isBoss ? 12 : 999, true);
       } catch(err){
         console.error('[shooter] nuke kill error on', en && en.kind, err);
         if(en) en.dead = true;
@@ -1648,6 +1646,21 @@ function soldierLifesteal(dmg){
   player.hp = Math.min(player.maxHp, player.hp + dmg * SOLDIER_LIFESTEAL);
 }
 
+// Single chokepoint for ALL damage dealt to enemies. Returns true if the hit was
+// fully absorbed — the enemy is already dead/killed, OR its boss `invulnT` shield
+// is up (set by bossInvuln) — so the caller may skip follow-up effects. Applies
+// the hit-flash, Syed's lifesteal (only when fromPlayer), and the kill. Routing
+// every hit through here is what makes boss brief-invincibility work everywhere.
+function damageEnemy(en, dmg, fromPlayer){
+  if(!en || en.dead || en._killed) return true;
+  if(en.invulnT > 0){ en.hitFlash = 0.05; return true; }   // invuln boss absorbs it
+  en.hp -= dmg;
+  en.hitFlash = 0.07;
+  if(fromPlayer) soldierLifesteal(dmg);
+  if(en.hp <= 0) killEnemy(en);
+  return false;
+}
+
 function explode(x, y, radius, dmg, fromPlayer){
   emit(x, y, 22, '#f39c12', 60, 180, 0.6);
   emit(x, y, 12, '#fff', 40, 150, 0.4);
@@ -1659,10 +1672,7 @@ function explode(x, y, radius, dmg, fromPlayer){
   for(const en of targets){
     if(en.dead) continue;
     if(dist2({x,y}, en) < radius*radius){
-      en.hp -= dmg;
-      en.hitFlash = 0.08;
-      if(fromPlayer) soldierLifesteal(dmg);
-      if(en.hp <= 0) killEnemy(en);
+      damageEnemy(en, dmg, fromPlayer);
     }
   }
 }
@@ -1954,9 +1964,7 @@ function updatePlaying(dt){
         if(b.hitSet && b.hitSet.has(en)) continue;
         const dr = b.radius + en.radius;
         if(dist2(b, en) < dr*dr){
-          en.hp -= b.dmg;
-          en.hitFlash = 0.07;
-          if(!b.fromAlly) soldierLifesteal(b.dmg);
+          damageEnemy(en, b.dmg, !b.fromAlly);
           emit(b.x, b.y, 4, '#fff', 30, 90, 0.25);
           if(b.explosive){
             explode(b.x, b.y, b.explodeRadius, b.dmg, !b.fromAlly);
@@ -1968,7 +1976,6 @@ function updatePlaying(dt){
             b.dead = true;
             sfx.hit();
           }
-          if(en.hp <= 0) killEnemy(en);
           if(!b.pierce) break;
         }
       }
@@ -2076,10 +2083,7 @@ function tickFlameburst(dt){
   for(const en of entities){
     if(en.type !== 'enemy' || en.dead) continue;
     if(dist2(player, en) < (radius + en.radius) * (radius + en.radius)){
-      en.hp -= dps * dt;
-      en.hitFlash = 0.06;
-      soldierLifesteal(dps * dt);
-      if(en.hp <= 0) killEnemy(en);
+      damageEnemy(en, dps * dt, true);
     }
   }
   // Spray flame particles along the ring (count scaled by dt so it looks
@@ -2121,9 +2125,7 @@ function fireFlamethrower(dt){
     while(diff >  Math.PI) diff -= 2 * Math.PI;
     while(diff < -Math.PI) diff += 2 * Math.PI;
     if(Math.abs(diff) > halfAngle) continue;
-    en.hp -= dps * dt;
-    en.hitFlash = 0.06;
-    if(en.hp <= 0) killEnemy(en);
+    damageEnemy(en, dps * dt, true);
   }
   // Visual flame particles spraying down the cone.
   for(let i = 0; i < 4; i++){
@@ -2163,10 +2165,7 @@ function fireKatana(dt){
     while(diff >  Math.PI) diff -= 2 * Math.PI;
     while(diff < -Math.PI) diff += 2 * Math.PI;
     if(Math.abs(diff) > KATANA_HALF) continue;
-    en.hp -= dps * dt;
-    en.hitFlash = 0.06;
-    soldierLifesteal(dps * dt);
-    if(en.hp <= 0) killEnemy(en);
+    damageEnemy(en, dps * dt, true);
   }
   // Slash visual: bright steel streaks sweeping the obtuse front arc.
   for(let i = 0; i < 3; i++){
@@ -2208,9 +2207,7 @@ function fireLaserBeams(){
       const dx = en.x - px, dy = en.y - py;
       const reach = LASER_BEAM_HALF + en.radius;
       if(dx*dx + dy*dy <= reach*reach){
-        en.hp -= dmg;
-        en.hitFlash = 0.08;
-        if(en.hp <= 0) killEnemy(en);
+        damageEnemy(en, dmg, true);
       }
     }
     // Beam visual: a straight line from muzzle along the beam, flashing then fading.
@@ -2493,10 +2490,8 @@ function swordAllyAttack(s){
     while(diff > Math.PI) diff -= Math.PI * 2;
     while(diff < -Math.PI) diff += Math.PI * 2;
     if(Math.abs(diff) > half) continue;
-    en.hp -= s.swingDmg;
-    en.hitFlash = 0.08;
+    damageEnemy(en, s.swingDmg, false);
     emit(en.x, en.y, 4, '#fff', 30, 90, 0.25);
-    if(en.hp <= 0) killEnemy(en);
     hit = true;
   }
   if(hit) sfx.hit();
@@ -2572,10 +2567,8 @@ function meleeAllyAttack(s){
     while(diff > Math.PI) diff -= Math.PI * 2;
     while(diff < -Math.PI) diff += Math.PI * 2;
     if(Math.abs(diff) > half) continue;
-    en.hp -= s.swingDmg;
-    en.hitFlash = 0.08;
+    damageEnemy(en, s.swingDmg, false);
     emit(en.x, en.y, 4, col, 30, 90, 0.25);
-    if(en.hp <= 0) killEnemy(en);
     hit = true;
   }
   if(hit) sfx.hit();
@@ -2676,9 +2669,7 @@ function updatePoisonAlly(s, dt){
     if(en.type !== 'enemy' || en.dead) continue;
     const rr = s.auraRadius + en.radius;
     if(dist2(s, en) < rr * rr){
-      en.hp -= dps * dt;
-      en.hitFlash = 0.05;
-      if(en.hp <= 0) killEnemy(en);
+      damageEnemy(en, dps * dt, false);
     }
   }
   // Rising toxic puffs scattered through the aura.
