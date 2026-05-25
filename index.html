@@ -1061,6 +1061,7 @@ let player = null;
 let allies = [];              // the chosen assistant entities live in here (also in `entities`)
 let entities = [];
 let particles = [];
+let groundFields = [];   // boss poison-gas pools: {x,y,radius,life,maxLife}
 let levelIdx = 0;
 let levelData = null;
 let spawnTimer = 0;
@@ -1741,6 +1742,80 @@ function spawnBoss(kind){
   shakeTime = 0.4; shakeAmt = 5;
 }
 
+// ============================================================
+// REUSABLE BOSS ABILITIES — layered onto the existing boss AIs, escalating by
+// levelIdx. All are no-ops for clones (so a cloned boss can't recursively clone
+// / summon / shield and balloon the entity count). They lean on existing
+// primitives: damageEnemy's invulnT gate, spawnEnemyAtEdge/createEnemy, emit,
+// and the groundFields poison-pool list.
+// ============================================================
+// Brief invincibility on a cooldown: shrugs off all damage for 1.2s every ~8s.
+// damageEnemy absorbs hits while invulnT>0; updateEnemy ticks invulnT down;
+// drawEnemy flashes the boss blue. (Set invulnT elsewhere too, e.g. reaper dash.)
+function bossInvuln(e, dt){
+  if(e.isClone || e.invulnT > 0) return;
+  e.invulnCd = (e.invulnCd || 0) - dt;
+  if(e.invulnCd <= 0){
+    e.invulnT = 1.2;
+    e.invulnCd = 8;
+    emit(e.x, e.y, 16, '#5dade2', 20, 80, 0.5);
+    sfx.shieldHit();
+  }
+}
+// Summon a small pack of exploding minions beside the boss (they rush + detonate).
+function bossSummonExploders(e, dt, n){
+  if(e.isClone) return;
+  e.emCd = (e.emCd || 0) - dt;
+  if(e.emCd <= 0){
+    e.emCd = 5;
+    if(entities.length < 480){
+      for(let i = 0; i < (n || 3); i++){
+        const a = Math.random() * Math.PI * 2;
+        entities.push(createEnemy('exploder', e.x + Math.cos(a)*18, e.y + Math.sin(a)*18));
+      }
+      emit(e.x, e.y, 16, '#e67e22', 25, 110, 0.45);
+    }
+  }
+}
+// Spawn a weak (25%-HP) NON-boss copy running the same AI. isBoss MUST stay false
+// so clones don't pollute the HUD boss-bar / boss loot / win logic. Clones can't
+// clone (guarded) and don't use boss abilities (the isClone guards above).
+function bossSpawnClone(e){
+  if(e.isClone || entities.length >= 480) return;
+  const c = createEnemy(e.kind, e.x + rand(-24, 24), e.y + rand(-24, 24));
+  c.hp = c.maxHp = Math.max(1, Math.round(e.maxHp * 0.25));
+  c.score = Math.round((e.score || 100) * 0.3);
+  c.isClone = true;
+  c.isBoss = false;
+  c.x = clamp(c.x, 14, worldW - 14);
+  c.y = clamp(c.y, 14, worldH - 16);
+  emit(c.x, c.y, 18, '#8e44ad', 25, 110, 0.5);
+  entities.push(c);
+}
+// Drop a small lingering poison-gas pool at the player's feet (must move out of it).
+function bossGasBomb(e, dt){
+  if(e.isClone) return;
+  e.gasCd = (e.gasCd || 0) - dt;
+  if(e.gasCd <= 0){
+    e.gasCd = 5.5;
+    if(groundFields.length < 12){
+      groundFields.push({ x: player.x, y: player.y, radius: 34, life: 3, maxLife: 3 });
+      emit(player.x, player.y, 18, '#27ae60', 20, 70, 0.6);
+      sfx.explode();
+    }
+  }
+}
+// Self-heal 5% of max HP on a cooldown (green sparkle), capped at maxHp.
+function bossHeal(e, dt){
+  if(e.isClone) return;
+  e.healCd = (e.healCd || 0) - dt;
+  if(e.healCd <= 0){
+    e.healCd = 6;
+    e.hp = Math.min(e.maxHp, e.hp + Math.ceil(e.maxHp * 0.05));
+    emit(e.x, e.y, 14, '#2ecc71', 20, 80, 0.5);
+  }
+}
+
 function startLevel(idx){
   levelIdx = idx;
   levelData = LEVELS[idx];
@@ -1759,6 +1834,7 @@ function startLevel(idx){
   camX = 0; camY = 0;
   entities = entities.filter(e => e.type === 'player');
   particles = [];
+  groundFields = [];
   if(!player){ player = createPlayer(selectedChar); entities.push(player); }
   else { player.x = worldW/2; player.y = worldH/2; player.invuln = 1.2; }
   // Refresh the chosen assistants each level: keep survivors (full HP), recreate
@@ -1794,6 +1870,7 @@ function startGame(){
   allies = [];
   spawnSelectedAssistants();
   particles = [];
+  groundFields = [];
   startLevel(0);
 }
 
@@ -1987,6 +2064,19 @@ function updatePlaying(dt){
     else if(e.type === 'sword_ally') updateSwordAlly(e, dt);
     if(e.hitFlash > 0) e.hitFlash -= dt;
   }
+
+  // ---- Boss poison-gas pools: small lingering AoE that drains the player ----
+  for(const gf of groundFields){
+    gf.life -= dt;
+    const rr = gf.radius + player.radius;
+    if(player.hp > 0 && player.invuln <= 0 && dist2(gf, player) < rr*rr) damagePlayer(1);
+    if(Math.random() < dt * 10 && particles.length < 300){
+      const ga = Math.random() * Math.PI * 2, gr = Math.random() * gf.radius;
+      particles.push({ x: gf.x + Math.cos(ga)*gr, y: gf.y + Math.sin(ga)*gr,
+                       vx: 0, vy: -12, life: 0.5, maxLife: 0.5, color: '#2ecc71', size: 1 });
+    }
+  }
+  groundFields = groundFields.filter(g => g.life > 0);
 
   // ---- Collisions ----
   for(const b of entities){
@@ -2824,6 +2914,7 @@ function killEnemy(en){
 // ENEMY AI
 // ============================================================
 function updateEnemy(e, dt){
+  if(e.invulnT > 0) e.invulnT -= dt;   // tick down any brief-invincibility shield
   if(e.kind === 'bruiser')  return updateBruiser(e, dt);
   if(e.kind === 'sniper')   return updateSniper(e, dt);
   if(e.kind === 'splitter' || e.kind === 'splitter_mid') return updateSplitter(e, dt);
@@ -3084,6 +3175,8 @@ function updateSummoner(e, dt){
 // OVERLORD: 3-phase
 function updateOverlord(boss, dt){
   boss.phaseT += dt;
+  if(levelIdx >= 21) bossInvuln(boss, dt);   // L22+: brief invincibility shield
+  if(levelIdx >= 23) bossHeal(boss, dt);     // L24+: periodic self-heal
   if(boss.phaseT > 4){
     boss.phaseT = 0;
     boss.phase = (boss.phase + 1) % 3;
@@ -3165,9 +3258,15 @@ function updateTwin(e, dt){
 // REAPER (L7): high-speed dasher, leaves slash-arcs behind. Cycle: stalk → dash → cooldown.
 function updateReaper(e, dt){
   e.phaseT += dt;
+  if(levelIdx >= 30) bossGasBomb(e, dt);     // L31+: poison-gas bombs
+  if(levelIdx >= 32){                         // L33+: spawn weak clones of itself
+    e.cloneCd = (e.cloneCd || 0) - dt;
+    if(e.cloneCd <= 0){ e.cloneCd = 9; bossSpawnClone(e); }
+  }
   const a = Math.atan2(player.y - e.y, player.x - e.x);
   if(e.phase === 1){
-    // Mid-dash: travel fast and shed sparks
+    // Mid-dash: travel fast, shed sparks, and phase out (brief invincibility).
+    e.invulnT = Math.max(e.invulnT || 0, 0.2);
     e.vx = Math.cos(e.chargeAngle) * e.speed * 4.0;
     e.vy = Math.sin(e.chargeAngle) * e.speed * 4.0;
     emit(e.x, e.y, 2, '#27ae60', 20, 60, 0.25);
@@ -3240,6 +3339,9 @@ function updateBomber(e, dt){
 // PHANTOM (L9): teleporting summoner of clones. Real boss is darker; clones flicker.
 function updatePhantom(e, dt){
   e.phaseT += dt;
+  if(levelIdx >= 36) bossGasBomb(e, dt);            // L37+: poison-gas bombs
+  if(levelIdx >= 37) bossHeal(e, dt);               // L38+: self-heal
+  if(levelIdx >= 38) bossSummonExploders(e, dt, 3); // L39+: exploding-minion packs
   const dx = player.x - e.x, dy = player.y - e.y;
   const d = Math.hypot(dx, dy);
   const a = Math.atan2(dy, dx);
@@ -3273,6 +3375,8 @@ function updatePhantom(e, dt){
 // NEMESIS (L10): four-phase final boss.
 function updateNemesis(boss, dt){
   boss.phaseT += dt;
+  if(levelIdx >= 26) bossGasBomb(boss, dt);            // L27+: poison-gas bombs
+  if(levelIdx >= 28) bossSummonExploders(boss, dt, 3); // L29+: exploding-minion packs
   if(boss.phaseT > 4.5){
     boss.phaseT = 0;
     boss.phase = (boss.phase + 1) % 4;
@@ -3650,6 +3754,20 @@ function drawPause(){
 // World-space drawing only: entities and particles. HUD is screen-space and
 // is called by `draw()` after the camera translate is restored.
 function drawGame(){
+  // Boss poison-gas pools: translucent green discs drawn beneath the entities.
+  for(const gf of groundFields){
+    const a = clamp(gf.life / gf.maxLife, 0, 1);
+    ctx.globalAlpha = 0.16 + 0.12 * a;
+    ctx.fillStyle = '#27ae60';
+    ctx.beginPath();
+    ctx.arc(Math.floor(gf.x), Math.floor(gf.y), gf.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.4 * a;
+    ctx.strokeStyle = '#2ecc71';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
   const list = entities.slice().sort((a,b) => a.y - b.y);
   for(const e of list){
     if(e.dead) continue;
@@ -3825,7 +3943,10 @@ function drawEnemy(e){
   }
   // Elites draw ~1.5x bigger so the sprite roughly matches the enlarged hitbox.
   if(e.elite){ ctx.save(); ctx.translate(e.x, e.y); ctx.scale(1.5, 1.5); ctx.translate(-e.x, -e.y); }
-  if(e.hitFlash > 0){
+  if(e.invulnT > 0 && Math.floor(stateTime * 20) % 2){
+    // Brief-invincibility shield: flash the boss blue (it's absorbing all damage).
+    drawSpriteTinted(sp, Math.floor(e.x - sp.w/2), Math.floor(e.y - sp.h/2), '#5dade2');
+  } else if(e.hitFlash > 0){
     drawSpriteTinted(sp, Math.floor(e.x - sp.w/2), Math.floor(e.y - sp.h/2), '#fff');
   } else {
     drawSpriteCentered(sp, e.x, e.y);
