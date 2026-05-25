@@ -1029,17 +1029,17 @@ const LEVELS = [
   { total:190, rate:0.17, mix:[['tank',0.34],['shooter',0.34],['charger',0.22],['exploder',0.1]],                                         boss:'nemesis',  bossName:'VOIDLORD'    },
   { total:220, rate:0.16, mix:[['tank',0.36],['shooter',0.34],['charger',0.22],['exploder',0.08]],                                        boss:'nemesis',  bossName:'ANNIHILATOR' },
   // ---- Tier 7: L31-L35 — REAPER (high-speed dasher). 3x arena. Post-finale escalation. ----
-  { total:230, rate:0.155, mix:[['tank',0.36],['shooter',0.34],['charger',0.22],['exploder',0.08]],                                       boss:'reaper'  },
-  { total:245, rate:0.15,  mix:[['tank',0.38],['shooter',0.32],['charger',0.22],['exploder',0.08]],                                       boss:'reaper',  bossName:'HARVESTER'   },
-  { total:260, rate:0.145, mix:[['tank',0.38],['shooter',0.34],['charger',0.2],['exploder',0.08]],                                        boss:'reaper',  bossName:'SOULREAPER'  },
-  { total:280, rate:0.14,  mix:[['tank',0.4],['shooter',0.32],['charger',0.2],['exploder',0.08]],                                         boss:'reaper',  bossName:'DEATHSCYTHE' },
-  { total:300, rate:0.135, mix:[['tank',0.4],['shooter',0.34],['charger',0.18],['exploder',0.08]],                                        boss:'reaper',  bossName:'OBLIVION'    },
+  { total:230, rate:0.155, mix:[['tank',0.36],['shooter',0.34],['charger',0.22],['exploder',0.08]],                                       boss:'reaper',  midBoss:'twin'  },
+  { total:245, rate:0.15,  mix:[['tank',0.38],['shooter',0.32],['charger',0.22],['exploder',0.08]],                                       boss:'reaper',  midBoss:'bomber',  bossName:'HARVESTER'   },
+  { total:260, rate:0.145, mix:[['tank',0.38],['shooter',0.34],['charger',0.2],['exploder',0.08]],                                        boss:'reaper',  midBoss:'splitter',  bossName:'SOULREAPER'  },
+  { total:280, rate:0.14,  mix:[['tank',0.4],['shooter',0.32],['charger',0.2],['exploder',0.08]],                                         boss:'reaper',  midBoss:'bomber',  bossName:'DEATHSCYTHE' },
+  { total:300, rate:0.135, mix:[['tank',0.4],['shooter',0.34],['charger',0.18],['exploder',0.08]],                                        boss:'reaper',  midBoss:'twin',  bossName:'OBLIVION'    },
   // ---- Tier 8: L36-L40 — PHANTOM (teleporting clone-summoner). 3x arena. Final tier. ----
-  { total:320, rate:0.13,  mix:[['tank',0.42],['shooter',0.32],['charger',0.18],['exploder',0.08]],                                       boss:'phantom' },
-  { total:345, rate:0.125, mix:[['tank',0.42],['shooter',0.34],['charger',0.16],['exploder',0.08]],                                       boss:'phantom', bossName:'WRAITH'      },
-  { total:370, rate:0.12,  mix:[['tank',0.44],['shooter',0.32],['charger',0.16],['exploder',0.08]],                                       boss:'phantom', bossName:'SPECTER'     },
-  { total:400, rate:0.115, mix:[['tank',0.44],['shooter',0.34],['charger',0.14],['exploder',0.08]],                                       boss:'phantom', bossName:'REVENANT'    },
-  { total:450, rate:0.11,  mix:[['tank',0.46],['shooter',0.34],['charger',0.14],['exploder',0.06]],                                       boss:'phantom', bossName:'APOCALYPSE'  }
+  { total:320, rate:0.13,  mix:[['tank',0.42],['shooter',0.32],['charger',0.18],['exploder',0.08]],                                       boss:'phantom',  midBoss:'bomber' },
+  { total:345, rate:0.125, mix:[['tank',0.42],['shooter',0.34],['charger',0.16],['exploder',0.08]],                                       boss:'phantom', midBoss:'twin',  bossName:'WRAITH'      },
+  { total:370, rate:0.12,  mix:[['tank',0.44],['shooter',0.32],['charger',0.16],['exploder',0.08]],                                       boss:'phantom', midBoss:'reaper',  bossName:'SPECTER'     },
+  { total:400, rate:0.115, mix:[['tank',0.44],['shooter',0.34],['charger',0.14],['exploder',0.08]],                                       boss:'phantom', midBoss:'bomber',  bossName:'REVENANT'    },
+  { total:450, rate:0.11,  mix:[['tank',0.46],['shooter',0.34],['charger',0.14],['exploder',0.06]],                                       boss:'phantom', midBoss:'reaper',  bossName:'APOCALYPSE'  }
 ];
 
 const BOSS_NAMES = {
@@ -1066,12 +1066,14 @@ let levelData = null;
 let spawnTimer = 0;
 let spawnedCount = 0;
 let bossSpawned = false;
+let midbossSpawned = false;   // L31-40: the mid-level transitional boss has been released
 let score = 0;
 let highScore = parseInt(localStorage.getItem('shooter_high') || '0', 10);
 let shakeTime = 0;
 let shakeAmt = 0;
 let stateTime = 0;
 let bossSpawnPulse = 0;
+let bossSpawnName = '';   // name shown in the boss-arrival flash (mid-boss or end boss)
 let slowMoTime = 0;          // global powerup — slows enemies & enemy bullets
 let paused = false;          // Space pauses gameplay; Space or a click resumes
 
@@ -1713,6 +1715,9 @@ function spawnBoss(kind){
   b.maxHp = b.hp;
   b.speed = b.speed * spdScale;
   entities.push(b);
+  // Flash the name of the boss that just arrived. The end boss uses the level's
+  // bossName override; a mid-boss (different kind) uses its own BOSS_NAMES entry.
+  bossSpawnName = (kind === levelData.boss ? (levelData.bossName || BOSS_NAMES[kind]) : BOSS_NAMES[kind]) || 'BOSS';
   bossSpawnPulse = 1;
   sfx.bossSpawn();
   shakeTime = 0.4; shakeAmt = 5;
@@ -1724,6 +1729,7 @@ function startLevel(idx){
   spawnTimer = 0.6;
   spawnedCount = 0;
   bossSpawned = false;
+  midbossSpawned = false;
   paused = false;
   // World sizing by 10-level block — arena AREA GROWS with the block:
   // L1-10 = 1x (480x270, no camera), L11-20 = 2x, L21-30 = 3x, L31-40 = 4x.
@@ -1928,6 +1934,15 @@ function updatePlaying(dt){
       spawnTimer = levelData.rate * rand(0.7, 1.3);
     }
   }
+  // L31-40 mid-level transitional boss: a DIFFERENT boss kind released at ~50%
+  // spawn progress, fought amid the wave before the tier's end boss arrives. It
+  // is isBoss (so it does NOT delay the end-boss gate below, which only counts
+  // non-boss regulars) and must die before the level can complete (the win check
+  // already requires zero living enemies of any kind).
+  if(levelData.midBoss && !midbossSpawned && spawnedCount >= Math.floor(levelData.total * 0.5)){
+    midbossSpawned = true;
+    spawnBoss(levelData.midBoss);
+  }
   // Spawn boss after all regular enemies have spawned and most are dead
   if(!bossSpawned && spawnedCount >= levelData.total){
     const aliveRegular = entities.filter(e => e.type === 'enemy' && !e.isBoss).length;
@@ -2048,7 +2063,8 @@ function updatePlaying(dt){
 
   // Win/loss
   const enemiesAlive = entities.some(e => e.type === 'enemy');
-  if(spawnedCount >= levelData.total && bossSpawned && !enemiesAlive){
+  const midDone = !levelData.midBoss || midbossSpawned;
+  if(spawnedCount >= levelData.total && bossSpawned && midDone && !enemiesAlive){
     clearedLevels.add(levelIdx);
     saveCleared();
     lastClearedLevel = levelIdx;
@@ -4072,7 +4088,12 @@ function drawHUD(){
     ctx.font = 'bold 8px monospace';
     ctx.fillStyle = '#fff';
     ctx.textAlign = 'center';
-    ctx.fillText(levelData.bossName || BOSS_NAMES[boss.kind] || 'BOSS', W/2, H - 17);
+    // A mid-boss is a different kind than levelData.boss, so label it by its own
+    // BOSS_NAMES entry; only the actual end boss gets the level's bossName override.
+    const bossLabel = (boss.kind === levelData.boss)
+      ? (levelData.bossName || BOSS_NAMES[boss.kind] || 'BOSS')
+      : (BOSS_NAMES[boss.kind] || 'BOSS');
+    ctx.fillText(bossLabel, W/2, H - 17);
   }
 
   // Boss spawn flash
@@ -4081,7 +4102,7 @@ function drawHUD(){
     ctx.fillStyle = '#9b59b6';
     ctx.font = 'bold 22px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('!! ' + (levelData.bossName || BOSS_NAMES[levelData.boss] || 'BOSS') + ' !!', W/2, H/2);
+    ctx.fillText('!! ' + (bossSpawnName || levelData.bossName || BOSS_NAMES[levelData.boss] || 'BOSS') + ' !!', W/2, H/2);
     ctx.globalAlpha = 1;
   }
 }
