@@ -1138,6 +1138,7 @@ let bossSpawnPulse = 0;
 let bossSpawnName = '';   // name shown in the boss-arrival flash (mid-boss or end boss)
 let slowMoTime = 0;          // global powerup — slows enemies & enemy bullets
 let paused = false;          // Space pauses gameplay; Space or a click resumes
+let showStats = false;       // Tab opens the CHARACTER STATS window (freezes play like pause)
 
 // ---- Persistent cleared-level set ----
 let clearedLevels = (function(){
@@ -1359,6 +1360,7 @@ const mouse = { x: W/2, y: H/2, down:false, rdown:false, clicked:false };
 const GAMEPLAY_KEYS = new Set([
   'KeyW','KeyA','KeyS','KeyD',
   'KeyX','KeyC','KeyV','KeyF','KeyB',
+  'Tab',  // toggles the CHARACTER STATS window; preventDefault stops focus-traversal
   'Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'
 ]);
 window.addEventListener('keydown', e => {
@@ -1369,14 +1371,25 @@ window.addEventListener('keydown', e => {
   if(e.code === 'Space' && !wasDown && state === STATE.PLAYING){
     paused = !paused;
   }
+  // Tab toggles the CHARACTER STATS window during play (leading edge only). While
+  // it's open the tick is frozen (see update()), so it acts like a stats-pause.
+  if(e.code === 'Tab' && !wasDown && state === STATE.PLAYING){
+    showStats = !showStats;
+  }
   // Escape leaves the current run / setup screen and returns to the main menu
   // (the "initial interface"). Leading edge only, from any state except MENU.
   // Intentionally NOT in GAMEPLAY_KEYS: Escape doesn't scroll the page, and we
   // don't want to suppress the browser's fullscreen-exit on Escape.
   if(e.code === 'Escape' && !wasDown && state !== STATE.MENU){
-    state = STATE.MENU;
-    stateTime = 0;
-    paused = false;
+    // If the stats window is open, Escape just closes it (stay in the run).
+    if(state === STATE.PLAYING && showStats){
+      showStats = false;
+    } else {
+      state = STATE.MENU;
+      stateTime = 0;
+      paused = false;
+      showStats = false;
+    }
   }
 });
 window.addEventListener('keyup', e => {
@@ -1392,6 +1405,8 @@ canvas.addEventListener('mousedown', e => {
   initAudio();
   // A click anywhere while paused just resumes — it shouldn't also fire a shot.
   if(state === STATE.PLAYING && paused){ paused = false; return; }
+  // Likewise a click while the stats window is open just closes it (no shot).
+  if(state === STATE.PLAYING && showStats){ showStats = false; return; }
   if(e.button === 2){ mouse.rdown = true; }
   else { mouse.down = true; mouse.clicked = true; }
 });
@@ -2128,6 +2143,7 @@ function startLevel(idx){
   bossGapTimer = 0;
   gapSpawnTimer = 0;
   paused = false;
+  showStats = false;
   // World sizing by 10-level block — arena AREA GROWS with the block, then every
   // tier is enlarged a further MAP_EXPAND (1.15x linear). Base scales: L1-10 = 1x,
   // L11-20 = 2x, L21-30 = 3x, L31-40 = 4x. The view stays W*H; a camera follows the
@@ -2168,6 +2184,7 @@ function updateCamera(dt){
 function startGame(){
   initAudio();
   paused = false;
+  showStats = false;
   score = 0;
   player = createPlayer();
   entities = [player];
@@ -2207,7 +2224,7 @@ function update(dt){
   else if(state === STATE.ASSISTANT_SELECT) handleAssistantSelect();
   else if(state === STATE.LEVEL_COMPLETE) handleLevelComplete();
   else if(state === STATE.GAME_OVER || state === STATE.VICTORY) handleEndScreen();
-  else if(state === STATE.PLAYING){ if(!paused) updatePlaying(dt); }
+  else if(state === STATE.PLAYING){ if(!paused && !showStats) updatePlaying(dt); }
   mouse.clicked = false;
 }
 
@@ -4019,6 +4036,7 @@ function draw(){
     if(state === STATE.LEVEL_COMPLETE) drawLevelComplete();
     else if(state === STATE.GAME_OVER) drawGameOver();
     else if(state === STATE.VICTORY) drawVictory();
+    else if(state === STATE.PLAYING && showStats) drawStats();
     else if(state === STATE.PLAYING && paused) drawPause();
   } else {
     drawBackground(THEMES.menu, 0, W, H);
@@ -4045,6 +4063,141 @@ function drawPause(){
   ctx.fillStyle = '#bdc3c7';
   ctx.font = 'bold 8px monospace';
   ctx.fillText('PRESS SPACE OR CLICK TO RESUME', W/2, H/2 + 16);
+  ctx.fillStyle = '#7fa8c9';
+  ctx.font = 'bold 7px monospace';
+  ctx.fillText('TAB — CHARACTER STATS', W/2, H/2 + 30);
+  ctx.textAlign = 'left';
+}
+
+// CHARACTER STATS window (Tab). Screen-space, frozen play behind a dim overlay.
+// Shows the character's LIVE basic parameters — every value is read/derived from
+// the same data the gameplay uses (CHARACTERS + level scaling + the RMB/regen
+// blocks), so it stays correct as those are tuned. Two columns: defence/mobility/
+// primary attack on the left, secondary attack + general on the right.
+function drawStats(){
+  const p = player;
+  if(!p) return;
+  const ch = CHARACTERS[p.char] || CHARACTERS.soldier;
+  const dm = p.damageMult || 1;
+  const fmt = n => isFinite(n) ? String(Math.round(n * 100) / 100) : '∞';
+
+  // --- Primary basic attack (LMB): per-class form, damage, cadence (mirrors fireWeapon) ---
+  let primName, primDmg, primCd;
+  if(p.char === 'scout'){ primName = 'LASER DOTS'; primDmg = 0.85 * dm; primCd = 0.06; }
+  else if(p.char === 'tank'){ primName = 'HEAVY SLUG'; primDmg = 2 * dm; primCd = p.fireRate; }
+  else { primName = 'PISTOL'; primDmg = 1 * dm; primCd = p.fireRate; }
+  const primRate = primCd > 0 ? 1 / primCd : 0;   // shots/sec
+
+  // --- Secondary basic attack (RMB): per-class form, damage, pool capacity, regen ---
+  let secName, secDmg, capLabel, capVal, regenVal, rmbExtra;
+  if(p.char === 'soldier'){
+    secName = 'BLADE SLASH';
+    secDmg  = fmt(40 * dm) + ' DPS';
+    capLabel = 'ENERGY';  capVal = fmt(p.energy) + ' / ' + fmt(p.maxEnergy) + ' s';
+    regenVal = '0.2 /s';  rmbExtra = '2% LIFESTEAL';
+  } else if(p.char === 'scout'){
+    secName = '3× LASER BEAM';
+    secDmg  = fmt(3 * dm) + ' /beam';
+    capLabel = 'POWER';   capVal = fmt(p.power) + ' / ' + fmt(p.maxPower) + ' volleys';
+    regenVal = '0.6 /s';  rmbExtra = fmt(1 / (0.22 * (p.laserScale || 1))) + ' volley/s';
+  } else {
+    secName = 'FLAMETHROWER';
+    secDmg  = fmt(7 * dm) + ' DPS';
+    capLabel = 'FUEL';    capVal = fmt(p.fuel) + ' / ' + fmt(p.maxFuel) + ' s';
+    regenVal = '0.1 /s';  rmbExtra = '40° cone';
+  }
+
+  // HP regen is a SCOUT-ONLY passive (0.5%/maxHp/s); the others have none.
+  const hpRegen = p.char === 'scout'
+    ? '0.5%/s (' + fmt(p.maxHp * 0.005) + '/s)'
+    : '—';
+  const lifesteal = p.char === 'soldier' ? '2%' : '—';
+  const baseSpd = p.speed;
+  const effSpd  = p.speed * playerSpeedMult();
+  const spdVal  = (Math.abs(effSpd - baseSpd) > 0.5)
+    ? fmt(Math.round(baseSpd)) + ' (→' + fmt(Math.round(effSpd)) + ')'
+    : fmt(Math.round(baseSpd)) + ' px/s';
+
+  // Column row lists. {h:'HEADER'} or [label, value].
+  const left = [
+    { h:'DEFENCE' },
+    ['HP', fmt(Math.round(p.hp * 10) / 10) + ' / ' + p.maxHp],
+    ['SHIELD', p.shieldHp + ' / ' + p.shieldMax],
+    ['HP REGEN', hpRegen],
+    { h:'MOBILITY' },
+    ['MOVE SPEED', spdVal],
+    { h:'PRIMARY ATTACK (LMB)' },
+    ['WEAPON', primName],
+    ['DAMAGE', fmt(primDmg) + ' /hit'],
+    ['FIRE RATE', fmt(Math.round(primRate * 10) / 10) + ' /s']
+  ];
+  const right = [
+    { h:'SECONDARY ATTACK (RMB)' },
+    ['WEAPON', secName],
+    ['DAMAGE', secDmg],
+    [capLabel + ' CAP.', capVal],
+    [capLabel + ' REGEN', regenVal],
+    ['CADENCE / NOTE', rmbExtra],
+    { h:'GENERAL' },
+    ['DAMAGE MULT', '×' + fmt(Math.round(dm * 100) / 100)],
+    ['LIFESTEAL', lifesteal],
+    ['ACCOUNT LV', String(profile.level || 1)]
+  ];
+
+  // --- Panel ---
+  ctx.fillStyle = 'rgba(6,8,16,0.86)';
+  ctx.fillRect(0, 0, W, H);
+  const px = 22, py = 20, pw = W - 44, ph = 184;
+  ctx.fillStyle = 'rgba(14,18,30,0.96)';
+  ctx.fillRect(px, py, pw, ph);
+  ctx.strokeStyle = ch.color || '#4fc3f7';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(px + 0.5, py + 0.5, pw - 1, ph - 1);
+
+  // Title bar
+  ctx.textAlign = 'left';
+  ctx.font = 'bold 11px monospace';
+  ctx.fillStyle = ch.color || '#fff';
+  ctx.fillText(ch.name, px + 8, py + 14);
+  ctx.textAlign = 'right';
+  ctx.font = 'bold 8px monospace';
+  ctx.fillStyle = '#7f8c9a';
+  ctx.fillText('CHARACTER STATS', px + pw - 8, py + 13);
+  ctx.strokeStyle = '#33384a';
+  ctx.beginPath();
+  ctx.moveTo(px + 6, py + 19.5); ctx.lineTo(px + pw - 6, py + 19.5);
+  ctx.stroke();
+
+  // Column renderer
+  const renderCol = (rows, x0, valX) => {
+    let y = py + 32;
+    for(const r of rows){
+      if(r.h){
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 8px monospace';
+        ctx.fillStyle = ch.color || '#4fc3f7';
+        ctx.fillText(r.h, x0, y);
+        y += 13;
+      } else {
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 8px monospace';
+        ctx.fillStyle = '#8b94a3';
+        ctx.fillText(r[0], x0 + 4, y);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#eef2f7';
+        ctx.fillText(r[1], valX, y);
+        y += 12;
+      }
+    }
+  };
+  renderCol(left,  px + 8,  px + pw / 2 - 8);
+  renderCol(right, px + pw / 2 + 6, px + pw - 8);
+
+  // Footer hint
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 7px monospace';
+  ctx.fillStyle = '#5f6b7a';
+  ctx.fillText('TAB / ESC / CLICK TO CLOSE', W / 2, py + ph - 6);
   ctx.textAlign = 'left';
 }
 

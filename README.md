@@ -26,6 +26,7 @@ A single-file, browser-based top-down arena shooter with retro pixel art. Writte
 | Blast — `B` | circular AoE burst around you |
 | Ultimate — `V` | unique per class (see below) |
 | Pause / resume | `Space` (or click) |
+| Character stats window | `Tab` (freezes play; `Tab`/`Esc`/click to close) |
 | Quit to main menu | `Esc` |
 
 Run setup is: **pick a level → pick a character → pick 2 of 5 assistants → play.** High score is saved in your browser's `localStorage`.

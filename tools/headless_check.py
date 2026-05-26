@@ -159,6 +159,14 @@ DRIVER = r"""
     safe('draw ' + s, function(){ state = STATE[s]; draw(); });
   });
 
+  // Exercise the CHARACTER STATS window (Tab overlay) for all three classes —
+  // its per-class branches read different RMB-pool / regen / damage fields.
+  safe('draw stats window', function(){
+    state = STATE.PLAYING; showStats = true;
+    ['soldier','scout','tank'].forEach(function(c){ player = createPlayer(c); draw(); });
+    showStats = false;
+  });
+
   report.consoleErrors = __errs.slice(0, 40);
   return JSON.stringify(report);
 })();

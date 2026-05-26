@@ -39,8 +39,8 @@ DOCX = os.path.normpath(os.path.join(HERE, "..", "Game-Overview.docx"))
 # ---------------------------------------------------------------------------
 REPLACEMENTS = [
     # 1. The big picture - refresh the line count.
-    ("index.html (~4,726 lines)",
-     "The entire game is one file: index.html (~4,943 lines). One <script> block, "
+    ("index.html (~4,943 lines)",
+     "The entire game is one file: index.html (~5,669 lines). One <script> block, "
      "vanilla JS, no build, no dependencies, no external assets. Sprites are inline "
      "ASCII-art arrays; all SFX are synthesized via Web Audio. It deploys by pushing "
      "to main (GitHub Pages serves the raw file)."),
@@ -189,6 +189,15 @@ INSERTS = [
         "GUIDE button now sits top-LEFT; the persistent LV/XP bar shows in the top-RIGHT "
         "corner with the COINS total (a specific number) on its own line just below the "
         "XP bar.",
+
+        "CHARACTER STATS window (Tab): during play, Tab opens a screen-space panel of "
+        "the character's LIVE, level-scaled basic parameters - HP, shield, move speed, "
+        "primary (LMB) and secondary (RMB) attack damage + fire cadence, the "
+        "FUEL/ENERGY/POWER pool capacity (= second-attack capacity) and its per-second "
+        "regen, the overall damage multiplier, Soldier lifesteal, and account level. It "
+        "freezes the tick like pause (update() skips updatePlaying while showStats); "
+        "Tab/Esc/click closes it. HP-regen is shown only for the Scout (0.5%/s) - the "
+        "others read '-', because there is no universal HP-per-second regen.",
     ]),
     ("10. Allies", [
         "Reusable boss abilities (escalate by levelIdx, no-op for clones): bossInvuln "
