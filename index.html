@@ -4340,15 +4340,6 @@ function drawHUD(){
   // Active weapon row (bottom-left)
   drawWeaponHUD();
 
-  // Enemies left
-  const left = (levelData.total - spawnedCount) + entities.filter(e => e.type === 'enemy' && !e.isBoss).length;
-  ctx.font = 'bold 8px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#ecf0f1';
-  if(!bossSpawned){
-    ctx.fillText('ENEMIES: ' + left, W/2, H - 6);
-  }
-
   // Boss bar
   const boss = entities.find(e => e.isBoss);
   if(boss){
