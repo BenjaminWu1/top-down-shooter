@@ -1289,21 +1289,23 @@ const CHARACTERS = {
 // Every `id` is a real triggerSkill() case. `cd` MUST equal the skillCdMax entry for
 // that id (a slot bound to an id missing from skillCdMax silently can't re-fire).
 // Tiers: 1 = cheap/small, 3 = expensive/big. heal (tier 0) is the free default.
+// Skill gold costs were raised across the board (a skill is a bigger investment than
+// an assistant upgrade level): tier 1 ~300, tier 2 ~700, tier 3 ~1200, nuke 2000.
 const SKILLS = {
-  heal:      { label:'HEAL',    color:'#2ecc71', cd:20,  cost:0,   tier:0 },
-  sprint:    { label:'SPRINT',  color:'#1abc9c', cd:20,  cost:120, tier:1 },
-  dash:      { label:'DASH',    color:'#f1c40f', cd:3.5, cost:150, tier:1 },
-  blast:     { label:'BLAST',   color:'#e67e22', cd:20,  cost:180, tier:1 },
-  grenade:   { label:'GRENADE', color:'#e67e22', cd:6,   cost:160, tier:1 },
-  blink:     { label:'BLINK',   color:'#f1c40f', cd:5,   cost:300, tier:2 },
-  invuln:    { label:'INVINC',  color:'#7fe9ff', cd:20,  cost:340, tier:2 },
-  slowmo:    { label:'SLOWMO',  color:'#3498db', cd:18,  cost:320, tier:2 },
-  summon:    { label:'KNIGHT',  color:'#f1c40f', cd:25,  cost:360, tier:2 },
-  wall:      { label:'WALL',    color:'#27ae60', cd:18,  cost:520, tier:3 },
-  flameburst:{ label:'NAPALM',  color:'#e67e22', cd:20,  cost:560, tier:3 },
-  barrage:   { label:'BARRAGE', color:'#e67e22', cd:24,  cost:600, tier:3 },
-  vsummon:   { label:'BLADE+',  color:'#f39c12', cd:25,  cost:640, tier:3 },
-  nuke:      { label:'NUKE',    color:'#e74c3c', cd:60,  cost:900, tier:3 }
+  heal:      { label:'HEAL',    color:'#2ecc71', cd:20,  cost:0,    tier:0 },
+  sprint:    { label:'SPRINT',  color:'#1abc9c', cd:20,  cost:280,  tier:1 },
+  dash:      { label:'DASH',    color:'#f1c40f', cd:3.5, cost:340,  tier:1 },
+  blast:     { label:'BLAST',   color:'#e67e22', cd:20,  cost:400,  tier:1 },
+  grenade:   { label:'GRENADE', color:'#e67e22', cd:6,   cost:360,  tier:1 },
+  blink:     { label:'BLINK',   color:'#f1c40f', cd:5,   cost:680,  tier:2 },
+  invuln:    { label:'INVINC',  color:'#7fe9ff', cd:20,  cost:760,  tier:2 },
+  slowmo:    { label:'SLOWMO',  color:'#3498db', cd:18,  cost:720,  tier:2 },
+  summon:    { label:'KNIGHT',  color:'#f1c40f', cd:25,  cost:820,  tier:2 },
+  wall:      { label:'WALL',    color:'#27ae60', cd:18,  cost:1150, tier:3 },
+  flameburst:{ label:'NAPALM',  color:'#e67e22', cd:20,  cost:1250, tier:3 },
+  barrage:   { label:'BARRAGE', color:'#e67e22', cd:24,  cost:1350, tier:3 },
+  vsummon:   { label:'BLADE+',  color:'#f39c12', cd:25,  cost:1450, tier:3 },
+  nuke:      { label:'NUKE',    color:'#e74c3c', cd:60,  cost:2000, tier:3 }
 };
 // Shop ordering (ids except the free default heal), grouped by tier.
 const SKILL_ORDER = ['sprint','dash','blast','grenade','blink','invuln','slowmo','summon','wall','flameburst','barrage','vsummon','nuke'];
@@ -4724,11 +4726,11 @@ function shopButtonRect(){ return { x: 8, y: H - 22, w: 56, h: 16 }; }
 // (The GUIDE button now lives in the top-LEFT corner, so this owns the right.)
 function drawProfileBar(){
   const bw = 96, x = W - bw - 8, yTop = 7;
-  // Level (top-left of the block).
-  ctx.textAlign = 'left';
+  // Level — right-aligned to the bar's right edge (same edge as COINS below).
+  ctx.textAlign = 'right';
   ctx.font = 'bold 8px monospace';
   ctx.fillStyle = '#f1c40f';
-  ctx.fillText('LV ' + profile.level, x, yTop + 7);
+  ctx.fillText('LV ' + profile.level, x + bw, yTop + 7);
   // XP bar.
   const need = xpToNext(profile.level);
   const frac = profile.level >= LEVEL_CAP ? 1 : clamp(profile.xp / need, 0, 1);
@@ -5020,7 +5022,7 @@ function handleCharacterSelect(){
     if(clickedRect(r.x, r.y, r.w, r.h)){
       selectedChar = CHAR_ORDER[i];
       // Character chosen → pick assistants next.
-      state = STATE.ASSISTANT_SELECT; stateTime = 0;
+      state = STATE.ASSISTANT_SELECT; stateTime = 0; loadoutMenuSlot = -1;
       return;
     }
   }
@@ -5045,8 +5047,26 @@ function loadoutSlotRect(i){
   return { x: xs + i * (sw + gap), y: 150, w: sw, h: sh };
 }
 function assistStartRect(){ const w = 120, h = 22; return { x: Math.floor((W - w) / 2), y: H - 30, w, h }; }
-// Owned non-heal skills (for the loadout cycle), preceded by null (= empty slot).
+// Owned non-heal skills (for the loadout picker), preceded by null (= empty slot).
 function cycleSkillList(){ return [null, ...profile.ownedSkills.filter(s => s !== 'heal' && SKILLS[s])]; }
+
+// Which X/C/B/V slot's skill-pick dropdown is open (slotKeys index 1..4, -1 = none).
+// Driven by mouse hover in handleAssistantSelect, rendered in drawAssistantSelect.
+let loadoutMenuSlot = -1;
+// Per-option rects for the dropdown under loadout slot `i` (1=X..4=V). Anchored just
+// below the slot, shifted up if it would run off the bottom of the 270px screen.
+function loadoutMenuRects(i){
+  const opts = cycleSkillList();                 // [null, ...owned non-heal]
+  const slot = loadoutSlotRect(i);
+  const ih = 13, iw = slot.w;
+  const listH = opts.length * ih;
+  const x = slot.x;
+  // Anchor flush to the slot's bottom (no gap) so moving the cursor from the slot
+  // onto the list never crosses dead space that would close the menu.
+  let y = slot.y + slot.h;
+  if(y + listH > H - 2) y = Math.max(2, H - 2 - listH);
+  return opts.map((id, k) => ({ x, y: y + k * ih, w: iw, h: ih, id }));
+}
 
 function drawAssistantSelect(){
   ctx.fillStyle = '#0c0c18';
@@ -5092,7 +5112,7 @@ function drawAssistantSelect(){
   // ---- Skill loadout strip ----
   ctx.fillStyle = '#bdc3c7';
   ctx.font = 'bold 7px monospace';
-  ctx.fillText('SKILLS  ·  F = HEAL  ·  +1 SLOT EVERY 5 LEVELS  ·  TAP TO CYCLE', W / 2, 144);
+  ctx.fillText('SKILLS  ·  F = HEAL  ·  +1 SLOT EVERY 5 LEVELS  ·  HOVER A SLOT TO PICK', W / 2, 144);
   const slotKeys = [['F','f'],['X','x'],['C','c'],['B','b'],['V','v']];
   const unlocked = unlockedSlots();
   for(let i = 0; i < slotKeys.length; i++){
@@ -5103,7 +5123,7 @@ function drawAssistantSelect(){
     const locked = !isHeal && slotIdx >= unlocked;
     const id = isHeal ? 'heal' : profile.loadout[slot];
     const sk = (id && SKILLS[id]) ? SKILLS[id] : null;
-    const hov = !locked && !isHeal && clickedRect(r.x, r.y, r.w, r.h);
+    const hov = !locked && !isHeal && (clickedRect(r.x, r.y, r.w, r.h) || i === loadoutMenuSlot);
     ctx.fillStyle = locked ? '#15151c' : (hov ? '#23303f' : '#141822');
     ctx.fillRect(r.x, r.y, r.w, r.h);
     ctx.strokeStyle = isHeal ? '#2ecc71' : (locked ? '#3a3a44' : (sk ? sk.color : '#566573'));
@@ -5152,13 +5172,70 @@ function drawAssistantSelect(){
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 8px monospace';
   ctx.fillText('< BACK', bb.x + bb.w / 2, bb.y + 11);
+
+  // ---- Skill-pick dropdown — shown on top while hovering an unlocked X/C/B/V slot.
+  // Click an entry to assign it (or "— EMPTY —" to clear); replaces the old cycle.
+  if(loadoutMenuSlot >= 1){
+    const slot = ['f','x','c','b','v'][loadoutMenuSlot];
+    const rects = loadoutMenuRects(loadoutMenuSlot);
+    const first = rects[0], last = rects[rects.length - 1];
+    const panelH = (last.y + last.h) - first.y;
+    ctx.fillStyle = '#0a0d14';
+    ctx.fillRect(first.x - 1, first.y - 1, first.w + 2, panelH + 2);
+    ctx.strokeStyle = '#aeb6bf';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(first.x - 0.5, first.y - 0.5, first.w + 1, panelH + 1);
+    for(const rr of rects){
+      const sk = rr.id ? SKILLS[rr.id] : null;
+      const cur = (profile.loadout[slot] || null) === rr.id;
+      const hov = clickedRect(rr.x, rr.y, rr.w, rr.h);
+      ctx.fillStyle = hov ? '#2a3a4d' : (cur ? '#16261a' : '#0f1622');
+      ctx.fillRect(rr.x, rr.y, rr.w, rr.h);
+      ctx.fillStyle = sk ? sk.color : '#7f8c8d';
+      ctx.font = 'bold 7px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(sk ? sk.label : '— EMPTY —', rr.x + rr.w / 2, rr.y + 9);
+    }
+  }
 }
 
 function handleAssistantSelect(){
+  const unlocked = unlockedSlots();
+  // ---- Hover: open the skill-pick dropdown for the unlocked X/C/B/V slot under the
+  // cursor; keep it open while the cursor is over that slot OR its dropdown; else close.
+  // An already-open menu wins so a long (shifted-up) list can't flicker between slots.
+  const overOpenMenu = loadoutMenuSlot >= 1 &&
+    loadoutMenuRects(loadoutMenuSlot).some(rr => clickedRect(rr.x, rr.y, rr.w, rr.h));
+  if(!overOpenMenu){
+    let hoverSlot = -1;
+    for(let i = 1; i < 5; i++){                         // skip F (index 0, locked to HEAL)
+      const slot = ['f','x','c','b','v'][i];
+      if(SLOT_ORDER.indexOf(slot) >= unlocked) continue; // locked by level
+      const r = loadoutSlotRect(i);
+      if(clickedRect(r.x, r.y, r.w, r.h)){ hoverSlot = i; break; }
+    }
+    loadoutMenuSlot = hoverSlot;                         // -1 when over neither slot nor menu
+  }
+
   if(!mouse.clicked) return;
   const bb = backButtonRect();
   if(clickedRect(bb.x, bb.y, bb.w, bb.h)){
-    state = STATE.CHARACTER_SELECT; stateTime = 0; return;
+    state = STATE.CHARACTER_SELECT; stateTime = 0; loadoutMenuSlot = -1; return;
+  }
+  // Dropdown pick (takes priority — it's drawn on top of everything else).
+  if(loadoutMenuSlot >= 1){
+    const slot = ['f','x','c','b','v'][loadoutMenuSlot];
+    for(const rr of loadoutMenuRects(loadoutMenuSlot)){
+      if(!clickedRect(rr.x, rr.y, rr.w, rr.h)) continue;
+      const next = rr.id;                              // null = clear the slot
+      // No duplicate skill across keys: clear any other slot already holding `next`.
+      if(next){ for(const s of SLOT_ORDER){ if(s !== slot && profile.loadout[s] === next) profile.loadout[s] = null; } }
+      profile.loadout[slot] = next;
+      saveProfile();
+      if(sfx.pickup) sfx.pickup();
+      loadoutMenuSlot = -1;
+      return;
+    }
   }
   // Assistant equip toggles (0..2 from owned; the default is removable).
   const owned = ownedAssistantList();
@@ -5175,28 +5252,9 @@ function handleAssistantSelect(){
       return;
     }
   }
-  // Skill-loadout slot cycling (X/C/B/V only; F is locked to HEAL).
-  const unlocked = unlockedSlots();
-  const cyc = cycleSkillList();
-  for(let i = 0; i < 5; i++){
-    const r = loadoutSlotRect(i);
-    if(!clickedRect(r.x, r.y, r.w, r.h)) continue;
-    const slot = ['f','x','c','b','v'][i];
-    if(slot === 'f') return;                          // heal is locked
-    const slotIdx = SLOT_ORDER.indexOf(slot);          // 0..3
-    if(slotIdx >= unlocked) return;                    // locked by level
-    let ci = cyc.indexOf(profile.loadout[slot]); if(ci < 0) ci = 0;
-    const next = cyc[(ci + 1) % cyc.length];
-    // No duplicate skill across keys: clear any other slot already holding `next`.
-    if(next){ for(const s of SLOT_ORDER){ if(s !== slot && profile.loadout[s] === next) profile.loadout[s] = null; } }
-    profile.loadout[slot] = next;
-    saveProfile();
-    if(sfx.pickup) sfx.pickup();
-    return;
-  }
   // START — always allowed (an empty loadout is just HEAL; 0 assistants is fine).
   const sb = assistStartRect();
-  if(clickedRect(sb.x, sb.y, sb.w, sb.h)) startSelectedRun();
+  if(clickedRect(sb.x, sb.y, sb.w, sb.h)){ loadoutMenuSlot = -1; startSelectedRun(); }
 }
 
 function startSelectedRun(){
