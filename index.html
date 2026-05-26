@@ -1292,7 +1292,11 @@ const XP_LEVEL_CLEAR = 120;   // XP for clearing a level
 const XP_VICTORY = 600;       // extra XP for the final victory
 const GOLD_PER_KILL_DIV = 10; // per-kill gold = floor(enemy.score / this)
 const GOLD_LEVEL_CLEAR = 80;  // gold for clearing a level
-const LEVEL_CAP = 40;         // soft cap (bounds stat scaling)
+const LEVEL_CAP = 50;         // account-level cap (bounds stat scaling). Levels 41-50 are
+                              // mostly prestige grind — the per-level XP requirement keeps
+                              // climbing (xpToNext), but the stat-scaling caps (LVL_*_CAP /
+                              // RMB_DUR_CAP) plateau before here, so the existing 1-40 curve
+                              // is unchanged; this just adds 10 more levels on top.
 const LVL_DMG_PER = 0.015, LVL_DMG_CAP = 0.60;   // +1.5%/lvl damage, max +60%
 const LVL_FIRE_PER = 0.010, LVL_FIRE_CAP = 0.40; // -1%/lvl fire cooldown, floor at 60%
 const LVL_HP_PER = 6,        LVL_HP_CAP = 8;      // +1 maxHp every 6 levels, max +8
@@ -1449,20 +1453,20 @@ const CHARACTERS = {
 // skills are a much more expensive long-term goal. Tier 1 (200-600), tier 2 (1400-
 // 2400), tier 3 (4000-5800), nuke (top, 9000).
 const SKILLS = {
-  heal:      { label:'HEAL',    color:'#2ecc71', cd:20,  cost:0,     tier:0 },
-  sprint:    { label:'SPRINT',  color:'#1abc9c', cd:20,  cost:250,   tier:1 },
-  dash:      { label:'DASH',    color:'#f1c40f', cd:3.5, cost:400,   tier:1 },
-  grenade:   { label:'GRENADE', color:'#e67e22', cd:6,   cost:550,   tier:1 },
-  blast:     { label:'BLAST',   color:'#e67e22', cd:20,  cost:750,   tier:1 },
-  blink:     { label:'BLINK',   color:'#f1c40f', cd:5,   cost:2000,  tier:2 },
-  slowmo:    { label:'SLOWMO',  color:'#3498db', cd:18,  cost:2600,  tier:2 },
-  invuln:    { label:'INVINC',  color:'#7fe9ff', cd:20,  cost:3200,  tier:2 },
-  summon:    { label:'KNIGHT',  color:'#f1c40f', cd:25,  cost:4000,  tier:2 },
-  wall:      { label:'WALL',    color:'#27ae60', cd:18,  cost:7500,  tier:3 },
-  flameburst:{ label:'NAPALM',  color:'#e67e22', cd:20,  cost:9500,  tier:3 },
-  barrage:   { label:'BARRAGE', color:'#e67e22', cd:24,  cost:12000, tier:3 },
-  vsummon:   { label:'BLADE+',  color:'#f39c12', cd:25,  cost:15000, tier:3 },
-  nuke:      { label:'NUKE',    color:'#e74c3c', cd:60,  cost:22000, tier:3 }
+  heal:      { label:'HEAL',    color:'#2ecc71', cd:20,  cost:0,    tier:0 },
+  sprint:    { label:'SPRINT',  color:'#1abc9c', cd:20,  cost:200,  tier:1 },
+  dash:      { label:'DASH',    color:'#f1c40f', cd:3.5, cost:320,  tier:1 },
+  grenade:   { label:'GRENADE', color:'#e67e22', cd:6,   cost:450,  tier:1 },
+  blast:     { label:'BLAST',   color:'#e67e22', cd:20,  cost:600,  tier:1 },
+  blink:     { label:'BLINK',   color:'#f1c40f', cd:5,   cost:1400, tier:2 },
+  slowmo:    { label:'SLOWMO',  color:'#3498db', cd:18,  cost:1700, tier:2 },
+  invuln:    { label:'INVINC',  color:'#7fe9ff', cd:20,  cost:2000, tier:2 },
+  summon:    { label:'KNIGHT',  color:'#f1c40f', cd:25,  cost:2400, tier:2 },
+  wall:      { label:'WALL',    color:'#27ae60', cd:18,  cost:4000, tier:3 },
+  flameburst:{ label:'NAPALM',  color:'#e67e22', cd:20,  cost:4600, tier:3 },
+  barrage:   { label:'BARRAGE', color:'#e67e22', cd:24,  cost:5200, tier:3 },
+  vsummon:   { label:'BLADE+',  color:'#f39c12', cd:25,  cost:5800, tier:3 },
+  nuke:      { label:'NUKE',    color:'#e74c3c', cd:60,  cost:9000, tier:3 }
 };
 // Shop ordering (ids except the free default heal), grouped by tier, cheapest-first.
 const SKILL_ORDER = ['sprint','dash','grenade','blast','blink','slowmo','invuln','summon','wall','flameburst','barrage','vsummon','nuke'];
@@ -5517,6 +5521,13 @@ function drawParameters(){
   const lmbCd   = key === 'scout' ? 0.06 : null;   // scout LMB cadence is FIXED (not fireRate)
   const lmbRate    = key === 'scout' ? 1 / 0.06 : 1 / cur.fireRate;
   const lmbRateNxt = key === 'scout' ? 1 / 0.06 : 1 / nxt.fireRate;
+  // Attack RANGE in game distance units (px). LMB = projectile reach = bullet speed ×
+  // life (scout 360×1.0, tank 300×1.6, soldier 240×1.8). RMB = the secondary's reach
+  // (blade KATANA_RANGE 32, scout LASER_BEAM_LEN 147, flamethrower range 140) + its scope.
+  const lmbRange = key === 'scout' ? 360 : key === 'tank' ? 480 : 432;
+  const secRange = key === 'soldier' ? '32 px · ~103° arc'
+                 : key === 'scout'   ? '147 px · 3 beams'
+                 :                      '140 px · ~60° cone';
 
   let secName, secBase, secUnit, capLabel, capCur, capNxt, capUnit, regenVal, secExtra;
   if(key === 'soldier'){
@@ -5542,16 +5553,18 @@ function drawParameters(){
     ['SHIELD', shieldStr, dl(0)],
     ['HP REGEN', hpRegen, dl(0)],
     { h:'MOBILITY' },
-    ['MOVE SPEED', fmt(ch.speed), dl(0)],
+    ['MOVE SPEED', fmt(ch.speed) + ' px/s', dl(0)],
     { h:'PRIMARY ATTACK (LMB)' },
     ['WEAPON', lmbName, null],
     ['DAMAGE', fmt(lmbBase * cur.dmgMult) + ' /hit', dl(lmbBase * (nxt.dmgMult - cur.dmgMult))],
-    ['FIRE RATE', fmt(Math.round(lmbRate * 10) / 10) + ' /s', dl(lmbRateNxt - lmbRate)]
+    ['FIRE RATE', fmt(Math.round(lmbRate * 10) / 10) + ' /s', dl(lmbRateNxt - lmbRate)],
+    ['RANGE', fmt(lmbRange) + ' px', dl(0)]
   ];
   const right = [
     { h:'SECONDARY ATTACK (RMB)' },
     ['WEAPON', secName, null],
     ['DAMAGE', fmt(secBase * cur.dmgMult) + secUnit, dl(secBase * (nxt.dmgMult - cur.dmgMult))],
+    ['RANGE', secRange, null],
     [capLabel + ' CAP.', fmt(capCur) + capUnit, dl(capNxt - capCur)],
     [capLabel + ' REGEN', regenVal, dl(0)],
     { h:'GENERAL' },
@@ -5622,6 +5635,15 @@ function drawParameters(){
   };
   renderCol(left,  16,      W/2 - 12);
   renderCol(right, W/2 + 8, W - 14);
+
+  // Distance-unit legend: the game measures everything in px (logical game pixels of
+  // the fixed 480x270 world). MOVE SPEED is px/s; RANGE is how far each attack reaches.
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 7px monospace';
+  ctx.fillStyle = '#7f8c99';
+  ctx.fillText('DISTANCE UNIT = px  (game pixels; the 480x270 world)', W/2, 234);
+  ctx.fillStyle = '#7fb0d1';
+  ctx.fillText('MOVE SPEED in px/s  ·  RANGE = how far the attack reaches', W/2, 244);
 
   // Back button
   const bb = backButtonRect();

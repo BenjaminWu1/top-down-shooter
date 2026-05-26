@@ -194,6 +194,29 @@ REPLACEMENTS = [
      "a DENSE wave of monsters (alive cap 28). Medium/transitional kinds reuse existing AIs "
      "plus two NEW boss AIs (warden, harrier) that are never tier end bosses, so validator "
      "C6's locked order is untouched."),
+
+    # Leveling bullet -> account level cap 40 -> 50. (Rewrite-in-place; text matches the
+    # INSERTS version so the insert step then skips it. find anchors on the OLD text.)
+    ("xpToNext grows geometrically (cap 40)",
+     "LEVELING + SCALING: XP from kills (small, accrued) + level-clear/victory "
+     "(banked); xpToNext grows geometrically and steepens past L15 (account level "
+     "cap 50). applyLevelScaling() at run start raises base damage, fire rate / "
+     "attack speed, max HP, and the held-RMB 'second basic attack' DURATION (its "
+     "fuel/energy/power pool starts short and grows with level). Drop rate also "
+     "scales up with level (gate only)."),
+
+    # PARAMETERS bullet -> add the distance unit (px) + attack RANGE. (Rewrite-in-place.)
+    ("move speed / shield / regen / lifesteal)",
+     "CHARACTER PARAMETERS screen (STATE.PARAMETERS): a PARAMETERS button on the MENU "
+     "(top-right, just below the profile bar's COINS line) opens a menu-side version of "
+     "the same readout, with three class tabs. Since there is no live player on the "
+     "menu, values come from scaledStatsFor(charKey, level) - a pure mirror of "
+     "applyLevelScaling - and each numeric row also shows its GAIN PER ACCOUNT LEVEL as "
+     "a (+x) token (computed by diffing the helper at level vs level+1; '(+0)' for "
+     "stats that don't scale, like move speed / shield / regen / lifesteal / range). It "
+     "also manifests the DISTANCE UNIT (px = game pixels of the 480x270 world): MOVE "
+     "SPEED in px/s, a RANGE row for LMB (projectile reach) and RMB (reach + scope) in "
+     "px, and a bottom legend."),
 ]
 
 # INSERTS: bullets added immediately before the paragraph whose text contains the
@@ -207,10 +230,11 @@ INSERTS = [
         "(headless stubs localStorage as a Proxy).",
 
         "LEVELING + SCALING: XP from kills (small, accrued) + level-clear/victory "
-        "(banked); xpToNext grows geometrically (cap 40). applyLevelScaling() at run "
-        "start raises base damage, fire rate / attack speed, max HP, and the held-RMB "
-        "'second basic attack' DURATION (its fuel/energy/power pool starts short and "
-        "grows with level). Drop rate also scales up with level (gate only).",
+        "(banked); xpToNext grows geometrically and steepens past L15 (account level "
+        "cap 50). applyLevelScaling() at run start raises base damage, fire rate / "
+        "attack speed, max HP, and the held-RMB 'second basic attack' DURATION (its "
+        "fuel/energy/power pool starts short and grows with level). Drop rate also "
+        "scales up with level (gate only).",
 
         "SHOP (STATE.SHOP, the ARMORY): spend Gold on tiered skills (cheap/small -> "
         "expensive/big) and on assistants - which you BUY then UPGRADE through 10 levels "
@@ -248,7 +272,10 @@ INSERTS = [
         "menu, values come from scaledStatsFor(charKey, level) - a pure mirror of "
         "applyLevelScaling - and each numeric row also shows its GAIN PER ACCOUNT LEVEL as "
         "a (+x) token (computed by diffing the helper at level vs level+1; '(+0)' for "
-        "stats that don't scale, like move speed / shield / regen / lifesteal).",
+        "stats that don't scale, like move speed / shield / regen / lifesteal / range). It "
+        "also manifests the DISTANCE UNIT (px = game pixels of the 480x270 world): MOVE "
+        "SPEED in px/s, a RANGE row for LMB (projectile reach) and RMB (reach + scope) in "
+        "px, and a bottom legend.",
     ]),
     ("10. Allies", [
         "FOUR-PHASE difficulty curve (difficultyRamp / enemyScale / bossHpScale / "
