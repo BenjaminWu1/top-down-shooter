@@ -77,7 +77,8 @@ Each ally has its own **upgrade level (1–10)**. A fresh ally is deliberately w
 
 - **40 levels** grouped into **8 boss tiers of 5 levels each.** Each tier is built around one boss AI, but every level inside a tier has its own boss name and scaled HP/speed, so all 40 fights feel distinct.
 - The arena grows as you advance: levels **1–13** use the base 480×270 world, **14–24** a 2× world, and **25–40** a 3× world — the larger arenas scroll with a camera that follows you.
-- Enemies and bosses scale up in HP and speed on a **three-phase difficulty curve** — gentle through levels 1–15, a moderate ramp 16–24, then a sharp spike 25–40, so the late game leans on your account upgrades.
+- **Staged boss encounters scale by block:** levels 1–10 are a single end-boss fight; **11–20** add one medium boss at the halfway mark; **21–30** field two different medium bosses at once; and **31–40** stack two mediums, then a transitional boss, then the end boss — four bosses per level. Between boss waves a **10–15s "surge"** floods the arena with a dense wave of monsters.
+- Enemies and bosses scale up in HP and speed on a **four-phase difficulty curve** — gentle through levels 1–15, a moderate ramp 16–24, a sharp ramp 25–30, then a steep **31–40 spike** (bigger boss HP, faster bosses, harder-hitting enemies), so the late game leans on your account upgrades.
 - **Drops are gated by level:** levels 1–15 give basic, sparse pickups; levels 16–24 add advanced weapon enhancers and utility power-ups; levels 25–40 unlock the full variety.
 
 ## Bosses

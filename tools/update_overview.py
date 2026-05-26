@@ -39,8 +39,8 @@ DOCX = os.path.normpath(os.path.join(HERE, "..", "Game-Overview.docx"))
 # ---------------------------------------------------------------------------
 REPLACEMENTS = [
     # 1. The big picture - refresh the line count.
-    ("index.html (~5,873 lines)",
-     "The entire game is one file: index.html (~5,963 lines). One <script> block, "
+    ("index.html (~5,963 lines)",
+     "The entire game is one file: index.html (~6,224 lines). One <script> block, "
      "vanilla JS, no build, no dependencies, no external assets. Sprites are inline "
      "ASCII-art arrays; all SFX are synthesized via Web Audio. It deploys by pushing "
      "to main (GitHub Pages serves the raw file)."),
@@ -85,11 +85,13 @@ REPLACEMENTS = [
      "kill (55% for elite mini-bosses). Bosses give a guaranteed enhancer/defense drop "
      "plus a health."),
 
-    # 9. Bosses - updateTwin/updateBomber are now the mid-bosses, not orphaned.
-    ("updateTwin and updateBomber (TWIN STRIKER / BOMBARDIER) are defined but orphaned",
-     "updateTwin and updateBomber are no longer orphaned - they are the L31-L40 "
-     "MID-BOSSES (see the mid-boss bullets below). Each L31-40 level carries a midBoss "
-     "field (twin/bomber/splitter/reaper), a DIFFERENT kind than its end boss."),
+    # 9. Bosses - updateTwin/updateBomber + the new warden/harrier are medium/trans bosses.
+    ("they are the L31-L40 MID-BOSSES",
+     "updateTwin and updateBomber are no longer orphaned - they are reused as "
+     "medium/transitional bosses in the staged L11-40 encounters, alongside two NEW "
+     "boss AIs (updateWarden, updateHarrier) used ONLY as medium/transitional bosses. "
+     "Each L11-40 level carries midBoss (+ midBoss2 from L21, + transBoss on L31-40) "
+     "naming the medium/transitional kinds, each a DIFFERENT kind than its end boss."),
 
     # 11. Draw/HUD - enemy counter removed; enhancer chips above the RMB bar.
     ("Boss HP bar, enemy counter, arrival flash are all screen-space",
@@ -102,7 +104,7 @@ REPLACEMENTS = [
 
     # 12. Validation - mention the headless runtime+balance check too. (The "find"
     # phrase must NOT recur in the new text, or this re-fires every run.)
-    ("it does not gate the deploy",
+    ("asserts ~18 balance properties",
      "tools/validate.py (pure stdlib) is a static invariant linter (not runtime): one "
      "<script>, brace balance, 40 levels, every mix sums to 1.0 (C4), all 3 drop pools "
      "sum to 1.0 (C5), boss tiers, skill wiring, GAMEPLAY_KEYS coverage. Run "
@@ -110,8 +112,9 @@ REPLACEMENTS = [
      "runs it on push as a signal only (it never blocks the Pages deploy). There is "
      "ALSO an optional (non-CI) runtime + balance check, tools/headless_check.py (needs "
      "pip install py_mini_racer): it executes the game in V8 with a stubbed canvas/DOM "
-     "across all 40 levels and asserts ~18 balance properties - including the new "
-     "'end boss waits 15-30s after the mid-boss dies, with monsters filling the gap'."),
+     "across all 40 levels and checks ~23 balance properties - including the STAGED "
+     "boss flow (1/2/3 mediums by block, the 10-15s surge gap, and the L31-40 0s "
+     "transitional-to-final handoff)."),
 
     # "Things to keep in mind" - the cascade reminder is obsolete; enhancers only.
     ("The weapon priority cascade in fireWeapon",
@@ -164,6 +167,33 @@ REPLACEMENTS = [
      "assistLevelFrac (~0.35 at L1 -> 1.0 at L10), so a fresh ally is much weaker and "
      "upgrades buy power back. Equipped allies spawn at run start "
      "(spawnSelectedAssistants) and rebuild each level (refreshAssistants)."),
+
+    # Difficulty curve bullet -> FOUR-PHASE + the L31-40 spike + the two new enemies.
+    # (Rewrites the bullet inserted earlier; text MUST match the INSERTS version so the
+    # insert step then sees it present and skips it. find anchors on the OLD bullet text.)
+    ("THREE-PHASE difficulty curve (difficultyRamp",
+     "FOUR-PHASE difficulty curve (difficultyRamp / enemyScale / bossHpScale / "
+     "bossSpdScale): scaling is gentle through L1-15, moderate L16-24, sharp L25-30, then a "
+     "STEEP L31-40 spike so the late game depends on meta-progression upgrades. The enemy "
+     "HP/speed ramp's per-level step is capped at 0.2, so most of the L31-40 spike is carried "
+     "by boss HP/speed plus enemyDmgScale(idx) (1.0 through L30, up to ~2.2 at L40, applied to "
+     "enemy contact/bullet/gas damage). Two new regular enemies join the L11-40 spawn mixes: "
+     "weaver (evasive bullet-dodger) and spitter (drops telegraphed poison pools). DROP "
+     "variety is also level-gated in killEnemy - basic & sparse in L1-15 "
+     "(health/resource/rapid/shield), widening at L16 (pierce/multi/damage/speed/magnet) and "
+     "L25 (full pool) - while the static drop arrays still sum to 1.0 (validator C5) and the "
+     "runtime filter renormalizes."),
+
+    # Mid-boss bullet -> the full STAGED encounter structure. (Same rewrite-in-place trick.)
+    ("L31-L40 mid-boss + gap: a mid-boss",
+     "STAGED boss encounters by 10-level block (bossPhase state machine): L1-10 end "
+     "boss only; L11-20 one medium boss at 50% progress, then a surge gap, then the end "
+     "boss; L21-30 two DIFFERENT mediums simultaneously, surge gap, end boss; L31-40 two "
+     "mediums, surge gap, a transitional boss, then the end boss IMMEDIATELY (0s) on its "
+     "death. Bosses never co-exist. The surge gap is rand(10,15)s and floods the arena with "
+     "a DENSE wave of monsters (alive cap 28). Medium/transitional kinds reuse existing AIs "
+     "plus two NEW boss AIs (warden, harrier) that are never tier end bosses, so validator "
+     "C6's locked order is untouched."),
 ]
 
 # INSERTS: bullets added immediately before the paragraph whose text contains the
@@ -221,12 +251,17 @@ INSERTS = [
         "stats that don't scale, like move speed / shield / regen / lifesteal).",
     ]),
     ("10. Allies", [
-        "THREE-PHASE difficulty curve (difficultyRamp / enemyScale / bossHpScale / "
-        "bossSpdScale): scaling is gentle through L1-15, ramps moderately L16-24, then spikes "
-        "sharply L25-40 so the late game depends on meta-progression upgrades. DROP variety is "
-        "also level-gated in killEnemy - basic & sparse in L1-15 (health/resource/rapid/shield), "
-        "widening at L16 (pierce/multi/damage/speed/magnet) and L25 (full pool) - while the "
-        "static drop arrays still sum to 1.0 (validator C5) and the runtime filter renormalizes.",
+        "FOUR-PHASE difficulty curve (difficultyRamp / enemyScale / bossHpScale / "
+        "bossSpdScale): scaling is gentle through L1-15, moderate L16-24, sharp L25-30, then a "
+        "STEEP L31-40 spike so the late game depends on meta-progression upgrades. The enemy "
+        "HP/speed ramp's per-level step is capped at 0.2, so most of the L31-40 spike is carried "
+        "by boss HP/speed plus enemyDmgScale(idx) (1.0 through L30, up to ~2.2 at L40, applied to "
+        "enemy contact/bullet/gas damage). Two new regular enemies join the L11-40 spawn mixes: "
+        "weaver (evasive bullet-dodger) and spitter (drops telegraphed poison pools). DROP "
+        "variety is also level-gated in killEnemy - basic & sparse in L1-15 "
+        "(health/resource/rapid/shield), widening at L16 (pierce/multi/damage/speed/magnet) and "
+        "L25 (full pool) - while the static drop arrays still sum to 1.0 (validator C5) and the "
+        "runtime filter renormalizes.",
 
         "Reusable boss abilities (escalate by levelIdx, no-op for clones): bossInvuln "
         "(1.2s damage-absorb shield), bossSummonExploders, bossSpawnClone, bossGasBomb, "
@@ -234,11 +269,14 @@ INSERTS = [
         "- a pulsing yellow telegraph ring that deals NO damage - so you can step out "
         "before it goes live (no 100%-hit instant chip).",
 
-        "L31-L40 mid-boss + gap: a mid-boss (twin/bomber/splitter/reaper, a different "
-        "kind than the end boss) spawns at 50% spawn progress. The end boss NEVER "
-        "co-exists with it - it is held back until the mid-boss DIES plus a 15-30s gap "
-        "(bossGapTimer), during which a trickle of monsters keeps spawning so the arena "
-        "is never empty.",
+        "STAGED boss encounters by 10-level block (bossPhase state machine): L1-10 end "
+        "boss only; L11-20 one medium boss at 50% progress, then a surge gap, then the end "
+        "boss; L21-30 two DIFFERENT mediums simultaneously, surge gap, end boss; L31-40 two "
+        "mediums, surge gap, a transitional boss, then the end boss IMMEDIATELY (0s) on its "
+        "death. Bosses never co-exist. The surge gap is rand(10,15)s and floods the arena with "
+        "a DENSE wave of monsters (alive cap 28). Medium/transitional kinds reuse existing AIs "
+        "plus two NEW boss AIs (warden, harrier) that are never tier end bosses, so validator "
+        "C6's locked order is untouched.",
     ]),
 ]
 
