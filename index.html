@@ -1175,9 +1175,9 @@ const DROP_LVL_PER = 0.004, DROP_LVL_CAP = 0.15, DROP_GATE_MAX = 0.75; // gate-o
 // gold in the SHOP; the gold cost rises every level). Level 1 is deliberately weak
 // (capabilities are SIGNIFICANTLY reduced) and level 10 restores full power. ----
 const ASSIST_MAX_LEVEL = 10;
-const ASSIST_UPGRADE_BASE = 120;     // gold to go from level 1 -> 2
-const ASSIST_UPGRADE_GROWTH = 1.45;  // each subsequent level costs ~45% more
-// => ~120 (L1->2) climbing to ~2345 (L9->10); ~7290 gold total to max one ally.
+const ASSIST_UPGRADE_BASE = 250;     // gold to go from level 1 -> 2
+const ASSIST_UPGRADE_GROWTH = 1.5;   // each subsequent level costs ~50% more
+// => ~250 (L1->2) climbing to ~6400 (L9->10); ~18,700 gold total to max one ally.
 
 function DEFAULT_PROFILE(){
   return { v:1, level:1, xp:0, gold:0,
