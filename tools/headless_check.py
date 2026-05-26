@@ -102,18 +102,22 @@ DRIVER = r"""
     // living regulars so aliveRegular hits 0 and the boss(es) arrive.
     spawnedCount = levelData.total;
     entities = entities.filter(function(e){ return e.type !== 'enemy' || e.isBoss; });
-    // Run ~13s so the mid-boss (50% gate) + end boss spawn AND every ability
-    // cooldown (gas 5.5s, exploders 5s, heal 6s, invuln 8s, clone 9s) fires.
-    // L31-40 new flow: the end boss is gated behind the mid-boss DYING + a 15-30s
-    // gap. Since the headless player never shoots, kill the mid-boss once it's up
-    // and zero the gap each frame so the end boss arrives early and its AI still
-    // gets the rest of Phase B to run (preserving the old single-boss coverage).
-    for(var g = 0; g < 800; g++){
+    // Run ~20s so the full staged boss chain resolves AND every ability cooldown
+    // fires. Staged flow (L11-40): medium wave (1 or 2 bosses) @50% -> surge gap ->
+    // [L31-40 transitional boss -> 0s] -> end boss. Since the headless player never
+    // shoots, walk the phases by force: kill ALL live bosses while a medium wave
+    // (bossPhase 1) or the transitional boss (bossPhase 3) is up, and zero the surge
+    // gap (bossPhase 2), so the end boss still arrives and its AI gets the rest of
+    // Phase B to run (preserving the old single-boss ability coverage on every level).
+    for(var g = 0; g < 1200; g++){
       player.hp = player.maxHp;
-      if(levelData.midBoss && midbossSpawned && !midbossDefeated){
-        entities.forEach(function(e){ if(e.type === 'enemy' && e.kind === levelData.midBoss) e.dead = true; });
+      if(midbossSpawned && bossPhase === 1){
+        entities.forEach(function(e){ if(e.type === 'enemy' && e.isBoss) e.dead = true; });
       }
-      if(levelData.midBoss && midbossDefeated) bossGapTimer = 0;
+      if(bossPhase === 2) bossGapTimer = 0;
+      if(bossPhase === 3){
+        entities.forEach(function(e){ if(e.type === 'enemy' && e.isBoss) e.dead = true; });
+      }
       safe('updB L' + idx, function(){ update(1/60); });
       safe('drawB L' + idx, function(){ draw(); });
     }
@@ -129,7 +133,7 @@ DRIVER = r"""
   // maybeElite on every regular kind — independent of whether the AI happened
   // to trigger them above.
   var bossKinds = ['bruiser','sniper','splitter','summoner','overlord','nemesis',
-                   'reaper','phantom','twin','bomber'];
+                   'reaper','phantom','twin','bomber','warden','harrier'];
   levelIdx = 39;
   bossKinds.forEach(function(k){
     safe('abilities ' + k, function(){
@@ -280,19 +284,29 @@ DRIVER_BALANCE = r"""
           'elite='+e.elite+' hp '+base.maxHp+'->'+e.maxHp+' r '+base.radius+'->'+e.radius);
   })();
 
-  // 6) Mid-boss data: L31-40 each have a midBoss that is a valid boss kind and
-  //    DIFFERS from the end boss; L1-30 have none.
+  // 6) Staged-boss data by tier: L1-10 none; L11-20 exactly 1 medium; L21-30 exactly
+  //    2 mediums; L31-40 exactly 2 mediums + a transitional boss. Every medium/trans
+  //    kind must be a valid boss kind, distinct from each other AND from the end boss.
   (function(){
     var bad = [];
     for(var i = 0; i < LEVELS.length; i++){
-      var mb = LEVELS[i].midBoss;
-      if(i >= 30){
-        if(!mb) bad.push('L'+(i+1)+':missing');
-        else if(mb === LEVELS[i].boss) bad.push('L'+(i+1)+':==end');
-        else { var t = createEnemy(mb, 0, 0); if(!t || !t.isBoss) bad.push('L'+(i+1)+':invalid('+mb+')'); }
-      } else if(mb){ bad.push('L'+(i+1)+':unexpected'); }
+      var L = LEVELS[i];
+      var meds = [L.midBoss, L.midBoss2, L.transBoss].filter(Boolean);
+      if(i < 10){ if(meds.length) bad.push('L'+(i+1)+':unexpected'); continue; }
+      var want = (i < 20) ? 1 : (i < 30) ? 2 : 3;
+      if(meds.length !== want){ bad.push('L'+(i+1)+':count'+meds.length+'!='+want); continue; }
+      if(i >= 30 && !L.transBoss) bad.push('L'+(i+1)+':no-trans');
+      if(i < 30 && L.transBoss)   bad.push('L'+(i+1)+':has-trans');
+      var seen = {};
+      meds.forEach(function(mb){
+        if(mb === L.boss) bad.push('L'+(i+1)+':==end('+mb+')');
+        if(seen[mb])      bad.push('L'+(i+1)+':dup('+mb+')');
+        seen[mb] = 1;
+        var t = createEnemy(mb, 0, 0);
+        if(!t || !t.isBoss) bad.push('L'+(i+1)+':invalid('+mb+')');
+      });
     }
-    check('Mid-boss: L31-40 valid+distinct, L1-30 none', bad.length === 0, bad.join(' '));
+    check('Staged bosses: L11-40 tiered (1/2/3) valid+distinct, L1-10 none', bad.length === 0, bad.join(' '));
   })();
 
   // 7) Boss-ability LEVEL GATING: each ability must NOT fire one level below its
@@ -335,39 +349,61 @@ DRIVER_BALANCE = r"""
           'below='+below+' above='+above);
   });
 
-  // 8) L31-40 boss gap: after the mid-boss DIES the end boss must wait a 15-30s
-  //    gap (the two bosses never co-exist), and a trickle of monsters must appear
-  //    during that gap so the arena is never empty. Drives the real spawn flow.
+  // 8) Staged boss gap (L11-40): after the medium-boss wave DIES the next phase must
+  //    wait a 10-15s SURGE gap (bosses never co-exist) filled by a DENSE stream of
+  //    monsters; then L11-30 spawn the end boss, while L31-40 spawn a transitional
+  //    boss whose death triggers the end boss IMMEDIATELY (0s). Drives the real flow.
+  //    Samples idx 12 (1 medium), 24 (2 mediums), 30 & 39 (2 mediums + transitional).
   (function(){
     var bad = [];
-    [30, 39].forEach(function(idx){
+    [12, 24, 30, 39].forEach(function(idx){
       startLevel(idx);
       state = STATE.PLAYING; paused = false;
       player.hp = player.maxHp = 99999;
       spawnedCount = levelData.total;                          // skip the main wave
       entities = entities.filter(function(e){ return e.type === 'player'; });
+      var meds = [levelData.midBoss, levelData.midBoss2].filter(Boolean);
       var guard = 0;
-      while(!midbossSpawned && guard++ < 120) update(1/60);     // release the mid-boss
+      while(!midbossSpawned && guard++ < 120) update(1/60);     // release the medium wave
       if(!midbossSpawned){ bad.push('L'+(idx+1)+':no-midboss'); return; }
-      // Kill the mid-boss; the next tick should open the gap.
-      entities.forEach(function(e){ if(e.type==='enemy' && e.kind===levelData.midBoss) e.dead = true; });
+      var liveMeds = entities.filter(function(e){ return e.type==='enemy' && e.isBoss; }).length;
+      if(liveMeds !== meds.length){ bad.push('L'+(idx+1)+':medcount'+liveMeds+'!='+meds.length); return; }
+      // Kill the whole medium wave; the next tick should open the surge gap.
+      entities.forEach(function(e){ if(e.type==='enemy' && e.isBoss) e.dead = true; });
       update(1/60);
       if(!midbossDefeated){ bad.push('L'+(idx+1)+':not-defeated'); return; }
-      if(bossGapTimer < 15 || bossGapTimer > 30){ bad.push('L'+(idx+1)+':gap='+bossGapTimer.toFixed(1)); return; }
-      // 14s in (< the 15s minimum gap): end boss must NOT be up yet; monsters appear.
-      var sawMonster = false;
-      for(var f = 0; f < 14*60; f++){
-        player.hp = player.maxHp;
-        update(1/60);
-        if(entities.some(function(e){ return e.type==='enemy' && !e.isBoss; })) sawMonster = true;
+      if(bossGapTimer < 10 || bossGapTimer > 15){ bad.push('L'+(idx+1)+':gap='+bossGapTimer.toFixed(1)); return; }
+      // Run almost the whole gap (stop ~0.5s short): no boss yet, and the surge must
+      // pile up a real crowd (would FAIL under the old <10 trickle).
+      var maxMonsters = 0, sawBoss = false;
+      var frames = Math.ceil(bossGapTimer * 60) - 30;
+      for(var f = 0; f < frames; f++){
+        player.hp = player.maxHp; update(1/60);
+        var m = entities.filter(function(e){ return e.type==='enemy' && !e.isBoss; }).length;
+        if(m > maxMonsters) maxMonsters = m;
+        if(entities.some(function(e){ return e.type==='enemy' && e.isBoss; })) sawBoss = true;
       }
-      if(bossSpawned){ bad.push('L'+(idx+1)+':boss-too-early'); return; }
-      if(!sawMonster){ bad.push('L'+(idx+1)+':no-gap-monsters'); return; }
-      // Let the rest of the gap (<=30s) elapse: the end boss must then arrive.
-      for(var f2 = 0; f2 < 18*60 && !bossSpawned; f2++){ player.hp = player.maxHp; update(1/60); }
-      if(!bossSpawned) bad.push('L'+(idx+1)+':boss-never');
+      if(sawBoss){ bad.push('L'+(idx+1)+':boss-too-early'); return; }
+      if(maxMonsters < 8){ bad.push('L'+(idx+1)+':surge-too-thin('+maxMonsters+')'); return; }
+      // Let the gap finish: the next boss (transitional for L31-40, else the end boss) arrives.
+      for(var f2 = 0; f2 < 4*60; f2++){
+        player.hp = player.maxHp; update(1/60);
+        if(entities.some(function(e){ return e.type==='enemy' && e.isBoss; })) break;
+      }
+      var liveBoss = entities.filter(function(e){ return e.type==='enemy' && e.isBoss; });
+      if(!liveBoss.length){ bad.push('L'+(idx+1)+':next-boss-never'); return; }
+      if(idx >= 30){
+        // L31-40: it's the TRANSITIONAL boss, not the end boss yet.
+        if(bossSpawned){ bad.push('L'+(idx+1)+':endboss-skipped-trans'); return; }
+        if(liveBoss[0].kind !== levelData.transBoss){ bad.push('L'+(idx+1)+':not-trans('+liveBoss[0].kind+')'); return; }
+        liveBoss.forEach(function(e){ e.dead = true; });
+        update(1/60);                                          // 0s handoff
+        if(!bossSpawned){ bad.push('L'+(idx+1)+':end-not-immediate'); return; }
+      } else {
+        if(!bossSpawned){ bad.push('L'+(idx+1)+':endboss-flag'); return; }
+      }
     });
-    check('Boss gap: end boss waits 15-30s after mid-boss + monsters fill gap',
+    check('Staged gap: 10-15s dense surge; L31-40 0s trans->end handoff',
           bad.length === 0, bad.join(' '));
   })();
 

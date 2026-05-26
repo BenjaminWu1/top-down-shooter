@@ -356,6 +356,48 @@ const SPR = {
     ".1221.",
     ".3..3."
   ]),
+  // Weaver — evasive teal dart (jukes away from bullets).
+  weaver_a: S({'.':null,'1':'#117a65','2':'#1abc9c','3':'#0b3d36','e':'#eafffb'}, [
+    "...22...",
+    "..2222..",
+    ".211112.",
+    "21e22e12",
+    "21e22e12",
+    ".211112.",
+    "..3..3..",
+    ".3....3."
+  ]),
+  weaver_b: S({'.':null,'1':'#117a65','2':'#1abc9c','3':'#0b3d36','e':'#eafffb'}, [
+    "...22...",
+    "..2222..",
+    ".211112.",
+    "21e22e12",
+    "21e22e12",
+    ".211112.",
+    ".3.33.3.",
+    "3......3"
+  ]),
+  // Spitter — toxic green blob that drips poison pools.
+  spitter_a: S({'.':null,'1':'#6e2c00','2':'#27ae60','3':'#145a32','e':'#eafff0','t':'#a9dfbf'}, [
+    "..1111..",
+    ".122221.",
+    "12e22e21",
+    "122tt221",
+    "12222221",
+    ".122221.",
+    "..3tt3..",
+    ".3.33.3."
+  ]),
+  spitter_b: S({'.':null,'1':'#6e2c00','2':'#27ae60','3':'#145a32','e':'#eafff0','t':'#a9dfbf'}, [
+    "..1111..",
+    ".122221.",
+    "12e22e21",
+    "122tt221",
+    "12222221",
+    ".122221.",
+    "..3..3..",
+    ".3.tt.3."
+  ]),
   // ---- Bosses ----
   bruiser: S({'.':null,'1':'#5d2a2a','2':'#c0392b','3':'#1c0a0a','e':'#fff1c1','y':'#f1c40f'}, [
     ".....111111.....",
@@ -464,6 +506,38 @@ const SPR = {
     "..gggg..............gggg",
     "...gg................gg.",
     "....g.................g."
+  ]),
+  // WARDEN — armored zoning sentinel (medium/transitional boss).
+  warden: S({'.':null,'1':'#34495e','2':'#5dade2','3':'#1b2631','e':'#d6eaf8','y':'#f7dc6f'}, [
+    "....11111111....",
+    "...1122222211...",
+    "..112eeeeee211..",
+    ".112eeeeeeee211.",
+    ".12e22222222e21.",
+    ".1y2222222222y1.",
+    ".12223333322221.",
+    "11223333333322y1",
+    "11223333333322y1",
+    ".1223333333321..",
+    "..122222222211..",
+    "..3..........3..",
+    ".3............3.",
+    "3..............3"
+  ]),
+  // HARRIER — fast multi-dash striker with wings (medium/transitional boss).
+  harrier: S({'.':null,'1':'#9c640c','2':'#f39c12','3':'#4d3402','e':'#fff','y':'#e74c3c'}, [
+    "......1111......",
+    ".....112211.....",
+    "....11e22e11....",
+    "...1122222211...",
+    "..112222222211..",
+    ".112222yy222211.",
+    "1122222222222211",
+    ".11222222222211.",
+    "..112222222211..",
+    "...1122222211...",
+    "....3.3..3.3....",
+    "...3..3..3..3..."
   ]),
   // ---- Companion (player's AI assistant drone) ----
   companion_a: S({'.':null,'1':'#aed6f1','2':'#2874a6','3':'#0e2a44','e':'#f1c40f'}, [
@@ -1061,49 +1135,52 @@ const LEVELS = [
   { total:32, rate:0.6,  mix:[['runner',0.25],['tank',0.2],['shooter',0.2],['charger',0.12],['exploder',0.13],['swarmer',0.1]],         boss:'sniper',  bossName:'DEADEYE'     },
   { total:36, rate:0.55, mix:[['runner',0.2],['tank',0.2],['shooter',0.2],['charger',0.15],['exploder',0.13],['swarmer',0.12]],         boss:'sniper',  bossName:'SHARPSHOT'   },
   { total:40, rate:0.5,  mix:[['runner',0.18],['tank',0.18],['shooter',0.22],['charger',0.15],['exploder',0.15],['swarmer',0.12]],      boss:'sniper',  bossName:'HUNTSMAN'    },
-  // ---- Tier 3: L11-L15 — HYDRA (splitter). Cascading kills, multi-split mid-game. ----
-  { total:44, rate:0.48, mix:[['runner',0.18],['tank',0.18],['shooter',0.22],['charger',0.15],['exploder',0.15],['swarmer',0.12]],      boss:'splitter' },
-  { total:48, rate:0.45, mix:[['runner',0.15],['tank',0.2],['shooter',0.22],['charger',0.15],['exploder',0.15],['swarmer',0.13]],       boss:'splitter', bossName:'MULTIFORM'   },
-  { total:52, rate:0.43, mix:[['runner',0.15],['tank',0.2],['shooter',0.22],['charger',0.15],['exploder',0.15],['swarmer',0.13]],       boss:'splitter', bossName:'SUNDERER'    },
-  { total:56, rate:0.4,  mix:[['runner',0.12],['tank',0.22],['shooter',0.22],['charger',0.16],['exploder',0.15],['swarmer',0.13]],      boss:'splitter', bossName:'FRAGMENTER'  },
-  { total:60, rate:0.38, mix:[['runner',0.12],['tank',0.2],['shooter',0.25],['charger',0.15],['exploder',0.15],['swarmer',0.13]],       boss:'splitter', bossName:'SCION'       },
-  // ---- Tier 4: L16-L20 — CONJURER (summoner). Spawns adds; the arena fills up. ----
-  { total:66, rate:0.36, mix:[['runner',0.1],['tank',0.22],['shooter',0.25],['charger',0.16],['exploder',0.15],['swarmer',0.12]],       boss:'summoner' },
-  { total:72, rate:0.34, mix:[['runner',0.08],['tank',0.22],['shooter',0.25],['charger',0.17],['exploder',0.16],['swarmer',0.12]],      boss:'summoner', bossName:'NECROMANCER' },
-  { total:78, rate:0.32, mix:[['runner',0.08],['tank',0.22],['shooter',0.25],['charger',0.18],['exploder',0.17],['swarmer',0.1]],       boss:'summoner', bossName:'WARLOCK'     },
-  { total:84, rate:0.3,  mix:[['runner',0.06],['tank',0.24],['shooter',0.26],['charger',0.18],['exploder',0.16],['swarmer',0.1]],       boss:'summoner', bossName:'SHEPHERD'    },
-  { total:92, rate:0.28, mix:[['tank',0.26],['shooter',0.28],['charger',0.2],['exploder',0.16],['swarmer',0.1]],                         boss:'summoner', bossName:'ARCHDEMON'   },
-  // ---- Tier 5: L21-L25 — OVERLORD (3-phase boss). 2x arena (L25 jumps to 3x). ----
-  { total:100, rate:0.27, mix:[['tank',0.24],['shooter',0.28],['charger',0.2],['exploder',0.18],['swarmer',0.1]],                        boss:'overlord' },
-  { total:108, rate:0.26, mix:[['tank',0.26],['shooter',0.28],['charger',0.2],['exploder',0.16],['swarmer',0.1]],                        boss:'overlord', bossName:'TYRANT'      },
-  { total:116, rate:0.25, mix:[['tank',0.26],['shooter',0.3],['charger',0.2],['exploder',0.14],['swarmer',0.1]],                         boss:'overlord', bossName:'SOVEREIGN'   },
-  { total:124, rate:0.24, mix:[['tank',0.28],['shooter',0.3],['charger',0.2],['exploder',0.14],['swarmer',0.08]],                        boss:'overlord', bossName:'EMPEROR'     },
-  { total:140, rate:0.22, mix:[['tank',0.3],['shooter',0.3],['charger',0.22],['exploder',0.12],['swarmer',0.06]],                        boss:'overlord', bossName:'GODKING'     },
-  // ---- Tier 6: L26-L30 — NEMESIS (4-phase finale). 3x arena. ----
-  { total:150, rate:0.20, mix:[['tank',0.3],['shooter',0.32],['charger',0.22],['exploder',0.1],['swarmer',0.06]],                        boss:'nemesis'  },
-  { total:160, rate:0.19, mix:[['tank',0.32],['shooter',0.32],['charger',0.22],['exploder',0.1],['swarmer',0.04]],                       boss:'nemesis',  bossName:'ARCHFIEND'   },
-  { total:175, rate:0.18, mix:[['tank',0.32],['shooter',0.34],['charger',0.22],['exploder',0.1],['swarmer',0.02]],                       boss:'nemesis',  bossName:'WORLDEATER'  },
-  { total:190, rate:0.17, mix:[['tank',0.34],['shooter',0.34],['charger',0.22],['exploder',0.1]],                                         boss:'nemesis',  bossName:'VOIDLORD'    },
-  { total:220, rate:0.16, mix:[['tank',0.36],['shooter',0.34],['charger',0.22],['exploder',0.08]],                                        boss:'nemesis',  bossName:'ANNIHILATOR' },
-  // ---- Tier 7: L31-L35 — REAPER (high-speed dasher). 3x arena. Post-finale escalation. ----
-  { total:230, rate:0.155, mix:[['tank',0.36],['shooter',0.34],['charger',0.22],['exploder',0.08]],                                       boss:'reaper',  midBoss:'twin'  },
-  { total:245, rate:0.15,  mix:[['tank',0.38],['shooter',0.32],['charger',0.22],['exploder',0.08]],                                       boss:'reaper',  midBoss:'bomber',  bossName:'HARVESTER'   },
-  { total:260, rate:0.145, mix:[['tank',0.38],['shooter',0.34],['charger',0.2],['exploder',0.08]],                                        boss:'reaper',  midBoss:'splitter',  bossName:'SOULREAPER'  },
-  { total:280, rate:0.14,  mix:[['tank',0.4],['shooter',0.32],['charger',0.2],['exploder',0.08]],                                         boss:'reaper',  midBoss:'bomber',  bossName:'DEATHSCYTHE' },
-  { total:300, rate:0.135, mix:[['tank',0.4],['shooter',0.34],['charger',0.18],['exploder',0.08]],                                        boss:'reaper',  midBoss:'twin',  bossName:'OBLIVION'    },
-  // ---- Tier 8: L36-L40 — PHANTOM (teleporting clone-summoner). 3x arena. Final tier. ----
-  { total:320, rate:0.13,  mix:[['tank',0.42],['shooter',0.32],['charger',0.18],['exploder',0.08]],                                       boss:'phantom',  midBoss:'bomber' },
-  { total:345, rate:0.125, mix:[['tank',0.42],['shooter',0.34],['charger',0.16],['exploder',0.08]],                                       boss:'phantom', midBoss:'twin',  bossName:'WRAITH'      },
-  { total:370, rate:0.12,  mix:[['tank',0.44],['shooter',0.32],['charger',0.16],['exploder',0.08]],                                       boss:'phantom', midBoss:'reaper',  bossName:'SPECTER'     },
-  { total:400, rate:0.115, mix:[['tank',0.44],['shooter',0.34],['charger',0.14],['exploder',0.08]],                                       boss:'phantom', midBoss:'bomber',  bossName:'REVENANT'    },
-  { total:450, rate:0.11,  mix:[['tank',0.46],['shooter',0.34],['charger',0.14],['exploder',0.06]],                                       boss:'phantom', midBoss:'reaper',  bossName:'APOCALYPSE'  }
+  // ---- Tier 3: L11-L15 — HYDRA (splitter). 2 BOSSES: 1 medium @50% -> surge gap -> end. ----
+  { total:44, rate:0.48, mix:[['runner',0.16],['tank',0.18],['shooter',0.18],['charger',0.13],['exploder',0.12],['swarmer',0.10],['weaver',0.07],['spitter',0.06]], boss:'splitter', midBoss:'bruiser' },
+  { total:48, rate:0.45, mix:[['runner',0.13],['tank',0.18],['shooter',0.18],['charger',0.13],['exploder',0.13],['swarmer',0.11],['weaver',0.07],['spitter',0.07]], boss:'splitter', bossName:'MULTIFORM',  midBoss:'twin'   },
+  { total:52, rate:0.43, mix:[['runner',0.13],['tank',0.18],['shooter',0.18],['charger',0.13],['exploder',0.13],['swarmer',0.11],['weaver',0.07],['spitter',0.07]], boss:'splitter', bossName:'SUNDERER',   midBoss:'sniper' },
+  { total:56, rate:0.4,  mix:[['runner',0.10],['tank',0.20],['shooter',0.18],['charger',0.14],['exploder',0.13],['swarmer',0.11],['weaver',0.07],['spitter',0.07]], boss:'splitter', bossName:'FRAGMENTER', midBoss:'warden' },
+  { total:60, rate:0.38, mix:[['runner',0.10],['tank',0.18],['shooter',0.20],['charger',0.13],['exploder',0.13],['swarmer',0.11],['weaver',0.08],['spitter',0.07]], boss:'splitter', bossName:'SCION',      midBoss:'harrier' },
+  // ---- Tier 4: L16-L20 — CONJURER (summoner). 2 BOSSES: 1 medium @50% -> surge gap -> end. ----
+  { total:66, rate:0.36, mix:[['runner',0.08],['tank',0.20],['shooter',0.21],['charger',0.14],['exploder',0.13],['swarmer',0.10],['weaver',0.08],['spitter',0.06]], boss:'summoner', midBoss:'twin'    },
+  { total:72, rate:0.34, mix:[['runner',0.06],['tank',0.20],['shooter',0.21],['charger',0.15],['exploder',0.14],['swarmer',0.10],['weaver',0.08],['spitter',0.06]], boss:'summoner', bossName:'NECROMANCER', midBoss:'sniper' },
+  { total:78, rate:0.32, mix:[['runner',0.06],['tank',0.20],['shooter',0.21],['charger',0.16],['exploder',0.15],['swarmer',0.08],['weaver',0.08],['spitter',0.06]], boss:'summoner', bossName:'WARLOCK',  midBoss:'warden' },
+  { total:84, rate:0.3,  mix:[['runner',0.05],['tank',0.22],['shooter',0.22],['charger',0.16],['exploder',0.14],['swarmer',0.08],['weaver',0.07],['spitter',0.06]], boss:'summoner', bossName:'SHEPHERD', midBoss:'bruiser' },
+  { total:92, rate:0.28, mix:[['tank',0.24],['shooter',0.24],['charger',0.18],['exploder',0.14],['swarmer',0.08],['weaver',0.07],['spitter',0.05]],                 boss:'summoner', bossName:'ARCHDEMON', midBoss:'twin' },
+  // ---- Tier 5: L21-L25 — OVERLORD (3-phase boss). 3 BOSSES: 2 mediums -> surge -> end. ----
+  { total:100, rate:0.27, mix:[['tank',0.22],['shooter',0.24],['charger',0.18],['exploder',0.16],['swarmer',0.08],['weaver',0.07],['spitter',0.05]],                boss:'overlord', midBoss:'sniper', midBoss2:'bomber' },
+  { total:108, rate:0.26, mix:[['tank',0.24],['shooter',0.24],['charger',0.18],['exploder',0.14],['swarmer',0.08],['weaver',0.07],['spitter',0.05]],                boss:'overlord', bossName:'TYRANT',    midBoss:'twin', midBoss2:'harrier' },
+  { total:116, rate:0.25, mix:[['tank',0.24],['shooter',0.26],['charger',0.18],['exploder',0.12],['swarmer',0.08],['weaver',0.07],['spitter',0.05]],                boss:'overlord', bossName:'SOVEREIGN', midBoss:'warden', midBoss2:'reaper' },
+  { total:124, rate:0.24, mix:[['tank',0.26],['shooter',0.26],['charger',0.18],['exploder',0.12],['swarmer',0.06],['weaver',0.07],['spitter',0.05]],                boss:'overlord', bossName:'EMPEROR',   midBoss:'bruiser', midBoss2:'sniper' },
+  { total:140, rate:0.22, mix:[['tank',0.28],['shooter',0.26],['charger',0.20],['exploder',0.10],['swarmer',0.04],['weaver',0.07],['spitter',0.05]],                boss:'overlord', bossName:'GODKING',   midBoss:'harrier', midBoss2:'bomber' },
+  // ---- Tier 6: L26-L30 — NEMESIS (4-phase finale). 3 BOSSES: 2 mediums -> surge -> end. ----
+  { total:150, rate:0.20, mix:[['tank',0.28],['shooter',0.28],['charger',0.20],['exploder',0.08],['swarmer',0.04],['weaver',0.07],['spitter',0.05]],                boss:'nemesis', midBoss:'twin', midBoss2:'warden' },
+  { total:160, rate:0.19, mix:[['tank',0.30],['shooter',0.28],['charger',0.20],['exploder',0.08],['swarmer',0.02],['weaver',0.07],['spitter',0.05]],                boss:'nemesis', bossName:'ARCHFIEND',  midBoss:'sniper', midBoss2:'harrier' },
+  { total:175, rate:0.18, mix:[['tank',0.30],['shooter',0.30],['charger',0.20],['exploder',0.08],['weaver',0.07],['spitter',0.05]],                                 boss:'nemesis', bossName:'WORLDEATER', midBoss:'bomber', midBoss2:'reaper' },
+  { total:190, rate:0.17, mix:[['tank',0.32],['shooter',0.30],['charger',0.20],['exploder',0.08],['weaver',0.06],['spitter',0.04]],                                 boss:'nemesis', bossName:'VOIDLORD',   midBoss:'warden', midBoss2:'splitter' },
+  { total:220, rate:0.16, mix:[['tank',0.34],['shooter',0.30],['charger',0.20],['exploder',0.06],['weaver',0.06],['spitter',0.04]],                                 boss:'nemesis', bossName:'ANNIHILATOR', midBoss:'harrier', midBoss2:'twin' },
+  // ---- Tier 7: L31-L35 — REAPER. 4 BOSSES: 2 mediums -> surge -> transitional -> 0s -> end. ----
+  { total:230, rate:0.155, mix:[['tank',0.32],['shooter',0.30],['charger',0.20],['exploder',0.08],['weaver',0.06],['spitter',0.04]],                                boss:'reaper', midBoss:'warden', midBoss2:'harrier', transBoss:'bomber' },
+  { total:245, rate:0.15,  mix:[['tank',0.34],['shooter',0.28],['charger',0.20],['exploder',0.08],['weaver',0.06],['spitter',0.04]],                                boss:'reaper', bossName:'HARVESTER',   midBoss:'twin', midBoss2:'bomber', transBoss:'warden' },
+  { total:260, rate:0.145, mix:[['tank',0.34],['shooter',0.30],['charger',0.18],['exploder',0.08],['weaver',0.06],['spitter',0.04]],                                boss:'reaper', bossName:'SOULREAPER',  midBoss:'sniper', midBoss2:'warden', transBoss:'harrier' },
+  { total:280, rate:0.14,  mix:[['tank',0.36],['shooter',0.28],['charger',0.18],['exploder',0.08],['weaver',0.06],['spitter',0.04]],                                boss:'reaper', bossName:'DEATHSCYTHE', midBoss:'bomber', midBoss2:'harrier', transBoss:'twin' },
+  { total:300, rate:0.135, mix:[['tank',0.36],['shooter',0.30],['charger',0.16],['exploder',0.08],['weaver',0.06],['spitter',0.04]],                                boss:'reaper', bossName:'OBLIVION',    midBoss:'warden', midBoss2:'twin', transBoss:'harrier' },
+  // ---- Tier 8: L36-L40 — PHANTOM. 4 BOSSES: 2 mediums -> surge -> transitional -> 0s -> end. ----
+  { total:320, rate:0.13,  mix:[['tank',0.38],['shooter',0.28],['charger',0.16],['exploder',0.08],['weaver',0.06],['spitter',0.04]],                                boss:'phantom', midBoss:'warden', midBoss2:'harrier', transBoss:'reaper' },
+  { total:345, rate:0.125, mix:[['tank',0.38],['shooter',0.30],['charger',0.14],['exploder',0.08],['weaver',0.06],['spitter',0.04]],                                boss:'phantom', bossName:'WRAITH',   midBoss:'twin', midBoss2:'bomber', transBoss:'warden' },
+  { total:370, rate:0.12,  mix:[['tank',0.40],['shooter',0.28],['charger',0.14],['exploder',0.08],['weaver',0.06],['spitter',0.04]],                                boss:'phantom', bossName:'SPECTER',  midBoss:'sniper', midBoss2:'reaper', transBoss:'harrier' },
+  { total:400, rate:0.115, mix:[['tank',0.40],['shooter',0.30],['charger',0.12],['exploder',0.08],['weaver',0.06],['spitter',0.04]],                                boss:'phantom', bossName:'REVENANT', midBoss:'warden', midBoss2:'twin', transBoss:'bomber' },
+  { total:450, rate:0.11,  mix:[['tank',0.42],['shooter',0.30],['charger',0.12],['exploder',0.06],['weaver',0.06],['spitter',0.04]],                                boss:'phantom', bossName:'APOCALYPSE', midBoss:'harrier', midBoss2:'reaper', transBoss:'warden' }
 ];
 
 const BOSS_NAMES = {
   bruiser:'BRUISER', sniper:'NEEDLE',
   splitter:'HYDRA', summoner:'CONJURER', overlord:'OVERLORD',
   twin:'TWIN STRIKER', reaper:'REAPER',
-  bomber:'BOMBARDIER', phantom:'PHANTOM', nemesis:'NEMESIS'
+  bomber:'BOMBARDIER', phantom:'PHANTOM', nemesis:'NEMESIS',
+  // New boss AIs — only ever used as medium / transitional bosses (the 8-tier END-boss
+  // order is locked by validator C6), but they need names for the HUD bar + arrival flash.
+  warden:'WARDEN', harrier:'HARRIER'
 };
 
 // THREE-PHASE difficulty progression across the 40 levels (idx 0..39). The shape is
@@ -1114,28 +1191,45 @@ const BOSS_NAMES = {
 // monotonicity). To re-tune the whole curve, edit the three slopes / anchors here.
 //   Phase 1  L1-15  (idx 0-14): forgiving — introduce mechanics.
 //   Phase 2  L16-24 (idx 15-23): moderate, steady ramp.
-//   Phase 3  L25-40 (idx 24-39): sharp spike.
+//   Phase 3  L25-30 (idx 24-29): sharp ramp.
+//   Phase 4  L31-40 (idx 30-39): the post-finale SPIKE (steeper still — the late game
+//            is meant to be brutal and lean hard on meta-progression upgrades).
+// The enemy ramp's per-level delta is capped at <=0.2 by the headless continuity
+// assertion, so most of the L31-40 spike is carried by bossHpScale (uncapped) + the
+// enemyDmgScale lever below, NOT this ramp.
 // `difficultyRamp` is the EXTRA on top of 1.0 (so a multiplier is 1 + ramp).
 function difficultyRamp(idx){
   if(idx <= 14) return idx * 0.03;                  // 0.00 .. 0.42
   if(idx <= 23) return 0.42 + (idx - 14) * 0.07;    // 0.49 .. 1.05
-  return 1.05 + (idx - 23) * 0.16;                  // 1.21 .. 3.61 (idx 39)
+  if(idx <= 29) return 1.05 + (idx - 23) * 0.16;    // 1.21 .. 2.01 (idx 29)
+  return 2.01 + (idx - 29) * 0.19;                  // 2.20 .. 4.10 (idx 39) — L31-40 spike
 }
-// Non-boss enemy HP/speed multiplier. ~1.0 @L1, ~1.42 @L15, ~2.05 @L24, ~4.61 @L40.
+// Non-boss enemy HP/speed multiplier. ~1.0 @L1, ~1.42 @L15, ~2.05 @L24, ~3.01 @L30, ~5.10 @L40.
 function enemyScale(){ return 1 + difficultyRamp(levelIdx); }
-// Boss HP multiplier — its own three-phase curve. The phase-1 slope (0.05) is steeper
+// Boss HP multiplier — its own FOUR-phase curve. The phase-1 slope (0.05) is steeper
 // than the enemy ramp ON PURPOSE: the smallest boss base HP is 24 (bruiser), and a
 // gentler slope would make consecutive within-tier HPs collide after Math.ceil (which
-// would fail the "boss HP strictly rises within each tier" assertion). Continuous at
-// the seams. ~1.0 @L1 (no-op), ~1.70 @L15, ~2.42 @L24, ~4.98 @L40.
+// would fail the "boss HP strictly rises within each tier" assertion). Phase 4 (L31-40)
+// is much steeper (0.32) to carry the post-finale spike — no headless delta cap on this
+// one, only strict-increase + L1 no-op. Continuous at the seams.
+// ~1.0 @L1 (no-op), ~1.70 @L15, ~2.42 @L24, ~3.38 @L30, ~6.58 @L40.
 function bossHpScale(idx){
   if(idx <= 14) return 1 + idx * 0.05;              // L1-15 : gentle (strict-after-ceil safe)
   if(idx <= 23) return 1.70 + (idx - 14) * 0.08;    // L16-24: moderate (idx23 -> 2.42)
-  return 2.42 + (idx - 23) * 0.16;                  // L25-40: sharp    (idx39 -> 4.98)
+  if(idx <= 29) return 2.42 + (idx - 23) * 0.16;    // L25-30: sharp    (idx29 -> 3.38)
+  return 3.38 + (idx - 29) * 0.32;                  // L31-40: STEEP spike (idx39 -> 6.58)
 }
 // Boss speed multiplier — shares the enemy ramp shape but flattened so bosses never
-// get uncatchable. ~1.0 @L1, ~1.05 @L15, ~1.25 @L24, ~1.43 @L40.
-function bossSpdScale(idx){ return 1 + difficultyRamp(idx) * 0.12; }
+// get uncatchable. Bumped (0.16) so late bosses pursue harder. ~1.0 @L1, ~1.66 @L40.
+function bossSpdScale(idx){ return 1 + difficultyRamp(idx) * 0.16; }
+// Enemy contact / bullet damage multiplier — flat 1.0 through L30, then ramps so the
+// L31-40 spike also makes enemy HITS hurt more (HP/speed alone are capped by the headless
+// continuity assertion). Applied at the three enemy-sourced damagePlayer sites only.
+// L31 = 1.12 .. L40 = 2.20.
+function enemyDmgScale(idx){
+  if(idx <= 29) return 1.0;
+  return 1.0 + (idx - 29) * 0.12;
+}
 
 // ============================================================
 // STATE
@@ -1152,11 +1246,16 @@ let levelData = null;
 let spawnTimer = 0;
 let spawnedCount = 0;
 let bossSpawned = false;
-let midbossSpawned = false;   // L31-40: the mid-level transitional boss has been released
-let midbossRef = null;        // L31-40: reference to the live mid-boss entity (to detect its death)
-let midbossDefeated = false;  // L31-40: mid-boss is dead — start the gap before the end boss
-let bossGapTimer = 0;         // L31-40: 15-30s gap between mid-boss death and end-boss arrival
-let gapSpawnTimer = 0;        // L31-40: cadence for the trickle of monsters during that gap
+// ---- Staged boss-encounter state machine (L11-40) ----
+// bossPhase: 0 pre-medium · 1 medium wave live · 2 surge gap · 3 transitional boss live
+//            (L31-40 only) · 4 end boss spawned. See the spawn block in updatePlaying.
+let bossPhase = 0;
+let midbossSpawned = false;   // first medium-boss wave has been released
+let midbossRefs = [];         // live medium-boss entities of the current wave (1 or 2)
+let transBossRef = null;      // L31-40: the transitional boss entity (phase 3)
+let midbossDefeated = false;  // all of the gap-triggering medium wave are dead — surge gap open
+let bossGapTimer = 0;         // 10-15s surge gap between the medium wave dying and the next phase
+let gapSpawnTimer = 0;        // cadence for the DENSE monster surge during that gap
 let score = 0;
 let highScore = parseInt(localStorage.getItem('shooter_high') || '0', 10);
 let shakeTime = 0;
@@ -1598,6 +1697,10 @@ function createEnemy(kind, x, y){
     case 'charger': return { ...base, speed:30*ss, hp:Math.ceil(2*ss), maxHp:Math.ceil(2*ss), radius:6, score:35, phase:0, phaseT:0 };
     case 'exploder':return { ...base, speed:48*ss, hp:Math.max(1, Math.ceil(1*ss)), maxHp:Math.max(1, Math.ceil(1*ss)), radius:5, score:30, explodes:true };
     case 'swarmer': return { ...base, speed:78*ss, hp:1, maxHp:1, radius:3, score:8, wobble:Math.random()*Math.PI*2 };
+    // Evasive dodger — jukes away from incoming player bullets, else weaves in.
+    case 'weaver':  return { ...base, speed:64*ss, hp:Math.max(1, Math.ceil(1*ss)), maxHp:Math.max(1, Math.ceil(1*ss)), radius:4, score:22, dodgeCd:0 };
+    // Hazard-dropper — lays telegraphed toxic ground pools (reuses groundFields).
+    case 'spitter': return { ...base, speed:30*ss, hp:Math.ceil(2*ss), maxHp:Math.ceil(2*ss), radius:5, score:28, poolCd:rand(1.2, 2.2) };
     case 'bruiser': return { ...base, speed:28, hp:24, maxHp:24, radius:9, score:200, isBoss:true };
     case 'sniper':  return { ...base, speed:34, hp:28, maxHp:28, radius:7, score:240, isBoss:true, fireCooldown:1.2 };
     case 'splitter':return { ...base, speed:32, hp:34, maxHp:34, radius:11, score:280, isBoss:true, fireCooldown:2 };
@@ -1605,6 +1708,10 @@ function createEnemy(kind, x, y){
     case 'splitter_mini': return { ...base, speed:60, hp:4, maxHp:4, radius:4, score:25 };
     case 'summoner':return { ...base, speed:24, hp:42, maxHp:42, radius:11, score:320, isBoss:true, fireCooldown:1.5 };
     case 'overlord':return { ...base, speed:20, hp:60, maxHp:60, radius:14, score:400, isBoss:true };
+    // New boss AIs — medium/transitional bosses only (never a tier end boss). isBoss:true
+    // so the headless mid-boss-validity assertion (createEnemy(k).isBoss) accepts them.
+    case 'warden':  return { ...base, speed:22, hp:78, maxHp:78, radius:12, score:560, isBoss:true, fireCooldown:1.4 };
+    case 'harrier': return { ...base, speed:50, hp:64, maxHp:64, radius:8,  score:540, isBoss:true, fireCooldown:1.2, phase:0, dashCount:0 };
     // New bosses (L6-L10) — HP grows with the level number
     case 'twin':    return { ...base, speed:46, hp:70, maxHp:70, radius:10, score:500, isBoss:true, fireCooldown:1.4 };
     case 'reaper':  return { ...base, speed:42, hp:85, maxHp:85, radius:9, score:600, isBoss:true, fireCooldown:2.0 };
@@ -2095,6 +2202,9 @@ function spawnBoss(kind){
   shakeTime = 0.4; shakeAmt = 5;
   return b;
 }
+// The medium-boss kinds for a level's Phase-1 wave (1 for L11-20, 2 for L21-40).
+// `transBoss` is a separate later phase, so it's NOT included here.
+function mediumBossKinds(L){ return [L.midBoss, L.midBoss2].filter(Boolean); }
 
 // ============================================================
 // REUSABLE BOSS ABILITIES — layered onto the existing boss AIs, escalating by
@@ -2111,7 +2221,7 @@ function bossInvuln(e, dt){
   e.invulnCd = (e.invulnCd || 0) - dt;
   if(e.invulnCd <= 0){
     e.invulnT = 1.2;
-    e.invulnCd = 8;
+    e.invulnCd = 5.5;
     emit(e.x, e.y, 16, '#5dade2', 20, 80, 0.5);
     sfx.shieldHit();
   }
@@ -2121,7 +2231,7 @@ function bossSummonExploders(e, dt, n){
   if(e.isClone) return;
   e.emCd = (e.emCd || 0) - dt;
   if(e.emCd <= 0){
-    e.emCd = 5;
+    e.emCd = 3.5;
     if(entities.length < 480){
       for(let i = 0; i < (n || 3); i++){
         const a = Math.random() * Math.PI * 2;
@@ -2154,7 +2264,7 @@ function bossGasBomb(e, dt){
   if(e.isClone) return;
   e.gasCd = (e.gasCd || 0) - dt;
   if(e.gasCd <= 0){
-    e.gasCd = 5.5;
+    e.gasCd = 3.5;
     if(groundFields.length < 12){
       groundFields.push({ x: player.x, y: player.y, radius: 34, life: 3, maxLife: 3, warn: 0.5 });
       emit(player.x, player.y, 18, '#27ae60', 20, 70, 0.6);
@@ -2167,7 +2277,7 @@ function bossHeal(e, dt){
   if(e.isClone) return;
   e.healCd = (e.healCd || 0) - dt;
   if(e.healCd <= 0){
-    e.healCd = 6;
+    e.healCd = 4;
     e.hp = Math.min(e.maxHp, e.hp + Math.ceil(e.maxHp * 0.05));
     emit(e.x, e.y, 14, '#2ecc71', 20, 80, 0.5);
   }
@@ -2179,8 +2289,10 @@ function startLevel(idx){
   spawnTimer = 0.6;
   spawnedCount = 0;
   bossSpawned = false;
+  bossPhase = 0;
   midbossSpawned = false;
-  midbossRef = null;
+  midbossRefs = [];
+  transBossRef = null;
   midbossDefeated = false;
   bossGapTimer = 0;
   gapSpawnTimer = 0;
@@ -2402,47 +2514,56 @@ function updatePlaying(dt){
       spawnTimer = levelData.rate * rand(0.7, 1.3);
     }
   }
-  // L31-40 mid-level transitional boss: a DIFFERENT boss kind released at ~50%
-  // spawn progress, fought amid the wave. The end boss is then held back until the
-  // mid-boss DIES plus a 15-30s gap (see the gap block below), so the two bosses
-  // never share the arena. midbossRef lets us detect the mid-boss's death.
-  if(levelData.midBoss && !midbossSpawned && spawnedCount >= Math.floor(levelData.total * 0.5)){
+  // ---- Staged boss encounters (L11-40) ----
+  // L11-20: 1 medium boss @50% -> surge gap -> end boss.
+  // L21-30: 2 different medium bosses @50% -> surge gap -> end boss.
+  // L31-40: 2 mediums @50% -> surge gap -> 1 transitional boss -> 0s -> end boss.
+  // bossPhase tracks where we are; each block keys on a distinct int so advancing the
+  // phase falsifies the later blocks' guards in the same frame.
+  const meds = mediumBossKinds(levelData);
+  const hasMedium = meds.length > 0;
+  // PHASE 0 -> 1: release the medium-boss wave at 50% spawn progress.
+  if(hasMedium && bossPhase === 0 && spawnedCount >= Math.floor(levelData.total * 0.5)){
+    bossPhase = 1;
     midbossSpawned = true;
-    midbossRef = spawnBoss(levelData.midBoss);
+    midbossRefs = meds.map(k => spawnBoss(k));
+    // Two simultaneous mediums: flash both names ("A + B"); spawnBoss already set the
+    // second one's name, so overwrite with the combined label.
+    if(meds.length > 1) bossSpawnName = meds.map(k => BOSS_NAMES[k] || 'BOSS').join(' + ');
   }
-  // Mid-boss just died → open the 15-30s gap before the end boss arrives.
-  if(levelData.midBoss && midbossSpawned && !midbossDefeated && (!midbossRef || midbossRef.dead)){
+  // PHASE 1 -> 2: ALL current medium bosses dead -> open the surge gap.
+  if(bossPhase === 1 && midbossRefs.every(b => !b || b.dead)){
+    bossPhase = 2;
     midbossDefeated = true;
-    bossGapTimer = rand(15, 30);
+    bossGapTimer = rand(10, 15);
+    gapSpawnTimer = 0;
+    midbossRefs = [];
   }
-  // During the gap, keep a trickle of monsters spawning so the arena is never empty
-  // while the player waits for the end boss. (The leftover main wave keeps spawning
-  // too if it hasn't finished; these gap monsters are bonus and don't count toward
-  // `total`, so they never block the win check.)
-  if(midbossDefeated && bossGapTimer > 0){
+  // PHASE 2: the SURGE — a DENSE stream of regular monsters fills the gap (not a trickle).
+  // These don't count toward `total`, so they never block the win check.
+  if(bossPhase === 2 && bossGapTimer > 0){
     bossGapTimer -= dt;
     gapSpawnTimer -= dt;
     const aliveRegular = entities.filter(e => e.type === 'enemy' && !e.isBoss).length;
-    if(gapSpawnTimer <= 0 && aliveRegular < 10 && entities.length < 480){
+    if(gapSpawnTimer <= 0 && aliveRegular < 28 && entities.length < 480){
       spawnEnemyAtEdge(pickWeighted(levelData.mix));
-      gapSpawnTimer = levelData.rate * rand(1.5, 2.5);
+      gapSpawnTimer = levelData.rate * rand(0.25, 0.5);
     }
   }
-  // Spawn the end boss. With a mid-boss: only after it's dead AND the gap elapses, so
-  // it never overlaps the mid-boss. Without one (L1-30): the original gate — after all
-  // regulars have spawned and most are dead.
-  if(!bossSpawned){
-    if(levelData.midBoss){
-      if(midbossDefeated && bossGapTimer <= 0){
-        bossSpawned = true;
-        spawnBoss(levelData.boss);
-      }
-    } else if(spawnedCount >= levelData.total){
-      const aliveRegular = entities.filter(e => e.type === 'enemy' && !e.isBoss).length;
-      if(aliveRegular <= Math.max(2, Math.floor(levelData.total * 0.2))){
-        bossSpawned = true;
-        spawnBoss(levelData.boss);
-      }
+  // PHASE 2 -> 3 (L31-40) transitional boss, or 2 -> 4 (L11-30) end boss.
+  if(bossPhase === 2 && bossGapTimer <= 0){
+    if(levelData.transBoss){ bossPhase = 3; transBossRef = spawnBoss(levelData.transBoss); }
+    else { bossPhase = 4; bossSpawned = true; spawnBoss(levelData.boss); }
+  }
+  // PHASE 3 -> 4 (L31-40): transitional boss died -> end boss arrives IMMEDIATELY (0s gap).
+  if(bossPhase === 3 && (!transBossRef || transBossRef.dead)){
+    bossPhase = 4; bossSpawned = true; spawnBoss(levelData.boss);
+  }
+  // L1-10 (no medium boss): the original gate — end boss after all regulars spawned + most dead.
+  if(!hasMedium && !bossSpawned && spawnedCount >= levelData.total){
+    const aliveRegular = entities.filter(e => e.type === 'enemy' && !e.isBoss).length;
+    if(aliveRegular <= Math.max(2, Math.floor(levelData.total * 0.2))){
+      bossSpawned = true; bossPhase = 4; spawnBoss(levelData.boss);
     }
   }
 
@@ -2471,7 +2592,7 @@ function updatePlaying(dt){
     if(gf.warn > 0){ gf.warn -= dt; continue; }
     gf.life -= dt;
     const rr = gf.radius + player.radius;
-    if(player.hp > 0 && player.invuln <= 0 && dist2(gf, player) < rr*rr) damagePlayer(1);
+    if(player.hp > 0 && player.invuln <= 0 && dist2(gf, player) < rr*rr) damagePlayer(1 * enemyDmgScale(levelIdx));
     if(Math.random() < dt * 10 && particles.length < 300){
       const ga = Math.random() * Math.PI * 2, gr = Math.random() * gf.radius;
       particles.push({ x: gf.x + Math.cos(ga)*gr, y: gf.y + Math.sin(ga)*gr,
@@ -2508,7 +2629,7 @@ function updatePlaying(dt){
       // Enemy bullet — can hit the player or any chosen ally.
       if(player.invuln <= 0){
         const dr = b.radius + player.radius;
-        if(dist2(b, player) < dr*dr){ b.dead = true; damagePlayer(1); continue; }
+        if(dist2(b, player) < dr*dr){ b.dead = true; damagePlayer(1 * enemyDmgScale(levelIdx)); continue; }
       }
       for(const a of entities){
         if(!isAlly(a) || a.dead || a.invuln > 0) continue;
@@ -2522,7 +2643,7 @@ function updatePlaying(dt){
       if(en.type !== 'enemy' || en.dead) continue;
       const dr = player.radius + en.radius;
       if(dist2(en, player) < dr*dr){
-        damagePlayer(en.isBoss ? 2 : 1);
+        damagePlayer((en.isBoss ? 2 : 1) * enemyDmgScale(levelIdx));
         const a = Math.atan2(en.y - player.y, en.x - player.x);
         en.x += Math.cos(a) * 12;
         en.y += Math.sin(a) * 12;
@@ -2573,7 +2694,7 @@ function updatePlaying(dt){
 
   // Win/loss
   const enemiesAlive = entities.some(e => e.type === 'enemy');
-  const midDone = !levelData.midBoss || midbossSpawned;
+  const midDone = !mediumBossKinds(levelData).length || midbossSpawned;
   if(spawnedCount >= levelData.total && bossSpawned && midDone && !enemiesAlive){
     clearedLevels.add(levelIdx);
     saveCleared();
@@ -3206,7 +3327,8 @@ function killEnemy(en){
     // Boss death drops a guaranteed special equipment
     const drops = {
       bruiser:'rapid', sniper:'shield', splitter:'multi', summoner:'damage', overlord:'pierce',
-      twin:'rapid', reaper:'pierce', bomber:'damage', phantom:'multi', nemesis:'damage'
+      twin:'rapid', reaper:'pierce', bomber:'damage', phantom:'multi', nemesis:'damage',
+      warden:'shield', harrier:'rapid'
     };
     const drop = drops[en.kind] || 'health';
     entities.push(createPickup(en.x, en.y, drop));
@@ -3294,10 +3416,14 @@ function updateEnemy(e, dt){
   if(e.kind === 'bomber')   return updateBomber(e, dt);
   if(e.kind === 'phantom')  return updatePhantom(e, dt);
   if(e.kind === 'nemesis')  return updateNemesis(e, dt);
+  if(e.kind === 'warden')   return updateWarden(e, dt);
+  if(e.kind === 'harrier')  return updateHarrier(e, dt);
   if(e.kind === 'shooter')  return updateShooter(e, dt);
   if(e.kind === 'charger')  return updateCharger(e, dt);
   if(e.kind === 'exploder') return updateExploder(e, dt);
   if(e.kind === 'swarmer')  return updateSwarmer(e, dt);
+  if(e.kind === 'weaver')   return updateWeaver(e, dt);
+  if(e.kind === 'spitter')  return updateSpitter(e, dt);
   return updateSeek(e, dt);
 }
 
@@ -3366,6 +3492,58 @@ function updateSwarmer(e, dt){
   if(e.frameT > 0.1){ e.frameT = 0; e.frame = (e.frame + 1) % 2; }
 }
 
+// WEAVER: evasive dodger. If a player bullet is bearing down, juke perpendicular to its
+// path (away from it); otherwise close in on a weaving sine path so it's hard to lead.
+function updateWeaver(e, dt){
+  const a = Math.atan2(player.y - e.y, player.x - e.x);
+  // Find the nearest incoming player bullet within ~90px.
+  let threat = null, nd = 90 * 90;
+  for(const b of entities){
+    if(b.type !== 'bullet' || b.owner !== 'player' || b.dead) continue;
+    const d2 = dist2(b, e);
+    if(d2 < nd){ nd = d2; threat = b; }
+  }
+  let mvx, mvy;
+  if(threat){
+    // Dodge: step to whichever side of the bullet's velocity line we're already on.
+    const ba = Math.atan2(threat.vy, threat.vx);
+    const side = ((e.x - threat.x) * Math.sin(ba) - (e.y - threat.y) * Math.cos(ba)) >= 0 ? 1 : -1;
+    const da = ba + side * Math.PI / 2;
+    mvx = Math.cos(da) * e.speed * 1.4; mvy = Math.sin(da) * e.speed * 1.4;
+    e.dodgeCd = 0.25;   // keep juking briefly after the bullet passes
+  } else if((e.dodgeCd = (e.dodgeCd || 0) - dt) > 0){
+    mvx = Math.cos(a + Math.PI / 2) * e.speed; mvy = Math.sin(a + Math.PI / 2) * e.speed;
+  } else {
+    e.wobble = (e.wobble || 0) + dt * 5;
+    const wa = a + Math.sin(e.wobble) * 0.7;
+    mvx = Math.cos(wa) * e.speed; mvy = Math.sin(wa) * e.speed;
+  }
+  e.vx = mvx; e.vy = mvy;
+  e.x += e.vx * dt; e.y += e.vy * dt;
+  e.x = clamp(e.x, 6, worldW - 6); e.y = clamp(e.y, 6, worldH - 8);
+  e.frameT += dt;
+  if(e.frameT > 0.1){ e.frameT = 0; e.frame = (e.frame + 1) % 2; }
+}
+
+// SPITTER: hazard-dropper. Keeps mid-range and periodically lays a telegraphed toxic
+// ground pool (reuses the boss groundFields system — a warn ring, then lethal AoE).
+function updateSpitter(e, dt){
+  const a = Math.atan2(player.y - e.y, player.x - e.x);
+  const d = Math.hypot(player.x - e.x, player.y - e.y);
+  if(d > 90){ e.vx = Math.cos(a) * e.speed; e.vy = Math.sin(a) * e.speed; }
+  else { e.vx = -Math.sin(a) * e.speed * 0.6; e.vy = Math.cos(a) * e.speed * 0.6; }
+  e.x += e.vx * dt; e.y += e.vy * dt;
+  e.x = clamp(e.x, 6, worldW - 6); e.y = clamp(e.y, 6, worldH - 8);
+  e.poolCd -= dt;
+  if(e.poolCd <= 0 && groundFields.length < 12){
+    groundFields.push({ x: e.x, y: e.y, radius: 24, life: 2.5, maxLife: 2.5, warn: 0.6 });
+    emit(e.x, e.y, 10, '#27ae60', 16, 60, 0.5);
+    e.poolCd = rand(2.0, 3.2);
+  }
+  e.frameT += dt;
+  if(e.frameT > 0.14){ e.frameT = 0; e.frame = (e.frame + 1) % 2; }
+}
+
 function updateSeek(e, dt){
   const a = Math.atan2(player.y - e.y, player.x - e.x);
   e.vx = Math.cos(a) * e.speed;
@@ -3408,7 +3586,7 @@ function updateBruiser(e, dt){
   if(e.phase === 1){
     e.vx = Math.cos(e.chargeAngle) * e.speed * 3.2;
     e.vy = Math.sin(e.chargeAngle) * e.speed * 3.2;
-    if(e.phaseT > 0.9){ e.phase = 0; e.phaseT = 0; e.fireCooldown = 2.4; }
+    if(e.phaseT > 0.9){ e.phase = 0; e.phaseT = 0; e.fireCooldown = 1.6; }
   } else {
     e.vx = Math.cos(a) * e.speed;
     e.vy = Math.sin(a) * e.speed;
@@ -3459,7 +3637,7 @@ function updateSniper(e, dt){
     if(!e.telegraphActive){
       e.telegraphActive = true;
       e.telegraphAngle = a;
-      e.fireCooldown = 0.5;
+      e.fireCooldown = 0.35;
     } else {
       entities.push(createBullet(e.x, e.y, e.telegraphAngle, 'enemy', {speed:260}));
       emit(e.x, e.y, 4, '#1abc9c', 20, 80, 0.2);
@@ -3467,8 +3645,8 @@ function updateSniper(e, dt){
       e.fireCooldown = 1.4;
     }
   }
-  // Teleport every 6s
-  if(e.phaseT > 6){
+  // Teleport every ~4.5s
+  if(e.phaseT > 4.5){
     e.phaseT = 0;
     emit(e.x, e.y, 18, '#8e44ad', 30, 120, 0.5);
     e.x = rand(40, worldW-40); e.y = rand(40, worldH-40);
@@ -3545,7 +3723,7 @@ function updateOverlord(boss, dt){
   boss.phaseT += dt;
   if(levelIdx >= 21) bossInvuln(boss, dt);   // L22+: brief invincibility shield
   if(levelIdx >= 23) bossHeal(boss, dt);     // L24+: periodic self-heal
-  if(boss.phaseT > 4){
+  if(boss.phaseT > 3){
     boss.phaseT = 0;
     boss.phase = (boss.phase + 1) % 3;
     boss.fireCooldown = 0.3;
@@ -3595,7 +3773,7 @@ function updateTwin(e, dt){
     // Dash forward in chargeAngle for ~0.8s
     e.vx = Math.cos(e.chargeAngle) * e.speed * 3.0;
     e.vy = Math.sin(e.chargeAngle) * e.speed * 3.0;
-    if(e.phaseT > 0.7){ e.phase = 0; e.phaseT = 0; e.fireCooldown = 1.4; }
+    if(e.phaseT > 0.7){ e.phase = 0; e.phaseT = 0; e.fireCooldown = 1.0; }
   } else {
     // Strafing approach + periodic twin-bullet bursts at perpendicular angles
     e.vx = Math.cos(a) * e.speed * 0.9 - Math.sin(a) * e.speed * 0.4;
@@ -3629,7 +3807,7 @@ function updateReaper(e, dt){
   if(levelIdx >= 30) bossGasBomb(e, dt);     // L31+: poison-gas bombs
   if(levelIdx >= 32){                         // L33+: spawn weak clones of itself
     e.cloneCd = (e.cloneCd || 0) - dt;
-    if(e.cloneCd <= 0){ e.cloneCd = 9; bossSpawnClone(e); }
+    if(e.cloneCd <= 0){ e.cloneCd = 6; bossSpawnClone(e); }
   }
   const a = Math.atan2(player.y - e.y, player.x - e.x);
   if(e.phase === 1){
@@ -3650,7 +3828,7 @@ function updateReaper(e, dt){
         entities.push(createBullet(e.x, e.y, aa, 'enemy', {speed:130}));
       }
     }
-    if(e.phaseT > 0.9){ e.phase = 0; e.phaseT = 0; e.slashed = false; e.fireCooldown = 1.0; }
+    if(e.phaseT > 0.9){ e.phase = 0; e.phaseT = 0; e.slashed = false; e.fireCooldown = 0.7; }
   } else {
     // Approach in a curve
     e.vx = Math.cos(a) * e.speed * 1.1 + Math.sin(a) * e.speed * 0.5;
@@ -3697,7 +3875,7 @@ function updateBomber(e, dt){
       emit(e.x, e.y, 6, '#e67e22', 40, 110, 0.3);
     }
     e.firePhase = (e.firePhase || 0) + 1;
-    e.fireCooldown = 1.6;
+    e.fireCooldown = 1.2;
   }
   e.x += e.vx * dt; e.y += e.vy * dt;
   e.x = clamp(e.x, 16, worldW - 16);
@@ -3726,8 +3904,8 @@ function updatePhantom(e, dt){
     }
     e.fireCooldown = 1.2;
   }
-  // Teleport every ~5s, summon a pair of runner adds on arrival
-  if(e.phaseT > 5){
+  // Teleport every ~3.8s, summon a pair of runner adds on arrival
+  if(e.phaseT > 3.8){
     e.phaseT = 0;
     emit(e.x, e.y, 22, '#8e44ad', 30, 130, 0.5);
     e.x = rand(40, worldW - 40); e.y = rand(40, worldH - 40);
@@ -3745,7 +3923,7 @@ function updateNemesis(boss, dt){
   boss.phaseT += dt;
   if(levelIdx >= 26) bossGasBomb(boss, dt);            // L27+: poison-gas bombs
   if(levelIdx >= 28) bossSummonExploders(boss, dt, 3); // L29+: exploding-minion packs
-  if(boss.phaseT > 4.5){
+  if(boss.phaseT > 3.2){
     boss.phaseT = 0;
     boss.phase = (boss.phase + 1) % 4;
     boss.fireCooldown = 0.3;
@@ -3802,6 +3980,78 @@ function updateNemesis(boss, dt){
   boss.y += boss.vy * dt;
   boss.x = clamp(boss.x, 20, worldW - 20);
   boss.y = clamp(boss.y, 20, worldH - 24);
+}
+
+// WARDEN: mid-range zoning turret — keeps its distance, fires wide aimed fans, blinks
+// to reposition, and shields itself (bossInvuln) so it's a stubborn medium boss.
+// At L21+ it also lobs telegraphed gas pools. Used as a medium/transitional boss only.
+function updateWarden(e, dt){
+  e.phaseT += dt;
+  bossInvuln(e, dt);
+  if(levelIdx >= 20) bossGasBomb(e, dt);
+  const dx = player.x - e.x, dy = player.y - e.y;
+  const d = Math.hypot(dx, dy), a = Math.atan2(dy, dx);
+  const ideal = 130;
+  if(d < ideal - 20){ e.vx = -Math.cos(a) * e.speed; e.vy = -Math.sin(a) * e.speed; }
+  else if(d > ideal + 20){ e.vx = Math.cos(a) * e.speed; e.vy = Math.sin(a) * e.speed; }
+  else { e.vx = -Math.sin(a) * e.speed * 0.7; e.vy = Math.cos(a) * e.speed * 0.7; }
+  e.fireCooldown -= dt;
+  if(e.fireCooldown <= 0){
+    const n = 7;
+    for(let i = 0; i < n; i++){
+      const aa = a + (i - (n - 1) / 2) * 0.18;
+      entities.push(createBullet(e.x, e.y, aa, 'enemy', { speed: 150 }));
+    }
+    e.fireCooldown = 1.0;
+  }
+  // Blink-reposition periodically so it can't be cornered.
+  if(e.phaseT > 3.5){
+    e.phaseT = 0;
+    emit(e.x, e.y, 16, '#8e44ad', 24, 110, 0.4);
+    const ba = a + rand(-0.6, 0.6), bd = 80;
+    e.x = clamp(e.x + Math.cos(ba) * bd, 20, worldW - 20);
+    e.y = clamp(e.y + Math.sin(ba) * bd, 20, worldH - 24);
+    emit(e.x, e.y, 16, '#5dade2', 24, 110, 0.4);
+    sfx.teleport();
+  }
+  e.x += e.vx * dt; e.y += e.vy * dt;
+  e.x = clamp(e.x, 18, worldW - 18); e.y = clamp(e.y, 18, worldH - 22);
+}
+
+// HARRIER: fast multi-dash striker — strings together up to 3 dashes (phasing out
+// briefly mid-dash), then drops a radial slash burst on recovery. At L24+ it spits
+// exploder packs. Used as a medium/transitional boss only.
+function updateHarrier(e, dt){
+  e.phaseT += dt;
+  if(levelIdx >= 24) bossSummonExploders(e, dt, 3);
+  const a = Math.atan2(player.y - e.y, player.x - e.x);
+  if(e.phase === 1){
+    // Dashing: phase out (brief invuln), travel fast; chain up to 3 dashes.
+    e.invulnT = Math.max(e.invulnT || 0, 0.15);
+    e.vx = Math.cos(e.chargeAngle) * e.speed * 4.2; e.vy = Math.sin(e.chargeAngle) * e.speed * 4.2;
+    emit(e.x, e.y, 2, '#f39c12', 18, 55, 0.2);
+    if(e.phaseT > 0.4){
+      e.dashCount = (e.dashCount || 0) + 1;
+      if(e.dashCount < 3){ e.chargeAngle = a; e.phaseT = 0; }
+      else { e.phase = 2; e.phaseT = 0; e.dashCount = 0; }
+    }
+  } else if(e.phase === 2){
+    // Recovery: decelerate + one radial slash burst.
+    e.vx *= 0.8; e.vy *= 0.8;
+    if(!e.slashed){
+      e.slashed = true;
+      const n = 5;
+      for(let i = 0; i < n; i++) entities.push(createBullet(e.x, e.y, (i / n) * Math.PI * 2, 'enemy', { speed: 150 }));
+    }
+    if(e.phaseT > 0.5){ e.phase = 0; e.phaseT = 0; e.slashed = false; e.fireCooldown = 0.8; }
+  } else {
+    // Stalk, then telegraph a dash.
+    e.vx = Math.cos(a) * e.speed * 1.1; e.vy = Math.sin(a) * e.speed * 1.1;
+    e.fireCooldown -= dt;
+    if(e.fireCooldown <= 0){ e.chargeAngle = a; e.phase = 1; e.phaseT = 0; emit(e.x, e.y, 12, '#f1c40f', 30, 110, 0.25); }
+  }
+  e.x += e.vx * dt; e.y += e.vy * dt;
+  e.x = clamp(e.x, 14, worldW - 14); e.y = clamp(e.y, 14, worldH - 16);
 }
 
 function updateBullet(b, dt){
@@ -4435,6 +4685,8 @@ function drawEnemy(e){
     case 'charger': sp = e.frame === 0 ? SPR.charger_a : SPR.charger_b; break;
     case 'exploder':sp = e.frame === 0 ? SPR.exploder_a : SPR.exploder_b; break;
     case 'swarmer': sp = e.frame === 0 ? SPR.swarmer_a : SPR.swarmer_b; break;
+    case 'weaver':  sp = e.frame === 0 ? SPR.weaver_a : SPR.weaver_b; break;
+    case 'spitter': sp = e.frame === 0 ? SPR.spitter_a : SPR.spitter_b; break;
     case 'bruiser': sp = SPR.bruiser; break;
     case 'sniper':  sp = SPR.sniper; break;
     case 'splitter': sp = SPR.splitter; break;
@@ -4442,6 +4694,8 @@ function drawEnemy(e){
     case 'splitter_mini': sp = SPR.splitter_mini; break;
     case 'summoner': sp = SPR.summoner; break;
     case 'overlord': sp = SPR.overlord; break;
+    case 'warden':   sp = SPR.warden; break;
+    case 'harrier':  sp = SPR.harrier; break;
     case 'twin':     sp = SPR.twin; break;
     case 'reaper':   sp = SPR.reaper; break;
     case 'bomber':   sp = SPR.bomber; break;
@@ -4761,24 +5015,31 @@ function drawHUD(){
   // Active weapon row (bottom-left)
   drawWeaponHUD();
 
-  // Boss bar
-  const boss = entities.find(e => e.isBoss);
-  if(boss){
-    ctx.fillStyle = '#000';
-    ctx.fillRect(W/2 - 90, H - 26, 180, 12);
-    ctx.fillStyle = '#3a1338';
-    ctx.fillRect(W/2 - 89, H - 25, 178, 10);
-    ctx.fillStyle = '#9b59b6';
-    ctx.fillRect(W/2 - 89, H - 25, Math.floor(178 * (boss.hp / boss.maxHp)), 10);
+  // Boss bar(s) — one per live boss, so the L21-40 twin medium bosses both show.
+  const bosses = entities.filter(e => e.isBoss && !e.dead);
+  if(bosses.length){
+    const barW = bosses.length > 1 ? 120 : 180;
+    const gap = 8;
+    const totalW = bosses.length * barW + (bosses.length - 1) * gap;
+    let bx = Math.floor(W/2 - totalW/2);
     ctx.font = 'bold 8px monospace';
-    ctx.fillStyle = '#fff';
     ctx.textAlign = 'center';
-    // A mid-boss is a different kind than levelData.boss, so label it by its own
-    // BOSS_NAMES entry; only the actual end boss gets the level's bossName override.
-    const bossLabel = (boss.kind === levelData.boss)
-      ? (levelData.bossName || BOSS_NAMES[boss.kind] || 'BOSS')
-      : (BOSS_NAMES[boss.kind] || 'BOSS');
-    ctx.fillText(bossLabel, W/2, H - 17);
+    for(const boss of bosses){
+      ctx.fillStyle = '#000';
+      ctx.fillRect(bx, H - 26, barW, 12);
+      ctx.fillStyle = '#3a1338';
+      ctx.fillRect(bx + 1, H - 25, barW - 2, 10);
+      ctx.fillStyle = '#9b59b6';
+      ctx.fillRect(bx + 1, H - 25, Math.floor((barW - 2) * (boss.hp / boss.maxHp)), 10);
+      // A mid-boss is a different kind than levelData.boss, so label it by its own
+      // BOSS_NAMES entry; only the actual end boss gets the level's bossName override.
+      const bossLabel = (boss.kind === levelData.boss)
+        ? (levelData.bossName || BOSS_NAMES[boss.kind] || 'BOSS')
+        : (BOSS_NAMES[boss.kind] || 'BOSS');
+      ctx.fillStyle = '#fff';
+      ctx.fillText(bossLabel, bx + barW/2, H - 17);
+      bx += barW + gap;
+    }
   }
 
   // Boss spawn flash
