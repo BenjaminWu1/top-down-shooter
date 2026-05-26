@@ -1112,7 +1112,7 @@ function enemyScale(){ return 1 + levelIdx * 0.08; }
 // ============================================================
 // STATE
 // ============================================================
-const STATE = { MENU:0, HOWTO:1, PLAYING:2, LEVEL_COMPLETE:3, GAME_OVER:4, VICTORY:5, CHARACTER_SELECT:6, ASSISTANT_SELECT:7 };
+const STATE = { MENU:0, HOWTO:1, PLAYING:2, LEVEL_COMPLETE:3, GAME_OVER:4, VICTORY:5, CHARACTER_SELECT:6, ASSISTANT_SELECT:7, SHOP:8 };
 let state = STATE.MENU;
 let player = null;
 let allies = [];              // the chosen assistant entities live in here (also in `entities`)
@@ -1299,7 +1299,7 @@ const ASSISTANTS = {
               tags:['AURA','DOT'],        lines:['HP 5','toxic cloud','wide range','constant dmg'] }
 };
 const ASSIST_ORDER = ['drone','henchman','nunchaku','bomber','poison'];
-let selectedAssistants = ['drone','henchman']; // chosen keys for the run (exactly 2)
+let selectedAssistants = ['drone']; // run's equipped assistants (0..2); seeded from profile.equippedAssistants at run start
 
 // ============================================================
 // INPUT
@@ -2112,6 +2112,7 @@ function update(dt){
   stateTime += dt;
   if(bossSpawnPulse > 0) bossSpawnPulse -= dt;
   if(state === STATE.MENU || state === STATE.HOWTO) handleMenu();
+  else if(state === STATE.SHOP) handleShop();
   else if(state === STATE.CHARACTER_SELECT) handleCharacterSelect();
   else if(state === STATE.ASSISTANT_SELECT) handleAssistantSelect();
   else if(state === STATE.LEVEL_COMPLETE) handleLevelComplete();
@@ -3703,6 +3704,11 @@ function handleMenu(){
       state = STATE.HOWTO; stateTime = 0;
       return;
     }
+    const shb = shopButtonRect();
+    if(clickedRect(shb.x, shb.y, shb.w, shb.h)){
+      state = STATE.SHOP; stateTime = 0; initAudio();
+      return;
+    }
     for(let i = 0; i < LEVELS.length; i++){
       const b = levelBoxRect(i);
       if(clickedRect(b.x, b.y, b.w, b.h)){
@@ -3914,6 +3920,9 @@ function draw(){
     else if(state === STATE.HOWTO) drawHowTo();
     else if(state === STATE.CHARACTER_SELECT) drawCharacterSelect();
     else if(state === STATE.ASSISTANT_SELECT) drawAssistantSelect();
+    else if(state === STATE.SHOP) drawShop();
+    // Persistent level/XP/gold bar overlays every non-game screen (upper-right).
+    drawProfileBar();
   }
 
   ctx.restore();
@@ -4593,9 +4602,22 @@ function drawMenu(){
   ctx.textAlign = 'center';
   ctx.fillText('? GUIDE', gb.x + gb.w / 2, gb.y + 11);
 
+  // SHOP button (lower-left) — opens the ARMORY (spend Gold on skills + assistants).
+  const shb = shopButtonRect();
+  const shHov = clickedRect(shb.x, shb.y, shb.w, shb.h);
+  ctx.fillStyle = shHov ? '#b9770e' : '#6e4a06';
+  ctx.fillRect(shb.x, shb.y, shb.w, shb.h);
+  ctx.strokeStyle = '#f1c40f';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(shb.x + 0.5, shb.y + 0.5, shb.w - 1, shb.h - 1);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 8px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('SHOP', shb.x + shb.w / 2, shb.y + 11);
+
   ctx.fillStyle = '#5d6d7e';
   ctx.font = 'bold 7px monospace';
-  ctx.fillText('CLICK A LEVEL  ·  WASD MOVE  ·  X/C SKILLS', W/2, 250);
+  ctx.fillText('CLICK A LEVEL  ·  SHOP TO UPGRADE  ·  WASD MOVE', W/2, 250);
 
   ctx.strokeStyle = '#f1c40f';
   ctx.lineWidth = 1;
@@ -4619,6 +4641,159 @@ function levelBoxRect(i){
   return { x: xs + col * (bw + gap), y: ys + row * (bh + gap), w: bw, h: bh };
 }
 
+// ============================================================
+// PROFILE BAR + SHOP (meta-progression UI)
+// ============================================================
+function shopButtonRect(){ return { x: 8, y: H - 22, w: 56, h: 16 }; }
+
+// Persistent upper-right strip on every non-game screen: level, XP bar
+// (DARK fill = current XP, LIGHT = remaining to next level), and gold total.
+// Positioned just left of the MENU guide button so the two never overlap.
+function drawProfileBar(){
+  const bw = 92, x = W - 66 - bw, yTop = 7;
+  ctx.textAlign = 'left';
+  ctx.font = 'bold 8px monospace';
+  ctx.fillStyle = '#f1c40f';
+  ctx.fillText('LV ' + profile.level, x, yTop + 7);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#f5d76e';
+  ctx.fillText('G ' + profile.gold, x + bw, yTop + 7);
+  const need = xpToNext(profile.level);
+  const frac = profile.level >= LEVEL_CAP ? 1 : clamp(profile.xp / need, 0, 1);
+  const by = yTop + 10, bh = 4;
+  ctx.fillStyle = '#e8d27a';                            // LIGHT = remaining XP needed
+  ctx.fillRect(x, by, bw, bh);
+  ctx.fillStyle = '#5a4708';                            // DARK = current XP
+  ctx.fillRect(x, by, Math.floor(bw * frac), bh);
+  ctx.strokeStyle = '#7a5006';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, by + 0.5, bw - 1, bh - 1);
+  ctx.textAlign = 'center';
+}
+
+// ---- SHOP (ARMORY) ----
+const ASSISTANT_COST = { drone:0, henchman:200, nunchaku:280, bomber:320, poison:300 };
+const SHOP_ASSIST_ORDER = ['henchman','nunchaku','bomber','poison'];
+let shopTab = 'skills';      // 'skills' | 'allies'
+let shopMsgUntil = 0;        // stateTime until which the "NOT ENOUGH GOLD" flash shows
+
+function shopTabRect(i){ return { x: W/2 - 86 + i * 88, y: 26, w: 84, h: 14 }; }
+function shopCardRect(i){
+  const cw = 86, ch = 46, gap = 6, cols = 5;
+  const totalW = cols * cw + (cols - 1) * gap;
+  const xs = Math.floor((W - totalW) / 2);
+  const col = i % cols, row = Math.floor(i / cols);
+  return { x: xs + col * (cw + gap), y: 52 + row * (ch + 6), w: cw, h: ch };
+}
+
+function drawShop(){
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 14px monospace';
+  ctx.fillStyle = '#f1c40f';
+  ctx.fillText('ARMORY', W/2, 20);
+
+  // Tabs
+  for(let i = 0; i < 2; i++){
+    const r = shopTabRect(i);
+    const tab = i === 0 ? 'skills' : 'allies';
+    const on = shopTab === tab, hov = clickedRect(r.x, r.y, r.w, r.h);
+    ctx.fillStyle = on ? '#1e6840' : (hov ? '#2a3340' : '#1a1f29');
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = on ? '#2ecc71' : '#566573';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 8px monospace';
+    ctx.fillText(i === 0 ? 'SKILLS' : 'ASSISTANTS', r.x + r.w/2, r.y + 10);
+  }
+
+  const items = shopTab === 'skills' ? SKILL_ORDER : SHOP_ASSIST_ORDER;
+  for(let i = 0; i < items.length; i++){
+    const id = items[i];
+    const r = shopCardRect(i);
+    const isSkill = shopTab === 'skills';
+    const meta = isSkill ? SKILLS[id] : ASSISTANTS[id];
+    const cost = isSkill ? SKILLS[id].cost : (ASSISTANT_COST[id] || 0);
+    const owned = isSkill ? profile.ownedSkills.includes(id) : profile.ownedAssistants.includes(id);
+    const afford = profile.gold >= cost;
+    const hov = clickedRect(r.x, r.y, r.w, r.h);
+    const col = isSkill ? meta.color : meta.color;
+    ctx.fillStyle = owned ? '#15241a' : (hov && afford ? '#23303f' : '#141822');
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = owned ? '#2ecc71' : col;
+    ctx.lineWidth = (hov && !owned) ? 2 : 1;
+    ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+    // Name + tier
+    ctx.fillStyle = col;
+    ctx.font = 'bold 9px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(isSkill ? meta.label : meta.name, r.x + r.w/2, r.y + 14);
+    ctx.fillStyle = '#7f8c8d';
+    ctx.font = 'bold 6px monospace';
+    ctx.fillText(isSkill ? ('TIER ' + meta.tier) : meta.tags.join(' '), r.x + r.w/2, r.y + 25);
+    // Cost / owned
+    if(owned){
+      ctx.fillStyle = '#2ecc71';
+      ctx.font = 'bold 8px monospace';
+      ctx.fillText('OWNED', r.x + r.w/2, r.y + 39);
+    } else {
+      ctx.fillStyle = afford ? '#f5d76e' : '#7d6608';
+      ctx.font = 'bold 8px monospace';
+      ctx.fillText('G ' + cost, r.x + r.w/2, r.y + 39);
+    }
+  }
+
+  // Insufficient-gold flash
+  if(stateTime < shopMsgUntil){
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 9px monospace';
+    ctx.fillText('NOT ENOUGH GOLD', W/2, H - 26);
+  } else {
+    ctx.fillStyle = '#5d6d7e';
+    ctx.font = 'bold 7px monospace';
+    ctx.fillText('BUY WITH GOLD  ·  EQUIP IN THE LOADOUT SCREEN', W/2, H - 26);
+  }
+
+  // Back button
+  const bb = backButtonRect();
+  const hovB = clickedRect(bb.x, bb.y, bb.w, bb.h);
+  ctx.fillStyle = hovB ? '#34495e' : '#1a242f';
+  ctx.fillRect(bb.x, bb.y, bb.w, bb.h);
+  ctx.strokeStyle = '#7f8c8d';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(bb.x + 0.5, bb.y + 0.5, bb.w - 1, bb.h - 1);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 8px monospace';
+  ctx.fillText('< BACK', bb.x + bb.w/2, bb.y + 11);
+}
+
+function handleShop(){
+  if(!mouse.clicked) return;
+  const bb = backButtonRect();
+  if(clickedRect(bb.x, bb.y, bb.w, bb.h)){ state = STATE.MENU; stateTime = 0; return; }
+  for(let i = 0; i < 2; i++){
+    const r = shopTabRect(i);
+    if(clickedRect(r.x, r.y, r.w, r.h)){ shopTab = i === 0 ? 'skills' : 'allies'; return; }
+  }
+  const items = shopTab === 'skills' ? SKILL_ORDER : SHOP_ASSIST_ORDER;
+  for(let i = 0; i < items.length; i++){
+    const r = shopCardRect(i);
+    if(!clickedRect(r.x, r.y, r.w, r.h)) continue;
+    const id = items[i];
+    const isSkill = shopTab === 'skills';
+    const owned = isSkill ? profile.ownedSkills.includes(id) : profile.ownedAssistants.includes(id);
+    if(owned) return;
+    const cost = isSkill ? SKILLS[id].cost : (ASSISTANT_COST[id] || 0);
+    if(profile.gold < cost){ shopMsgUntil = stateTime + 1.2; return; }
+    profile.gold -= cost;
+    if(isSkill) profile.ownedSkills.push(id);
+    else profile.ownedAssistants.push(id);
+    saveProfile();
+    if(sfx.pickup) sfx.pickup();
+    return;
+  }
+}
+
 // ---- CHARACTER SELECT ----
 const CHAR_ORDER = ['soldier', 'scout', 'tank'];
 function charCardRect(i){
@@ -4636,6 +4811,11 @@ function drawCharacterSelect(){
   ctx.font = 'bold 14px monospace';
   ctx.fillStyle = '#f1c40f';
   ctx.fillText('LEVEL ' + (selectedLevel + 1) + ' — CHOOSE YOUR CHARACTER', W/2, 36);
+
+  // Meta-level bonuses (shown on the cards so the player sees their scaled stats).
+  const Llv = Math.max(0, (profile.level || 1) - 1);
+  const rmbMul = RMB_BASE_FRAC * (1 + Math.min(RMB_DUR_CAP, Llv * RMB_DUR_PER));
+  const hpBonus = Math.min(LVL_HP_CAP, Math.floor(Llv / LVL_HP_PER));
 
   for(let i = 0; i < CHAR_ORDER.length; i++){
     const key = CHAR_ORDER[i];
@@ -4659,25 +4839,27 @@ function drawCharacterSelect(){
     // Stats — laid out sequentially so optional rows (DMG/SHIELD/FUEL) never overlap.
     ctx.font = 'bold 8px monospace';
     ctx.textAlign = 'left';
-    const stats = [['HP   : ' + ch.hp, '#bdc3c7'], ['SPEED: ' + ch.speed, '#bdc3c7']];
+    const stats = [['HP   : ' + (ch.hp + hpBonus), '#bdc3c7'], ['SPEED: ' + ch.speed, '#bdc3c7']];
     if(ch.damageMult > 1) stats.push(['DMG  : x' + ch.damageMult, '#bdc3c7']);
     if(ch.startShield)    stats.push(['SHIELD: ' + ch.startShield, '#bdc3c7']);
-    if(key === 'tank')    stats.push(['FUEL : 12 (RMB)', '#e67e22']);
-    if(key === 'soldier') stats.push(['ENERGY: 6 (RMB)', '#2ecc71']);
-    if(key === 'scout')   stats.push(['POWER: 20 (RMB)', '#19f0ff']);
+    if(key === 'tank')    stats.push(['FUEL : ' + Math.max(1, Math.round(12 * rmbMul)) + ' (RMB)', '#e67e22']);
+    if(key === 'soldier') stats.push(['ENERGY: ' + Math.max(1, Math.round(6 * rmbMul)) + ' (RMB)', '#2ecc71']);
+    if(key === 'scout')   stats.push(['POWER: ' + Math.max(1, Math.round(20 * rmbMul)) + ' (RMB)', '#19f0ff']);
     let sy = r.y + 70;
     for(const st of stats){ ctx.fillStyle = st[1]; ctx.fillText(st[0], r.x + 12, sy); sy += 9; }
 
-    // Skill map — same sequential layout, scales to however many slots exist.
+    // Class identity: LMB + held-RMB are fixed per class; the active X/C/B/V skills
+    // are now chosen in the LOADOUT screen (the old per-class kit is retired).
     sy += 3;
     ctx.fillStyle = '#7f8c8d';
-    ctx.fillText('SKILLS', r.x + 12, sy); sy += 9;
+    ctx.fillText('WEAPONS', r.x + 12, sy); sy += 9;
     ctx.fillStyle = '#fff';
-    const sk = [['X', ch.skillLabels.x], ['C', ch.skillLabels.c]];
-    if(ch.skillLabels.f) sk.push(['F', ch.skillLabels.f]);
-    if(ch.skillLabels.b) sk.push(['B', ch.skillLabels.b]);
-    if(ch.skillLabels.v) sk.push(['V', ch.skillLabels.v]);
-    for(const s of sk){ ctx.fillText(s[0] + ' ' + s[1], r.x + 12, sy); sy += 8; }
+    const lmbN = { soldier:'PISTOL', scout:'SMG', tank:'SLUG' }[key] || 'GUN';
+    const rmbN = { soldier:'BLADE', scout:'3x LASER', tank:'FLAME' }[key] || 'RMB';
+    ctx.fillText('LMB ' + lmbN, r.x + 12, sy); sy += 8;
+    ctx.fillText('RMB ' + rmbN, r.x + 12, sy); sy += 8;
+    ctx.fillStyle = '#5dade2';
+    ctx.fillText('SKILLS: LOADOUT', r.x + 12, sy); sy += 8;
 
     // Innate passive — each class has one. Sits below the 5 skill rows; 7px so the
     // longer strings fit the card width even on the tank (its 5 stat rows push lowest).
@@ -4705,7 +4887,7 @@ function drawCharacterSelect(){
 
   ctx.font = 'bold 7px monospace';
   ctx.fillStyle = '#5d6d7e';
-  ctx.fillText('CLICK A CHARACTER — THEN PICK 2 ASSISTANTS', W/2, H - 14);
+  ctx.fillText('CLICK A CHARACTER — THEN SET YOUR LOADOUT', W/2, H - 14);
 }
 
 function handleCharacterSelect(){
@@ -4726,32 +4908,45 @@ function handleCharacterSelect(){
 }
 
 // ---- Assistant selection screen (pick exactly 2 of the 5-strong roster) ----
-function assistCardRect(i){
-  const cw = 84, ch = 150, gap = 6;
-  const n = ASSIST_ORDER.length;
+// Owned assistants in stable roster order (only these appear on the loadout screen;
+// the rest are bought in the shop).
+function ownedAssistantList(){ return ASSIST_ORDER.filter(k => profile.ownedAssistants.includes(k)); }
+function assistCardRect(i, n){
+  const cw = 84, ch = 96, gap = 6;
+  n = n || ownedAssistantList().length || 1;
   const totalW = n * cw + (n - 1) * gap;
   const xs = Math.floor((W - totalW) / 2);
-  return { x: xs + i * (cw + gap), y: 56, w: cw, h: ch };
+  return { x: xs + i * (cw + gap), y: 38, w: cw, h: ch };
+}
+// Five skill-loadout slot boxes (F + X/C/B/V) below the assistant area.
+function loadoutSlotRect(i){
+  const sw = 64, sh = 42, gap = 8, n = 5;
+  const totalW = n * sw + (n - 1) * gap;
+  const xs = Math.floor((W - totalW) / 2);
+  return { x: xs + i * (sw + gap), y: 150, w: sw, h: sh };
 }
 function assistStartRect(){ const w = 120, h = 22; return { x: Math.floor((W - w) / 2), y: H - 30, w, h }; }
+// Owned non-heal skills (for the loadout cycle), preceded by null (= empty slot).
+function cycleSkillList(){ return [null, ...profile.ownedSkills.filter(s => s !== 'heal' && SKILLS[s])]; }
 
 function drawAssistantSelect(){
   ctx.fillStyle = '#0c0c18';
   ctx.fillRect(0, 0, W, H);
   ctx.textAlign = 'center';
-  ctx.font = 'bold 14px monospace';
+  ctx.font = 'bold 13px monospace';
   ctx.fillStyle = '#f1c40f';
-  ctx.fillText('CHOOSE 2 ASSISTANTS', W / 2, 28);
-  const ready = selectedAssistants.length === 2;
-  ctx.font = 'bold 8px monospace';
-  ctx.fillStyle = ready ? '#2ecc71' : '#bdc3c7';
-  ctx.fillText(selectedAssistants.length + ' / 2 SELECTED' + (ready ? '  —  READY' : ''), W / 2, 44);
+  ctx.fillText('LOADOUT', W / 2, 16);
+  ctx.font = 'bold 7px monospace';
+  ctx.fillStyle = '#bdc3c7';
+  ctx.fillText('ASSISTANTS — EQUIP UP TO 2  (' + profile.equippedAssistants.length + '/2)  ·  BUY MORE IN SHOP', W / 2, 30);
 
-  for(let i = 0; i < ASSIST_ORDER.length; i++){
-    const key = ASSIST_ORDER[i];
+  const owned = ownedAssistantList();
+  for(let i = 0; i < owned.length; i++){
+    const key = owned[i];
     const a = ASSISTANTS[key];
-    const r = assistCardRect(i);
-    const chosen = selectedAssistants.includes(key);
+    const r = assistCardRect(i, owned.length);
+    const chosen = profile.equippedAssistants.includes(key);
+    const isDef = profile.defaultAssistant === key;
     const hov = clickedRect(r.x, r.y, r.w, r.h);
     ctx.fillStyle = chosen ? '#16261a' : (hov ? '#1c2433' : '#141822');
     ctx.fillRect(r.x, r.y, r.w, r.h);
@@ -4760,39 +4955,73 @@ function drawAssistantSelect(){
     ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
 
     ctx.fillStyle = a.color;
-    ctx.font = 'bold 10px monospace';
-    ctx.fillText(a.name, r.x + r.w / 2, r.y + 16);
-
-    drawSpriteCentered(a.sprite(), r.x + r.w / 2, r.y + 40);
-
+    ctx.font = 'bold 9px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(a.name, r.x + r.w / 2, r.y + 13);
+    drawSpriteCentered(a.sprite(), r.x + r.w / 2, r.y + 34);
     ctx.font = 'bold 6px monospace';
     ctx.fillStyle = '#7f8c8d';
-    ctx.fillText(a.tags.join(' · '), r.x + r.w / 2, r.y + 62);
+    ctx.fillText(a.tags.join(' · '), r.x + r.w / 2, r.y + 54);
+    if(isDef){
+      ctx.fillStyle = '#5dade2';
+      ctx.fillText('DEFAULT', r.x + r.w / 2, r.y + 66);
+    }
+    ctx.fillStyle = chosen ? '#2ecc71' : '#566573';
+    ctx.font = 'bold 8px monospace';
+    ctx.fillText(chosen ? 'EQUIPPED' : 'TAP TO EQUIP', r.x + r.w / 2, r.y + r.h - 6);
+  }
 
+  // ---- Skill loadout strip ----
+  ctx.fillStyle = '#bdc3c7';
+  ctx.font = 'bold 7px monospace';
+  ctx.fillText('SKILLS  ·  F = HEAL  ·  +1 SLOT EVERY 5 LEVELS  ·  TAP TO CYCLE', W / 2, 144);
+  const slotKeys = [['F','f'],['X','x'],['C','c'],['B','b'],['V','v']];
+  const unlocked = unlockedSlots();
+  for(let i = 0; i < slotKeys.length; i++){
+    const [keyLabel, slot] = slotKeys[i];
+    const r = loadoutSlotRect(i);
+    const isHeal = slot === 'f';
+    const slotIdx = isHeal ? -1 : SLOT_ORDER.indexOf(slot);   // 0..3
+    const locked = !isHeal && slotIdx >= unlocked;
+    const id = isHeal ? 'heal' : profile.loadout[slot];
+    const sk = (id && SKILLS[id]) ? SKILLS[id] : null;
+    const hov = !locked && !isHeal && clickedRect(r.x, r.y, r.w, r.h);
+    ctx.fillStyle = locked ? '#15151c' : (hov ? '#23303f' : '#141822');
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = isHeal ? '#2ecc71' : (locked ? '#3a3a44' : (sk ? sk.color : '#566573'));
+    ctx.lineWidth = 1;
+    ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+    ctx.fillStyle = '#7f8c8d';
     ctx.font = 'bold 7px monospace';
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#bdc3c7';
-    a.lines.forEach((ln, j) => ctx.fillText(ln, r.x + 8, r.y + 78 + j * 11));
+    ctx.fillText(keyLabel, r.x + 4, r.y + 10);
     ctx.textAlign = 'center';
-
-    if(chosen){
-      ctx.fillStyle = '#2ecc71';
-      ctx.font = 'bold 8px monospace';
-      ctx.fillText('PICKED', r.x + r.w / 2, r.y + r.h - 8);
+    if(locked){
+      ctx.fillStyle = '#566573'; ctx.font = 'bold 7px monospace';
+      ctx.fillText('LOCKED', r.x + r.w / 2, r.y + 24);
+      ctx.fillStyle = '#46505e'; ctx.font = 'bold 6px monospace';
+      ctx.fillText('LV ' + ((slotIdx + 1) * 5), r.x + r.w / 2, r.y + 34);
+    } else if(sk){
+      ctx.fillStyle = isHeal ? '#2ecc71' : sk.color; ctx.font = 'bold 9px monospace';
+      ctx.fillText(sk.label, r.x + r.w / 2, r.y + 26);
+      if(isHeal){ ctx.fillStyle = '#7f8c8d'; ctx.font = 'bold 6px monospace'; ctx.fillText('DEFAULT', r.x + r.w / 2, r.y + 36); }
+    } else {
+      ctx.fillStyle = '#566573'; ctx.font = 'bold 8px monospace';
+      ctx.fillText('EMPTY', r.x + r.w / 2, r.y + 26);
     }
   }
 
-  // START button (only active with exactly 2 chosen)
+  // START button — always allowed (0..2 assistants; empty loadout = just HEAL).
   const sb = assistStartRect();
   const hovS = clickedRect(sb.x, sb.y, sb.w, sb.h);
-  ctx.fillStyle = ready ? (hovS ? '#27ae60' : '#1e6840') : '#2a2a33';
+  ctx.fillStyle = hovS ? '#27ae60' : '#1e6840';
   ctx.fillRect(sb.x, sb.y, sb.w, sb.h);
-  ctx.strokeStyle = ready ? '#2ecc71' : '#444';
+  ctx.strokeStyle = '#2ecc71';
   ctx.lineWidth = 1;
   ctx.strokeRect(sb.x + 0.5, sb.y + 0.5, sb.w - 1, sb.h - 1);
-  ctx.fillStyle = ready ? '#fff' : '#666';
+  ctx.fillStyle = '#fff';
   ctx.font = 'bold 11px monospace';
-  ctx.fillText(ready ? 'START' : 'PICK 2 TO START', sb.x + sb.w / 2, sb.y + 15);
+  ctx.fillText('START', sb.x + sb.w / 2, sb.y + 15);
 
   // Back button
   const bb = backButtonRect();
@@ -4813,33 +5042,49 @@ function handleAssistantSelect(){
   if(clickedRect(bb.x, bb.y, bb.w, bb.h)){
     state = STATE.CHARACTER_SELECT; stateTime = 0; return;
   }
-  for(let i = 0; i < ASSIST_ORDER.length; i++){
-    const r = assistCardRect(i);
+  // Assistant equip toggles (0..2 from owned; the default is removable).
+  const owned = ownedAssistantList();
+  for(let i = 0; i < owned.length; i++){
+    const r = assistCardRect(i, owned.length);
     if(clickedRect(r.x, r.y, r.w, r.h)){
-      const key = ASSIST_ORDER[i];
-      const idx = selectedAssistants.indexOf(key);
-      if(idx >= 0){
-        selectedAssistants.splice(idx, 1);
-      } else if(selectedAssistants.length < 2){
-        selectedAssistants.push(key);
-      } else {
-        // Already 2 picked — swap out the oldest so a click always does something.
-        selectedAssistants.shift();
-        selectedAssistants.push(key);
-      }
+      const key = owned[i];
+      const idx = profile.equippedAssistants.indexOf(key);
+      if(idx >= 0) profile.equippedAssistants.splice(idx, 1);
+      else if(profile.equippedAssistants.length < 2) profile.equippedAssistants.push(key);
+      else { profile.equippedAssistants.shift(); profile.equippedAssistants.push(key); }
+      saveProfile();
       if(sfx.pickup) sfx.pickup();
       return;
     }
   }
-  const sb = assistStartRect();
-  if(selectedAssistants.length === 2 && clickedRect(sb.x, sb.y, sb.w, sb.h)){
-    startSelectedRun();
+  // Skill-loadout slot cycling (X/C/B/V only; F is locked to HEAL).
+  const unlocked = unlockedSlots();
+  const cyc = cycleSkillList();
+  for(let i = 0; i < 5; i++){
+    const r = loadoutSlotRect(i);
+    if(!clickedRect(r.x, r.y, r.w, r.h)) continue;
+    const slot = ['f','x','c','b','v'][i];
+    if(slot === 'f') return;                          // heal is locked
+    const slotIdx = SLOT_ORDER.indexOf(slot);          // 0..3
+    if(slotIdx >= unlocked) return;                    // locked by level
+    let ci = cyc.indexOf(profile.loadout[slot]); if(ci < 0) ci = 0;
+    const next = cyc[(ci + 1) % cyc.length];
+    // No duplicate skill across keys: clear any other slot already holding `next`.
+    if(next){ for(const s of SLOT_ORDER){ if(s !== slot && profile.loadout[s] === next) profile.loadout[s] = null; } }
+    profile.loadout[slot] = next;
+    saveProfile();
+    if(sfx.pickup) sfx.pickup();
+    return;
   }
+  // START — always allowed (an empty loadout is just HEAL; 0 assistants is fine).
+  const sb = assistStartRect();
+  if(clickedRect(sb.x, sb.y, sb.w, sb.h)) startSelectedRun();
 }
 
 function startSelectedRun(){
   initAudio();
   score = 0;
+  selectedAssistants = profile.equippedAssistants.slice();  // seed the run from the profile
   player = createPlayer(selectedChar);
   entities = [player];
   allies = [];

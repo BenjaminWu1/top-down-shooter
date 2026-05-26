@@ -83,7 +83,9 @@ DRIVER = r"""
   // Make audio calls harmless (initAudio normally fires on first click).
   safe('initAudio', function(){ if(typeof initAudio === 'function') initAudio(); });
 
-  // Choose a class + loadout and start a run.
+  // Choose a class + loadout and start a run. Reset the meta-progression profile to a
+  // clean default so the run is deterministic and independent of any (stubbed) storage.
+  if(typeof DEFAULT_PROFILE === 'function'){ profile = DEFAULT_PROFILE(); }
   selectedChar = 'soldier';
   selectedAssistants = ['drone', 'henchman'];
   safe('startGame', function(){ startGame(); });
@@ -151,7 +153,7 @@ DRIVER = r"""
   });
 
   // Exercise every draw state (menus / select / overlays) for draw-time errors.
-  ['MENU','HOWTO','CHARACTER_SELECT','ASSISTANT_SELECT','PLAYING',
+  ['MENU','HOWTO','CHARACTER_SELECT','ASSISTANT_SELECT','SHOP','PLAYING',
    'LEVEL_COMPLETE','GAME_OVER','VICTORY'].forEach(function(s){
     if(STATE[s] === undefined){ report.notes.push('no STATE.' + s); return; }
     safe('draw ' + s, function(){ state = STATE[s]; draw(); });
@@ -339,6 +341,30 @@ DRIVER_BALANCE = r"""
     });
     check('Boss gap: end boss waits 15-30s after mid-boss + monsters fill gap',
           bad.length === 0, bad.join(' '));
+  })();
+
+  // 9) Meta-progression: XP curve rises; level scaling raises dmg/maxHp, lowers
+  //    fireRate, grows the RMB pool (short at L1); slot gating; loadout ownership.
+  (function(){
+    var saved = profile, ok = true, d = [];
+    for(var l = 1; l < 20; l++){ if(xpToNext(l + 1) <= xpToNext(l)){ ok = false; d.push('xp@' + l); break; } }
+    profile = DEFAULT_PROFILE();            var p1  = createPlayer('tank');
+    profile = DEFAULT_PROFILE(); profile.level = 20; var p20 = createPlayer('tank');
+    if(!(p20.damageMult > p1.damageMult)) { ok = false; d.push('dmg'); }
+    if(!(p20.maxHp > p1.maxHp))           { ok = false; d.push('hp'); }
+    if(!(p20.fireRate < p1.fireRate))     { ok = false; d.push('fire'); }
+    if(!(p20.maxFuel > p1.maxFuel))       { ok = false; d.push('rmbGrow'); }
+    if(!(p1.maxFuel < 12))                { ok = false; d.push('rmbShort'); }
+    profile = DEFAULT_PROFILE(); profile.level = 1;  if(unlockedSlots() !== 0) { ok = false; d.push('slot1'); }
+    profile.level = 5;  if(unlockedSlots() !== 1) { ok = false; d.push('slot5'); }
+    profile.level = 20; if(unlockedSlots() !== 4) { ok = false; d.push('slot20'); }
+    profile = DEFAULT_PROFILE(); profile.level = 20; profile.loadout.x = 'nuke';   // not owned yet
+    var lo = resolvePlayerLoadout(); if(lo.x !== null) { ok = false; d.push('unowned'); }
+    profile.ownedSkills.push('nuke'); lo = resolvePlayerLoadout();
+    if(lo.x !== 'nuke') { ok = false; d.push('owned'); }
+    if(lo.f !== 'heal') { ok = false; d.push('healDefault'); }
+    profile = saved;
+    check('Meta: XP curve + level scaling + slot gating + loadout ownership', ok, d.join(' '));
   })();
 
   return JSON.stringify(R);
