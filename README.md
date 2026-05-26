@@ -91,11 +91,13 @@ Before a run you pick **2 of 5** AI allies that fight at your side and are rebui
 
 ## Pickups
 
-Enemies drop weapons, defenses, and buffs. The drop pool is tuned per class (Benjamin Wu can roll **fuel**, Dr.Syed can roll **beverage**).
+Enemies drop attack enhancers, defenses, and buffs. The drop pool is tuned per class (Benjamin Wu can roll **fuel**, Dr.Syed can roll **beverage**).
 
-**Equipment:** Health (+1 HP) · Spread (3-shot cone) · Rapid (half cooldown) · Shield (absorb hits) · Armor (raise shield cap + brief invuln) · Rocket (explosive AoE rounds) · Laser (piercing beam) · Minigun (rapid bullets) · Plasma (bouncing + piercing) · Homing (seeking missiles).
+**Attack enhancers** (these only *enhance* your basic attack — they never change its form): Rapid (half cooldown) · Pierce (shots punch through enemies) · Multi (single → parallel double shot) · Damage (2×). All ~8s timed buffs; their gauges show top-left, above your secondary-attack bar.
 
-**Powerups:** Speed (+50% move) · Damage (2×) · Slow-Mo (enemies crawl) · Score ×2 · Magnet (pickups fly to you).
+**Equipment:** Health (+1 HP) · Shield (absorb hits) · Armor (raise shield cap + brief invuln).
+
+**Powerups:** Speed (+50% move) · Slow-Mo (enemies crawl) · Score ×2 · Magnet (pickups fly to you).
 
 **Class resources:** Fuel (Benjamin Wu's flamethrower) · Beverage (Dr.Syed's blade energy) · Battery (Xu Yihui's laser power).
 
