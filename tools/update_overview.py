@@ -117,11 +117,61 @@ REPLACEMENTS = [
     ("The weapon priority cascade in fireWeapon",
      "Weapon pickups only ENHANCE the basic attack (rapid/pierce/multi/damage) - they "
      "must NEVER change its projectile form."),
+
+    # 3. STATE machine - SHOP state added.
+    ("CHARACTER_SELECT, ASSISTANT_SELECT. Both update() and draw() dispatch",
+     "STATE enum: MENU, HOWTO, PLAYING, LEVEL_COMPLETE, GAME_OVER, VICTORY, "
+     "CHARACTER_SELECT, ASSISTANT_SELECT, SHOP. Both update() and draw() dispatch on "
+     "the state variable."),
+
+    # 3. Run setup flow - now a loadout screen + shop, not 'pick exactly 2'.
+    ("ASSISTANT_SELECT (pick exactly 2 of 5)",
+     "Run setup flow: MENU (pick level) -> CHARACTER_SELECT (pick class) -> "
+     "ASSISTANT_SELECT (the LOADOUT screen: equip 0-2 OWNED assistants + assign "
+     "owned skills to X/C/B/V) -> PLAYING. SHOP (the ARMORY) opens from a lower-left "
+     "MENU button. The real entry point is startSelectedRun() (uses selectedChar + "
+     "selectedLevel + the persistent profile)."),
+
+    # 5. Player classes - active skills are now a loadout, not the fixed kit.
+    # (find must NOT recur in the new text, or it re-fires every run.)
+    ("off them. Display names and live stats:",
+     "Three classes; class keys never change (soldier/scout/tank) so all logic keys "
+     "off them. Each keeps a class-locked LMB + held-RMB; the active X/C/B/V skills "
+     "are now a PROFILE LOADOUT (F=HEAL locked, +1 slot per 5 levels) drawn from the "
+     "SKILLS catalog, NOT the per-class CHARACTERS.skills kit (now vestigial / kept "
+     "only for validator C7). Display names and live stats:"),
+
+    # 10. Allies - owned + equip 0..2, not forced-2.
+    ("player picks exactly 2 (selectedAssistants)",
+     "Roster in ASSISTANTS (drone, henchman, nunchaku, bomber, poison); the player "
+     "OWNS a default drone + any bought in the SHOP, and EQUIPS 0-2 of them on the "
+     "loadout screen (profile.equippedAssistants; default removable - the old "
+     "exactly-2 rule is gone). startSelectedRun seeds selectedAssistants from the "
+     "profile; spawned at run start (spawnSelectedAssistants) and rebuilt each level "
+     "(refreshAssistants - survivors refilled, dead recreated)."),
 ]
 
 # INSERTS: bullets added immediately before the paragraph whose text contains the
 # heading key. (before_heading, [bullet_text, ...])
 INSERTS = [
+    ("6. RMB secondaries", [
+        "META-PROGRESSION (persistent): one shared account profile in localStorage "
+        "(shooter_profile) - level, XP, gold, owned skills + assistants, the X/C/B/V "
+        "loadout, and equipped assistants. XP earned on ANY character credits the one "
+        "profile, so all characters level together. loadProfile() guards a non-string "
+        "(headless stubs localStorage as a Proxy).",
+
+        "LEVELING + SCALING: XP from kills (small, accrued) + level-clear/victory "
+        "(banked); xpToNext grows geometrically (cap 40). applyLevelScaling() at run "
+        "start raises base damage, fire rate / attack speed, max HP, and the held-RMB "
+        "'second basic attack' DURATION (its fuel/energy/power pool starts short and "
+        "grows with level). Drop rate also scales up with level (gate only).",
+
+        "SHOP (STATE.SHOP, the ARMORY): spend Gold on tiered skills (cheap/small -> "
+        "expensive/big) and extra assistants; purchases persist. LOADOUT screen: F is "
+        "locked to HEAL, X/C/B/V unlock +1 per 5 levels and are filled from owned "
+        "skills; the persistent LV/XP bar + gold show upper-right on every menu.",
+    ]),
     ("10. Allies", [
         "Reusable boss abilities (escalate by levelIdx, no-op for clones): bossInvuln "
         "(1.2s damage-absorb shield), bossSummonExploders, bossSpawnClone, bossGasBomb, "

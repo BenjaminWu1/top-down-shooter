@@ -13,9 +13,14 @@ Letter keys (especially W/A/S/D/X/C/F/B/V and Space) used to allow browser defau
 
 When adding a new gameplay key, **also add it to `GAMEPLAY_KEYS`**, or the bug returns.
 
-## Special skills (X / C / F / B / V)
+## Special skills (X / C / F / B / V) — now a PROFILE LOADOUT
 
-Each character in `CHARACTERS` has a `skills:{x, c, f, b, v}` map and a matching `skillLabels`. **X / F / B are universal** (all three classes share them); **C and V are both class-specific** — all three classes now fill the V slot too. Every key dispatches through `triggerSkill(name, dx, dy, mag)` which returns `true` on successful fire so the per-key cooldown only charges on success. Cooldown maximums live in `player.skillCdMax` (`sprint:20`, `heal:20`, `blast:20`, `vsummon:25`, `wall:18`, `blink:7`, `dash:5`, `flameburst:20`, `barrage:24`, `slowmo` via the `c:12` default, …). The lookup is **by skill name**, not by key, so e.g. X's cooldown comes from `skillCdMax['sprint']` (20), not the unused `x:4` entry.
+**The fixed per-class skill kit was replaced by a meta-progression LOADOUT** (see the meta-progression bullet in session-changes). The live game no longer reads `CHARACTERS[char].skills`; it reads **`player.loadout`** (built by `resolvePlayerLoadout()` in `createPlayer` from the persistent `profile`):
+
+- **F is locked to HEAL** — the default skill every player owns from the start.
+- **X / C / B / V are assignable loadout slots.** A slot is active only if it's **unlocked by level** (`unlockedSlots() = min(4, floor(profile.level/5))`, slot order X→C→B→V — so +1 slot every 5 levels) **AND** assigned in `profile.loadout[slot]` **AND** that skill id is in `profile.ownedSkills`. LMB and the held-RMB secondary stay class-locked (not part of the loadout).
+- The `updatePlaying` dispatch loops `[['KeyF','f'],['KeyX','x'],['KeyC','c'],['KeyB','b'],['KeyV','v']]`, firing `triggerSkill(player.loadout[slot], …)` and charging `skillCd[slot] = skillCdMax[id]` on success. Skills you own/equip come from the **`SKILLS`** catalog (id = a real `triggerSkill` case; tiered with gold costs; bought in the shop). `drawSkillHUD` builds its chips from `player.loadout` + `SKILLS` too.
+- **`CHARACTERS.skills`/`skillLabels` are now vestigial** — kept only so `validate.py` C7 stays green; they no longer drive gameplay. Cooldown maximums still live in `player.skillCdMax`, looked up **by skill name** (`sprint:20`, `heal:20`, `blast:20`, `vsummon:25`, `wall:18`, `blink:5`, `dash:3.5`, `flameburst:20`, `barrage:24`, `slowmo:18`, `grenade:6`, `nuke:60`, …). `triggerSkill(name, dx, dy, mag)` returns `true` on successful fire so a slot only charges its cooldown on success.
 
 - **X is `sprint`** (label `SPRINT`, 20 s cooldown): sets `player.sprintTime = 5`, a +30% move-speed buff. `playerSpeedMult()` combines it with the SPEED powerup (1.5×) multiplicatively, and is used by both player movement and the allies that pace themselves to the player. Shows a `SPRNT` buff timer in `drawWeaponHUD`.
 - **C is class-specific**: Soldier `flameburst` (label `NAPALM` — 3 s fire ring via `tickFlameburst`, 20 s cd), Scout `blink` (teleport to cursor, 0.45 s i-frames, 7 s cd), Tank `wall` (4 s full invuln, 18 s cd).
