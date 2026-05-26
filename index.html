@@ -1169,10 +1169,17 @@ const LVL_HP_PER = 6,        LVL_HP_CAP = 8;      // +1 maxHp every 6 levels, ma
 const RMB_BASE_FRAC = 0.4;                        // level-1 RMB pool = 40% of base ("very short")
 const RMB_DUR_PER = 0.06,    RMB_DUR_CAP = 2.0;   // RMB-secondary duration grows ~3x by high level
 const DROP_LVL_PER = 0.004, DROP_LVL_CAP = 0.15, DROP_GATE_MAX = 0.75; // gate-only drop scaling
+// ---- Assistant leveling (each owned ally has its own level 1..10, upgraded with
+// gold in the SHOP; the gold cost rises every level). Level 1 is deliberately weak
+// (capabilities are SIGNIFICANTLY reduced) and level 10 restores full power. ----
+const ASSIST_MAX_LEVEL = 10;
+const ASSIST_UPGRADE_BASE = 50;     // gold to go from level 1 -> 2
+const ASSIST_UPGRADE_GROWTH = 1.4;  // each subsequent level costs ~40% more
 
 function DEFAULT_PROFILE(){
   return { v:1, level:1, xp:0, gold:0,
            ownedSkills:['heal'], ownedAssistants:['drone'],
+           assistantLevels:{ drone:1 },
            loadout:{ x:null, c:null, b:null, v:null },
            defaultAssistant:'drone', equippedAssistants:['drone'] };
 }
@@ -1204,6 +1211,12 @@ function loadProfile(){
     if(lo[k] && out.ownedSkills.includes(lo[k])) out.loadout[k] = lo[k];
   }
   out.equippedAssistants = out.equippedAssistants.filter(k => out.ownedAssistants.includes(k)).slice(0, 2);
+  // Per-assistant upgrade level (1..10), kept only for owned assistants.
+  const al = (p.assistantLevels && typeof p.assistantLevels === 'object') ? p.assistantLevels : {};
+  out.assistantLevels = {};
+  for(const k of out.ownedAssistants){
+    out.assistantLevels[k] = Math.max(1, Math.min(ASSIST_MAX_LEVEL, Math.floor(al[k]) || 1));
+  }
   return out;
 }
 function saveProfile(){
@@ -1228,6 +1241,23 @@ function grantGold(amount){ profile.gold += amount; saveProfile(); }
 // Loadout slot gating: +1 equippable skill slot per 5 levels (cap 4 = X/C/B/V).
 const SLOT_ORDER = ['x','c','b','v'];
 function unlockedSlots(){ return Math.min(4, Math.floor(profile.level / 5)); }
+
+// ---- Assistant level helpers ----
+function assistantLevel(key){
+  const al = profile.assistantLevels || {};
+  return Math.max(1, Math.min(ASSIST_MAX_LEVEL, Math.floor(al[key]) || 1));
+}
+// Fraction of an assistant's FULL (factory-reference) capability at a given level:
+// weak at level 1, full at level 10. This is what "significantly reduces" a fresh
+// (level-1) ally and what each upgrade buys back.
+function assistLevelFrac(lvl){
+  const L = Math.max(1, Math.min(ASSIST_MAX_LEVEL, lvl || 1));
+  return 0.35 + (L - 1) / (ASSIST_MAX_LEVEL - 1) * 0.65;   // L1 = 0.35 ... L10 = 1.0
+}
+// Gold to upgrade from `lvl` to `lvl+1` (rises each level).
+function assistUpgradeCost(lvl){
+  return Math.round(ASSIST_UPGRADE_BASE * Math.pow(ASSIST_UPGRADE_GROWTH, lvl - 1));
+}
 
 // ---- Character profiles. X (sprint) and F (heal) are universal; C is the
 // class-unique slot (slowmo / wall); the optional V slot is Tank-only. ----
@@ -1513,7 +1543,7 @@ function createCompanion(){
     type:'companion', assistKey:'drone', x:player ? player.x - 14 : W/2 - 14, y:player ? player.y : H/2,
     vx:0, vy:0, angle:0, radius:4,
     hp:6, maxHp:6,
-    fireCooldown:0, fireRate:0.25,
+    fireCooldown:0, fireRate:0.25, dmg:3, detectRange:280,
     hitInvuln:0.85, deathColor:'#3498db',
     hitFlash:0, invuln:0, frame:0, frameT:0, dead:false
   };
@@ -1591,16 +1621,57 @@ function createPoisonAlly(){
   };
 }
 
-// Factory dispatch used by the selection flow and per-level refresh.
+// Factory dispatch used by the selection flow and per-level refresh. The base
+// factory stats are the LEVEL-10 reference; applyAssistantLevel scales them down
+// for lower-level (un-upgraded) allies so a fresh ally is much weaker.
 function createAssistant(key){
+  let a;
   switch(key){
-    case 'drone':    return createCompanion();
-    case 'henchman': return createHenchman();
-    case 'nunchaku': return createNunchaku();
-    case 'bomber':   return createBomberAlly();
-    case 'poison':   return createPoisonAlly();
+    case 'drone':    a = createCompanion();  break;
+    case 'henchman': a = createHenchman();   break;
+    case 'nunchaku': a = createNunchaku();   break;
+    case 'bomber':   a = createBomberAlly(); break;
+    case 'poison':   a = createPoisonAlly(); break;
+    default:         a = createCompanion();
   }
-  return createCompanion();
+  applyAssistantLevel(a, key);
+  return a;
+}
+
+// Scale a freshly-built assistant down toward its upgrade level. At level 1 every
+// ally is at ~35% of its reference power (HP, damage, range, attack speed); at
+// level 10 it is exactly the factory stats. Capabilities scale harder than range
+// so a low-level ally is weak but still functional.
+function applyAssistantLevel(a, key){
+  const lvl = assistantLevel(key);
+  const f = assistLevelFrac(lvl);          // 0.35 .. 1.0
+  const rangeF = 0.6 + 0.4 * f;            // ranges shrink less than power
+  const rateF  = 0.55 + 0.45 * f;          // attack speed (divisor: <1 => slower)
+  a.level = lvl;
+  a.maxHp = Math.max(1, Math.round(a.maxHp * f));
+  a.hp = a.maxHp;
+  switch(a.type){
+    case 'companion':
+      a.dmg = a.dmg * f;
+      a.detectRange = a.detectRange * rangeF;
+      a.fireRate = a.fireRate / rateF;
+      break;
+    case 'henchman':
+    case 'nunchaku':
+      a.swingDmg = Math.max(1, a.swingDmg * f);
+      a.attackRange = a.attackRange * rangeF;
+      a.attackRate = a.attackRate / rateF;
+      break;
+    case 'bomber_ally':
+      a.bombDmg = Math.max(1, a.bombDmg * f);
+      a.explodeRadius = a.explodeRadius * rangeF;
+      a.fireRate = a.fireRate / rateF;
+      break;
+    case 'poison_ally':
+      a.dps = a.dps * f;
+      a.auraRadius = a.auraRadius * rangeF;
+      break;
+  }
 }
 
 function createBullet(x,y,angle,owner,opts={}){
@@ -2693,10 +2764,11 @@ function updateCompanion(c, dt){
   c.frameT += dt;
   if(c.frameT > 0.18){ c.frameT = 0; c.frame = (c.frame + 1) % 2; }
 
-  // Auto-fire at nearest enemy in range.
+  // Auto-fire at nearest enemy in range. Detection range + bullet damage scale
+  // with the drone's upgrade level (see applyAssistantLevel).
   c.fireCooldown -= dt;
-  // Detection/attack scope doubled from 140 to 280 (companion engages from 2x farther).
-  let nearest = null, nd = 280*280;
+  const range = c.detectRange || 280;
+  let nearest = null, nd = range*range;
   for(const en of entities){
     if(en.type !== 'enemy' || en.dead) continue;
     const dd = dist2(c, en);
@@ -2707,7 +2779,7 @@ function updateCompanion(c, dt){
     if(c.fireCooldown <= 0){
       // Companion bullets are friendly to player (owner='player') so they share collision logic.
       entities.push(createBullet(c.x, c.y, c.angle, 'player', {
-        sprite: SPR.bullet_companion, speed: 260, dmg: 3, radius: 2, life: 1.5, fromAlly: true
+        sprite: SPR.bullet_companion, speed: 260, dmg: c.dmg || 3, radius: 2, life: 1.5, fromAlly: true
       }));
       c.fireCooldown = c.fireRate;
       emit(c.x, c.y, 1, '#aed6f1', 20, 60, 0.15);
@@ -4626,7 +4698,7 @@ function drawMenu(){
   ctx.stroke();
 }
 
-function guideButtonRect(){ return { x: W - 64, y: 8, w: 56, h: 16 }; }
+function guideButtonRect(){ return { x: 8, y: 8, w: 56, h: 16 }; }
 
 // Geometry helper shared by drawMenu + handleMenu so click targets stay in sync.
 function levelBoxRect(i){
@@ -4646,21 +4718,21 @@ function levelBoxRect(i){
 // ============================================================
 function shopButtonRect(){ return { x: 8, y: H - 22, w: 56, h: 16 }; }
 
-// Persistent upper-right strip on every non-game screen: level, XP bar
-// (DARK fill = current XP, LIGHT = remaining to next level), and gold total.
-// Positioned just left of the MENU guide button so the two never overlap.
+// Persistent strip flush in the TOP-RIGHT corner on every non-game screen:
+// LV + the XP bar (DARK fill = current XP, LIGHT = remaining to next level), with
+// the COINS total — a specific number — on its own line just below the XP bar.
+// (The GUIDE button now lives in the top-LEFT corner, so this owns the right.)
 function drawProfileBar(){
-  const bw = 92, x = W - 66 - bw, yTop = 7;
+  const bw = 96, x = W - bw - 8, yTop = 7;
+  // Level (top-left of the block).
   ctx.textAlign = 'left';
   ctx.font = 'bold 8px monospace';
   ctx.fillStyle = '#f1c40f';
   ctx.fillText('LV ' + profile.level, x, yTop + 7);
-  ctx.textAlign = 'right';
-  ctx.fillStyle = '#f5d76e';
-  ctx.fillText('G ' + profile.gold, x + bw, yTop + 7);
+  // XP bar.
   const need = xpToNext(profile.level);
   const frac = profile.level >= LEVEL_CAP ? 1 : clamp(profile.xp / need, 0, 1);
-  const by = yTop + 10, bh = 4;
+  const by = yTop + 11, bh = 4;
   ctx.fillStyle = '#e8d27a';                            // LIGHT = remaining XP needed
   ctx.fillRect(x, by, bw, bh);
   ctx.fillStyle = '#5a4708';                            // DARK = current XP
@@ -4668,12 +4740,18 @@ function drawProfileBar(){
   ctx.strokeStyle = '#7a5006';
   ctx.lineWidth = 1;
   ctx.strokeRect(x + 0.5, by + 0.5, bw - 1, bh - 1);
+  // Coins — specific number — on the line below the XP bar, right-aligned.
+  ctx.textAlign = 'right';
+  ctx.font = 'bold 8px monospace';
+  ctx.fillStyle = '#f5d76e';
+  ctx.fillText('COINS: ' + profile.gold, x + bw, by + bh + 9);
   ctx.textAlign = 'center';
 }
 
 // ---- SHOP (ARMORY) ----
 const ASSISTANT_COST = { drone:0, henchman:200, nunchaku:280, bomber:320, poison:300 };
-const SHOP_ASSIST_ORDER = ['henchman','nunchaku','bomber','poison'];
+// Drone is owned by default but listed so it (like the rest) can be UPGRADED here.
+const SHOP_ASSIST_ORDER = ['drone','henchman','nunchaku','bomber','poison'];
 let shopTab = 'skills';      // 'skills' | 'allies'
 let shopMsgUntil = 0;        // stateTime until which the "NOT ENOUGH GOLD" flash shows
 
@@ -4713,33 +4791,53 @@ function drawShop(){
     const r = shopCardRect(i);
     const isSkill = shopTab === 'skills';
     const meta = isSkill ? SKILLS[id] : ASSISTANTS[id];
-    const cost = isSkill ? SKILLS[id].cost : (ASSISTANT_COST[id] || 0);
     const owned = isSkill ? profile.ownedSkills.includes(id) : profile.ownedAssistants.includes(id);
+    const col = meta.color;
+    // Assistants: level (1..10) + the relevant gold price (buy if unowned, else upgrade).
+    const lvl = isSkill ? 0 : assistantLevel(id);
+    const maxed = !isSkill && owned && lvl >= ASSIST_MAX_LEVEL;
+    let cost;
+    if(isSkill) cost = SKILLS[id].cost;
+    else if(!owned) cost = ASSISTANT_COST[id] || 0;
+    else cost = maxed ? 0 : assistUpgradeCost(lvl);
     const afford = profile.gold >= cost;
+    // "done" = nothing more to buy here (a skill you own, or a maxed assistant).
+    const done = isSkill ? owned : maxed;
     const hov = clickedRect(r.x, r.y, r.w, r.h);
-    const col = isSkill ? meta.color : meta.color;
-    ctx.fillStyle = owned ? '#15241a' : (hov && afford ? '#23303f' : '#141822');
+    ctx.fillStyle = done ? '#15241a' : (hov && afford ? '#23303f' : '#141822');
     ctx.fillRect(r.x, r.y, r.w, r.h);
-    ctx.strokeStyle = owned ? '#2ecc71' : col;
-    ctx.lineWidth = (hov && !owned) ? 2 : 1;
+    ctx.strokeStyle = done ? '#2ecc71' : col;
+    ctx.lineWidth = (hov && !done) ? 2 : 1;
     ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
-    // Name + tier
+    // Name
     ctx.fillStyle = col;
     ctx.font = 'bold 9px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(isSkill ? meta.label : meta.name, r.x + r.w/2, r.y + 14);
-    ctx.fillStyle = '#7f8c8d';
+    ctx.fillText(isSkill ? meta.label : meta.name, r.x + r.w/2, r.y + 13);
+    // Sub line: skill tier, or assistant level / tags.
     ctx.font = 'bold 6px monospace';
-    ctx.fillText(isSkill ? ('TIER ' + meta.tier) : meta.tags.join(' '), r.x + r.w/2, r.y + 25);
-    // Cost / owned
-    if(owned){
+    if(isSkill){
+      ctx.fillStyle = '#7f8c8d';
+      ctx.fillText('TIER ' + meta.tier, r.x + r.w/2, r.y + 23);
+    } else if(owned){
+      ctx.fillStyle = '#f1c40f';
+      ctx.fillText('LV ' + lvl + ' / ' + ASSIST_MAX_LEVEL, r.x + r.w/2, r.y + 23);
+      // Level progress bar.
+      const bx = r.x + 12, bw2 = r.w - 24, byy = r.y + 27, bhh = 3;
+      ctx.fillStyle = '#2a2a30'; ctx.fillRect(bx, byy, bw2, bhh);
+      ctx.fillStyle = col; ctx.fillRect(bx, byy, Math.round(bw2 * lvl / ASSIST_MAX_LEVEL), bhh);
+    } else {
+      ctx.fillStyle = '#7f8c8d';
+      ctx.fillText(meta.tags.join(' '), r.x + r.w/2, r.y + 23);
+    }
+    // Bottom line: status / price.
+    ctx.font = 'bold 8px monospace';
+    if(done){
       ctx.fillStyle = '#2ecc71';
-      ctx.font = 'bold 8px monospace';
-      ctx.fillText('OWNED', r.x + r.w/2, r.y + 39);
+      ctx.fillText(maxed ? 'MAX LV' : 'OWNED', r.x + r.w/2, r.y + 40);
     } else {
       ctx.fillStyle = afford ? '#f5d76e' : '#7d6608';
-      ctx.font = 'bold 8px monospace';
-      ctx.fillText('G ' + cost, r.x + r.w/2, r.y + 39);
+      ctx.fillText((!isSkill && owned ? 'UP  G ' : 'G ') + cost, r.x + r.w/2, r.y + 40);
     }
   }
 
@@ -4751,7 +4849,9 @@ function drawShop(){
   } else {
     ctx.fillStyle = '#5d6d7e';
     ctx.font = 'bold 7px monospace';
-    ctx.fillText('BUY WITH GOLD  ·  EQUIP IN THE LOADOUT SCREEN', W/2, H - 26);
+    ctx.fillText(shopTab === 'skills'
+      ? 'BUY WITH GOLD  ·  EQUIP IN THE LOADOUT SCREEN'
+      : 'BUY / UPGRADE WITH GOLD  ·  HIGHER LEVEL = STRONGER ALLY', W/2, H - 26);
   }
 
   // Back button
@@ -4780,14 +4880,33 @@ function handleShop(){
     const r = shopCardRect(i);
     if(!clickedRect(r.x, r.y, r.w, r.h)) continue;
     const id = items[i];
-    const isSkill = shopTab === 'skills';
-    const owned = isSkill ? profile.ownedSkills.includes(id) : profile.ownedAssistants.includes(id);
-    if(owned) return;
-    const cost = isSkill ? SKILLS[id].cost : (ASSISTANT_COST[id] || 0);
+    if(shopTab === 'skills'){
+      if(profile.ownedSkills.includes(id)) return;
+      const cost = SKILLS[id].cost;
+      if(profile.gold < cost){ shopMsgUntil = stateTime + 1.2; return; }
+      profile.gold -= cost;
+      profile.ownedSkills.push(id);
+      saveProfile();
+      if(sfx.pickup) sfx.pickup();
+      return;
+    }
+    // Assistants: BUY (unlock at level 1) if unowned, else UPGRADE one level.
+    if(!profile.ownedAssistants.includes(id)){
+      const cost = ASSISTANT_COST[id] || 0;
+      if(profile.gold < cost){ shopMsgUntil = stateTime + 1.2; return; }
+      profile.gold -= cost;
+      profile.ownedAssistants.push(id);
+      profile.assistantLevels[id] = 1;
+      saveProfile();
+      if(sfx.pickup) sfx.pickup();
+      return;
+    }
+    const lvl = assistantLevel(id);
+    if(lvl >= ASSIST_MAX_LEVEL) return;          // already maxed
+    const cost = assistUpgradeCost(lvl);
     if(profile.gold < cost){ shopMsgUntil = stateTime + 1.2; return; }
     profile.gold -= cost;
-    if(isSkill) profile.ownedSkills.push(id);
-    else profile.ownedAssistants.push(id);
+    profile.assistantLevels[id] = lvl + 1;
     saveProfile();
     if(sfx.pickup) sfx.pickup();
     return;
@@ -4938,7 +5057,7 @@ function drawAssistantSelect(){
   ctx.fillText('LOADOUT', W / 2, 16);
   ctx.font = 'bold 7px monospace';
   ctx.fillStyle = '#bdc3c7';
-  ctx.fillText('ASSISTANTS — EQUIP UP TO 2  (' + profile.equippedAssistants.length + '/2)  ·  BUY MORE IN SHOP', W / 2, 30);
+  ctx.fillText('ASSISTANTS — EQUIP UP TO 2  (' + profile.equippedAssistants.length + '/2)  ·  BUY / UPGRADE IN SHOP', W / 2, 30);
 
   const owned = ownedAssistantList();
   for(let i = 0; i < owned.length; i++){
@@ -4946,7 +5065,6 @@ function drawAssistantSelect(){
     const a = ASSISTANTS[key];
     const r = assistCardRect(i, owned.length);
     const chosen = profile.equippedAssistants.includes(key);
-    const isDef = profile.defaultAssistant === key;
     const hov = clickedRect(r.x, r.y, r.w, r.h);
     ctx.fillStyle = chosen ? '#16261a' : (hov ? '#1c2433' : '#141822');
     ctx.fillRect(r.x, r.y, r.w, r.h);
@@ -4962,10 +5080,10 @@ function drawAssistantSelect(){
     ctx.font = 'bold 6px monospace';
     ctx.fillStyle = '#7f8c8d';
     ctx.fillText(a.tags.join(' · '), r.x + r.w / 2, r.y + 54);
-    if(isDef){
-      ctx.fillStyle = '#5dade2';
-      ctx.fillText('DEFAULT', r.x + r.w / 2, r.y + 66);
-    }
+    // Upgrade level (set/raised in the SHOP).
+    ctx.fillStyle = '#f1c40f';
+    ctx.font = 'bold 7px monospace';
+    ctx.fillText('LV ' + assistantLevel(key) + ' / ' + ASSIST_MAX_LEVEL, r.x + r.w / 2, r.y + 66);
     ctx.fillStyle = chosen ? '#2ecc71' : '#566573';
     ctx.font = 'bold 8px monospace';
     ctx.fillText(chosen ? 'EQUIPPED' : 'TAP TO EQUIP', r.x + r.w / 2, r.y + r.h - 6);

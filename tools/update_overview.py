@@ -132,6 +132,17 @@ REPLACEMENTS = [
      "MENU button. The real entry point is startSelectedRun() (uses selectedChar + "
      "selectedLevel + the persistent profile)."),
 
+    # Shop now buys AND upgrades assistants (10 levels); UI layout move.
+    # (find anchors on current docx text and must NOT recur in new, or it re-fires.)
+    ("and extra assistants; purchases persist",
+     "SHOP (STATE.SHOP, the ARMORY): spend Gold on tiered skills (cheap/small -> "
+     "expensive/big) and on assistants - which you BUY then UPGRADE through 10 levels "
+     "(the gold cost rises each level); purchases persist. LOADOUT screen: F is locked "
+     "to HEAL, X/C/B/V unlock +1 per 5 levels and are filled from owned skills. The "
+     "GUIDE button now sits top-LEFT; the persistent LV/XP bar shows in the top-RIGHT "
+     "corner with the COINS total (a specific number) on its own line just below the "
+     "XP bar."),
+
     # 5. Player classes - active skills are now a loadout, not the fixed kit.
     # (find must NOT recur in the new text, or it re-fires every run.)
     ("off them. Display names and live stats:",
@@ -141,14 +152,18 @@ REPLACEMENTS = [
      "SKILLS catalog, NOT the per-class CHARACTERS.skills kit (now vestigial / kept "
      "only for validator C7). Display names and live stats:"),
 
-    # 10. Allies - owned + equip 0..2, not forced-2.
-    ("player picks exactly 2 (selectedAssistants)",
+    # 10. Allies - owned + equip 0..2 + per-ally 10-level gold upgrades.
+    # (find anchors on current docx text and must NOT recur in new, or it re-fires.)
+    ("the old exactly-2 rule is gone",
      "Roster in ASSISTANTS (drone, henchman, nunchaku, bomber, poison); the player "
      "OWNS a default drone + any bought in the SHOP, and EQUIPS 0-2 of them on the "
-     "loadout screen (profile.equippedAssistants; default removable - the old "
-     "exactly-2 rule is gone). startSelectedRun seeds selectedAssistants from the "
-     "profile; spawned at run start (spawnSelectedAssistants) and rebuilt each level "
-     "(refreshAssistants - survivors refilled, dead recreated)."),
+     "loadout screen (the equipped set is default-removable). Each ally also has a "
+     "per-account UPGRADE LEVEL 1..10 (profile.assistantLevels, raised with gold in "
+     "the SHOP): createAssistant runs applyAssistantLevel, treating the per-kind stats "
+     "as the level-10 reference and scaling HP/damage/range/attack-speed down by "
+     "assistLevelFrac (~0.35 at L1 -> 1.0 at L10), so a fresh ally is much weaker and "
+     "upgrades buy power back. Equipped allies spawn at run start "
+     "(spawnSelectedAssistants) and rebuild each level (refreshAssistants)."),
 ]
 
 # INSERTS: bullets added immediately before the paragraph whose text contains the
@@ -168,9 +183,12 @@ INSERTS = [
         "grows with level). Drop rate also scales up with level (gate only).",
 
         "SHOP (STATE.SHOP, the ARMORY): spend Gold on tiered skills (cheap/small -> "
-        "expensive/big) and extra assistants; purchases persist. LOADOUT screen: F is "
-        "locked to HEAL, X/C/B/V unlock +1 per 5 levels and are filled from owned "
-        "skills; the persistent LV/XP bar + gold show upper-right on every menu.",
+        "expensive/big) and on assistants - which you BUY then UPGRADE through 10 levels "
+        "(the gold cost rises each level); purchases persist. LOADOUT screen: F is locked "
+        "to HEAL, X/C/B/V unlock +1 per 5 levels and are filled from owned skills. The "
+        "GUIDE button now sits top-LEFT; the persistent LV/XP bar shows in the top-RIGHT "
+        "corner with the COINS total (a specific number) on its own line just below the "
+        "XP bar.",
     ]),
     ("10. Allies", [
         "Reusable boss abilities (escalate by levelIdx, no-op for clones): bossInvuln "

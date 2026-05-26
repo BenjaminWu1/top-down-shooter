@@ -62,13 +62,15 @@ All three secondaries draw from a depletable bar shown top-left (no number — t
 
 ## Assistants
 
-Before a run you pick **2 of 5** AI allies that fight at your side and are rebuilt each level:
+You start owning the **Drone** and buy the rest in the **SHOP** with gold. On the loadout screen you equip **up to 2** of the allies you own; they fight at your side and are rebuilt each level:
 
 - **Drone** — floats nearby and auto-fires at the closest enemy.
 - **Brute** — tanky melee bruiser with a wide club swing.
 - **Nunchaku** — fast, high-damage close-range striker.
 - **Bomber** — lobs high-damage, large-radius bombs from behind you.
 - **Poison** — emits a continuous toxic aura that damages everything around it.
+
+Each ally has its own **upgrade level (1–10)**. A fresh ally is deliberately weak; spend gold in the SHOP to level it up (the cost rises each level), restoring its HP, damage, range, and attack speed toward full power.
 
 ## Progression
 
