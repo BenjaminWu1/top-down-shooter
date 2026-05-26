@@ -395,6 +395,123 @@ DRIVER_BALANCE = r"""
     check('Meta: XP curve + level scaling + slot gating + loadout ownership', ok, d.join(' '));
   })();
 
+  // 10) THREE-PHASE scaling curve: difficultyRamp / enemyScale / bossHpScale /
+  //     bossSpdScale must be strictly increasing across all 40 levels, start at the
+  //     L1 baseline (ramp 0, scales 1, enemyScale 1), enemyScale must equal
+  //     1+difficultyRamp, and there must be NO discontinuous jump at the phase seams
+  //     (every per-level ramp delta in (0, 0.2]).
+  (function(){
+    var ok = true, d = [];
+    if(difficultyRamp(0) !== 0) { ok = false; d.push('ramp0!=0'); }
+    if(bossHpScale(0) !== 1)    { ok = false; d.push('bossHp0!=1'); }
+    if(bossSpdScale(0) !== 1)   { ok = false; d.push('bossSpd0!=1'); }
+    var savedIdx = levelIdx, pr = -1, ph = -1, ps = -1;
+    for(var i = 0; i < 40; i++){
+      var r = difficultyRamp(i), h = bossHpScale(i), s = bossSpdScale(i);
+      levelIdx = i; var e = enemyScale();
+      if(Math.abs(e - (1 + r)) > 1e-9) { ok = false; d.push('enemy!=1+ramp@' + i); }
+      if(i > 0){
+        if(!(r > pr)) { ok = false; d.push('ramp!up@' + i); }
+        if(!(h > ph)) { ok = false; d.push('bossHp!up@' + i); }
+        if(!(s > ps)) { ok = false; d.push('bossSpd!up@' + i); }
+        var dr = r - pr;
+        if(dr <= 0 || dr > 0.2) { ok = false; d.push('rampjump@' + i + '=' + dr.toFixed(3)); }
+      }
+      pr = r; ph = h; ps = s;
+    }
+    levelIdx = savedIdx;
+    check('Scaling: three-phase curve strictly rises, continuous, L1 = no-op', ok, d.slice(0, 6).join(' '));
+  })();
+
+  // 11) Level-gated drop variety: at low levels killEnemy must NEVER yield a kind
+  //     outside that phase's allow-set, the filtered pool stays non-empty (variety
+  //     beyond health), and advanced-only kinds DO unlock at L25+. A deterministic
+  //     LCG replaces Math.random so the sweep is reproducible and isn't perturbed by
+  //     emit() consuming randoms.
+  (function(){
+    var savedIdx = levelIdx, savedPlayer = player, savedEnt = entities,
+        savedProfile = profile, savedRandom = Math.random, ok = true, d = [];
+    profile = DEFAULT_PROFILE();
+    player = createPlayer('soldier');            // class resource pickup = 'beverage'
+    var seed = 123456789;
+    Math.random = function(){ seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+    function sampleKinds(idx, iters){
+      levelIdx = idx; var got = {};
+      for(var n = 0; n < iters; n++){
+        entities = [];
+        var en = createEnemy('grunt', 100, 100); entities.push(en); killEnemy(en);
+        for(var k = 0; k < entities.length; k++){ if(entities[k].type === 'pickup') got[entities[k].kind] = 1; }
+      }
+      return Object.keys(got);
+    }
+    var basics = { health:1, beverage:1, rapid:1, shield:1 };
+    var mid    = { health:1, beverage:1, rapid:1, shield:1, pierce:1, multi:1, damage:1, speed:1, magnet:1 };
+    var advOnly = { armor:1, slowmo:1, score2x:1 };
+    var p1 = sampleKinds(5, 1500);               // L6  (phase 1: basics only)
+    var leak1 = p1.filter(function(k){ return !basics[k]; });
+    if(leak1.length)   { ok = false; d.push('L1-15 leak:' + leak1.join(',')); }
+    if(p1.length < 2)  { ok = false; d.push('L1-15 no variety'); }
+    var p2 = sampleKinds(18, 1500);              // L19 (phase 2: + enhancers/utility)
+    var leak2 = p2.filter(function(k){ return !mid[k]; });
+    if(leak2.length)   { ok = false; d.push('L16-24 leak:' + leak2.join(',')); }
+    var p3 = sampleKinds(30, 1500);              // L31 (phase 3: full pool)
+    if(p3.filter(function(k){ return advOnly[k]; }).length === 0) { ok = false; d.push('L25-40 advanced never drops'); }
+    levelIdx = savedIdx; player = savedPlayer; entities = savedEnt; profile = savedProfile; Math.random = savedRandom;
+    check('Drops: level-gated variety (no leak L1-24, advanced unlock L25+)', ok, d.join(' '));
+  })();
+
+  // 12) RMB pools (all 3 classes): the resource regens even while RMB is HELD; the
+  //     secondary fires until the pool empties, which arms a ~1s rmbLockT lockout; and
+  //     while locked a FULL pool does not drain (no fire). Drives updatePlaying's real
+  //     regen + per-class fire blocks. A fresh player is built per sub-check.
+  (function(){
+    var savedChar = selectedChar, savedProfile = profile, dt = 1 / 60, ok = true, d = [];
+    profile = DEFAULT_PROFILE();
+    selectedChar = 'soldier'; startGame(); state = STATE.PLAYING;   // sets up level/world/state once
+    [['soldier','energy','maxEnergy'],
+     ['tank','fuel','maxFuel'],
+     ['scout','power','maxPower']].forEach(function(spec){
+      var cls = spec[0], pool = spec[1], maxF = spec[2];
+      function fresh(){ player = createPlayer(cls); entities = [player]; allies = []; mouse.rdown = true; mouse.down = false; if(cls === 'scout') player.laserCd = 0; player.hp = player.maxHp; }
+      // (a) recover while held: empty pool, not locked -> regen still bumps it above 0.
+      fresh(); player[pool] = 0; player.rmbLockT = 0; update(dt);
+      if(!(player[pool] > 0)) { ok = false; d.push(cls + ':noRegenHeld'); }
+      // (b) lockout engages: pool just over one use -> fires once, empties, sets ~1s lock.
+      fresh(); player.rmbLockT = 0; player[pool] = (cls === 'scout') ? 1 : dt * 1.5; if(cls === 'scout') player.laserCd = 0; update(dt);
+      if(!(player.rmbLockT > 0.9)) { ok = false; d.push(cls + ':noLockout(' + (player.rmbLockT || 0).toFixed(2) + ')'); }
+      // (c) locked -> no drain: full pool but rmbLockT high -> stays full (regen only).
+      fresh(); player[pool] = player[maxF]; player.rmbLockT = 1; if(cls === 'scout') player.laserCd = 0; update(dt);
+      if(player[pool] < player[maxF] - 1e-6) { ok = false; d.push(cls + ':drainedWhileLocked'); }
+    });
+    selectedChar = savedChar; profile = savedProfile;
+    check('RMB: regen-while-held + 1s empty-lockout (all 3 classes)', ok, d.join(' '));
+  })();
+
+  // 13) Assistant level scaling: assistLevelFrac runs 0.35 (L1) -> 1.0 (L10) and is
+  //     strictly increasing; for every roster ally, level 10 has >= HP and > primary
+  //     damage than level 1, and L1 HP is never < 1 (createAssistant -> applyAssistantLevel).
+  (function(){
+    var savedProfile = profile, ok = true, d = [];
+    if(Math.abs(assistLevelFrac(1) - 0.35) > 1e-6)               { ok = false; d.push('frac1!=0.35'); }
+    if(Math.abs(assistLevelFrac(ASSIST_MAX_LEVEL) - 1) > 1e-6)   { ok = false; d.push('frac10!=1'); }
+    for(var l = 2; l <= ASSIST_MAX_LEVEL; l++){ if(!(assistLevelFrac(l) > assistLevelFrac(l - 1))){ ok = false; d.push('frac!up@' + l); } }
+    var dmgField = { companion:'dmg', henchman:'swingDmg', nunchaku:'swingDmg', bomber_ally:'bombDmg', poison_ally:'dps' };
+    ['drone','henchman','nunchaku','bomber','poison'].forEach(function(key){
+      profile = DEFAULT_PROFILE();
+      profile.ownedAssistants = ['drone','henchman','nunchaku','bomber','poison'];
+      profile.assistantLevels = {}; profile.assistantLevels[key] = 1;
+      var a1 = createAssistant(key);
+      profile.assistantLevels[key] = ASSIST_MAX_LEVEL;
+      var a10 = createAssistant(key);
+      var df = dmgField[a1.type];
+      if(!(a1.maxHp >= 1))            { ok = false; d.push(key + ':hp<1'); }
+      if(!(a10.maxHp >= a1.maxHp))    { ok = false; d.push(key + ':hp!up'); }
+      if(df && !(a10[df] > a1[df]))   { ok = false; d.push(key + ':dmg!up'); }
+    });
+    profile = savedProfile;
+    check('Assistants: level scaling raises HP/damage (frac 0.35 -> 1.0)', ok, d.join(' '));
+  })();
+
   return JSON.stringify(R);
 })();
 """
