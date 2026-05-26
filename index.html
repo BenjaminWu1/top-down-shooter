@@ -884,6 +884,13 @@ const SPR = {
     "23332",
     "11111"
   ]),
+  // Blue laser-light dot — Scout's LMB primary (round glowing bolt, not the beam).
+  bullet_dot_blue: S({'.':null,'1':'#1e88e5','2':'#bbdefb'}, [
+    ".11.",
+    "1221",
+    "1221",
+    ".11."
+  ]),
   bullet_rocket: S({'.':null,'1':'#7f8c8d','2':'#e67e22','3':'#fff'}, [
     ".11..",
     "11223",
@@ -980,6 +987,13 @@ function noiseHit(dur=0.08, gain=0.15, freq=1200){
 const sfx = {
   shoot: () => tone(880, 0.05, 'square', 220, 0.06),
   laser: () => tone(1400, 0.08, 'sawtooth', 700, 0.05),
+  // Syed RMB — a blade "swish": bright bandpass-noise sweep + a quick high→low whoosh.
+  slash: () => { noiseHit(0.13, 0.09, 2600); tone(1800, 0.09, 'sawtooth', 420, 0.04); },
+  // Xu Yihui RMB — a sci-fi laser "pew": high sawtooth diving down + a short zap fizz.
+  laserBeam: () => { tone(2200, 0.13, 'sawtooth', 380, 0.06); noiseHit(0.04, 0.025, 3200); },
+  // Benjamin Wu RMB — flames burning: a low noise rumble + a higher crackle layer.
+  // Fired on a fast cadence while RMB is held (see fireFlamethrower) so it sustains.
+  flame: () => { noiseHit(0.22, 0.05, 560); noiseHit(0.13, 0.03, 1500); },
   rocket: () => { noiseHit(0.1, 0.08, 400); tone(220, 0.2, 'sawtooth', 80, 0.08); },
   explode: () => { noiseHit(0.25, 0.18, 350); tone(110, 0.35, 'sawtooth', 40, 0.12); },
   hit: () => noiseHit(0.07, 0.1),
@@ -2280,6 +2294,11 @@ function fireFlamethrower(dt){
     });
   }
   if(particles.length > 300) particles.length = 300;
+  // Burning-flame roar on a fast cadence — this fn runs every frame while RMB is
+  // held, so throttle to ~10 bursts/sec; each sfx.flame burst is ~0.2s so they
+  // overlap into a continuous roar. `||0` guard => no createPlayer field needed.
+  player.flameSfxT = (player.flameSfxT || 0) - dt;
+  if(player.flameSfxT <= 0){ sfx.flame(); player.flameSfxT = 0.1; }
 }
 
 // Syed's right-mouse secondary: a VERY-high-DPS continuous KATANA slash swept
@@ -2315,6 +2334,11 @@ function fireKatana(dt){
     });
   }
   if(particles.length > 300) particles.length = 300;
+  // Blade-slice "swish" on a cadence — this fn runs every frame while RMB is held,
+  // so throttle the sound to one swish per ~0.22s instead of 60/sec. The `||0` guard
+  // means no createPlayer field is needed and the first frame fires immediately.
+  player.slashSfxT = (player.slashSfxT || 0) - dt;
+  if(player.slashSfxT <= 0){ sfx.slash(); player.slashSfxT = 0.22; }
 }
 
 // Scout RMB: THREE instant straight-line laser beams. Each beam is a line segment
@@ -2353,7 +2377,7 @@ function fireLaserBeams(){
     });
   }
   emit(lx, ly, 6, '#4fc3f7', 40, 150, 0.18);
-  sfx.laser();
+  sfx.laserBeam();
 }
 
 function fireWeapon(mx, my){
@@ -2435,10 +2459,11 @@ function fireWeapon(mx, my){
     // but each shot is weak — rewards landing many hits, punishes spray-at-range.
     // (AoE for Scout comes from the rocket/spread pickups, not the base weapon.)
     entities.push(createBullet(mx, my, player.angle, 'player', {
-      dmg: 0.85 * dmgMult, speed: 360, radius: 2, life: 1.0
+      dmg: 0.85 * dmgMult, speed: 360, radius: 2, life: 1.0,
+      sprite: SPR.bullet_dot_blue   // fires dots of blue laser light
     }));
     player.fireCooldown = 0.06 * rapidFactor;
-    emit(mx, my, 2, '#f1c40f', 30, 110, 0.14);
+    emit(mx, my, 2, '#4fc3f7', 30, 110, 0.14);
     sfx.shoot();
     return;
   }
@@ -3836,16 +3861,27 @@ function drawPlayer(p){
   // so the attack's obtuse angle is visible in-game (drawn under the sprite).
   if(p.char === 'soldier' && mouse.rdown && p.energy > 0){
     ctx.save();
-    ctx.fillStyle = 'rgba(232,238,242,0.16)';
+    // Faint slash zone (the obtuse arc the blade sweeps over).
+    ctx.fillStyle = 'rgba(207,216,220,0.10)';
     ctx.beginPath();
     ctx.moveTo(p.x, p.y);
     ctx.arc(p.x, p.y, KATANA_RANGE, p.angle - KATANA_HALF, p.angle + KATANA_HALF);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    // Sweeping blade: a bright crescent edge + a radial blade line whose angle
+    // oscillates across the obtuse arc, so the attack reads as an actual slicing
+    // swing rather than a static cone. Locked to KATANA_RANGE/KATANA_HALF.
+    const bladeA = p.angle + Math.sin(stateTime * 22) * KATANA_HALF;
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, KATANA_RANGE, bladeA - 0.5, bladeA + 0.5);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(220,235,245,0.85)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, KATANA_RANGE, p.angle - KATANA_HALF, p.angle + KATANA_HALF);
+    ctx.moveTo(p.x + Math.cos(bladeA) * 4, p.y + Math.sin(bladeA) * 4);
+    ctx.lineTo(p.x + Math.cos(bladeA) * KATANA_RANGE, p.y + Math.sin(bladeA) * KATANA_RANGE);
     ctx.stroke();
     ctx.restore();
   }
