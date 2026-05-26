@@ -1487,6 +1487,10 @@ function createPlayer(charKey){
     maxFuel: charKey === 'tank' ? 12 : 0,
     // Scout's right-mouse 3-beam laser cooldown.
     laserCd:0,
+    // Soldier/Tank only: 1s no-fire lockout that starts the instant their RMB pool
+    // (energy/fuel) is drained to empty. Blocks the secondary while > 0; recovery of
+    // the pool itself is unaffected.
+    rmbLockT:0,
     // Syed's katana energy: ~6 s of continuous slashing. Drained by dt while RMB
     // held (float-precise); slowly self-regens 0.1/s and is topped up by the
     // 'beverage' pickup (+1 s each). Mirrors Tank fuel (which also regens 0.1/s).
@@ -2266,6 +2270,9 @@ function updatePlaying(dt){
   if(player.pierceTime > 0) player.pierceTime -= dt;
   if(player.multiTime  > 0) player.multiTime  -= dt;
   if(player.laserCd > 0) player.laserCd -= dt;
+  // 1s firing lockout after Soldier/Tank drain their RMB pool to empty (see RMB blocks
+  // below). Ticks down independently of regen — recovery is NOT influenced by it.
+  if(player.rmbLockT > 0) player.rmbLockT -= dt;
 
   if(mouse.down && player.fireCooldown <= 0){
     const mx = player.x + Math.cos(player.angle) * 9;
@@ -2292,19 +2299,22 @@ function updatePlaying(dt){
     player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.005 * dt);
 
   // ---- Tank's second normal attack: flamethrower (right mouse) ----
-  // Fires only while there's enough fuel to fully cover this frame's dt cost. When
-  // fuel is too low it simply does nothing (no damage) and resumes the instant fuel
-  // has regenerated enough again — there is NO recharge lockout/wait.
-  if(player.char === 'tank' && mouse.rdown && player.fuel >= dt){
+  // Fires only while there's enough fuel to fully cover this frame's dt cost AND the
+  // 1s post-empty lockout isn't running. The instant fuel is drained to empty, a 1s
+  // `rmbLockT` lockout starts during which the flamethrower can't fire (fuel recovery
+  // is NOT influenced — it keeps regenerating per its own rules).
+  if(player.char === 'tank' && mouse.rdown && player.rmbLockT <= 0 && player.fuel >= dt){
     player.fuel -= dt;
     fireFlamethrower(dt);
+    if(player.fuel < dt) player.rmbLockT = 1;  // ran out this frame -> 1s no-fire lockout
   }
   // ---- Syed's secondary: continuous katana slash (right mouse) ----
-  // Same fuel-style gate on `energy` (refilled by 'beverage' + slow self-regen):
-  // no slash / no damage when energy can't cover the frame.
-  if(player.char === 'soldier' && mouse.rdown && player.energy >= dt){
+  // Same fuel-style gate on `energy` (refilled by 'beverage' + slow self-regen) plus
+  // the same 1s lockout when energy hits empty; no slash / no damage during it.
+  if(player.char === 'soldier' && mouse.rdown && player.rmbLockT <= 0 && player.energy >= dt){
     player.energy -= dt;
     fireKatana(dt);
+    if(player.energy < dt) player.rmbLockT = 1;  // ran out this frame -> 1s no-fire lockout
   }
   // ---- Scout's secondary: THREE straight-line laser BEAMS (right mouse) ----
   // Instant hitscan beams (NOT travelling projectiles): on each release the mech
