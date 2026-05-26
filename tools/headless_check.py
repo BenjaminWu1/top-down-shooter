@@ -165,6 +165,19 @@ DRIVER = r"""
     ['soldier','scout','tank'].forEach(function(c){ paramChar = c; draw(); });
   });
 
+  // SHOP ASSISTANTS tab + LOADOUT both render per-ally level-scaled stat blocks
+  // (assistantStatLines builds a throwaway assistant for every roster key) — exercise
+  // them with ALL assistants owned so every stat branch (companion/melee/bomber/poison)
+  // is drawn at least once.
+  safe('draw SHOP allies + LOADOUT stats', function(){
+    profile.ownedAssistants = ['drone','henchman','nunchaku','bomber','poison'];
+    profile.assistantLevels = { drone:1, henchman:5, nunchaku:10, bomber:3, poison:7 };
+    shopTab = 'allies'; state = STATE.SHOP; draw();
+    state = STATE.ASSISTANT_SELECT; draw();
+    shopTab = 'skills';
+    profile = DEFAULT_PROFILE();
+  });
+
   // Exercise the CHARACTER STATS window (Tab overlay) for all three classes —
   // its per-class branches read different RMB-pool / regen / damage fields.
   safe('draw stats window', function(){
@@ -230,17 +243,18 @@ DRIVER_BALANCE = r"""
     }
     check('Boss scaling: HP strictly rises within each tier', tierOk, tierBad && ('flat/low at '+tierBad));
     // The spawned maxHp must match the documented spawnBoss formula
-    // ceil(base * (1 + idx*0.07)). (NB: the L40 phantom is NOT the absolute
-    // tankiest — the L30 nemesis has a higher base HP — by design, so we assert
-    // the scaling math, not an HP ranking.)
+    // ceil(base * bossHpScale(idx)) — the three-phase curve. Call the live game
+    // helper so this stays in lock-step with any re-tuning. (NB: the L40 phantom is
+    // NOT the absolute tankiest — the L30 nemesis has a higher base HP — by design,
+    // so we assert the scaling math, not an HP ranking. We sample one idx per phase.)
     var base = spawnedBossHp('phantom', 0);
     var fOk = true, fBad = '';
-    [10, 20, 39].forEach(function(idx){
-      var want = Math.ceil(base * (1 + idx * 0.07));
+    [7, 19, 30, 39].forEach(function(idx){
+      var want = Math.ceil(base * bossHpScale(idx));
       var got = spawnedBossHp('phantom', idx);
       if(got !== want){ fOk = false; fBad += ' idx' + idx + ' want' + want + ' got' + got; }
     });
-    check('Boss scaling: matches ceil(base*(1+idx*0.07))', fOk, fBad);
+    check('Boss scaling: matches ceil(base*bossHpScale(idx))', fOk, fBad);
   })();
 
   // 4) Enemy scaling: a tank grunt is tankier at L40 than at L1 (enemyScale).

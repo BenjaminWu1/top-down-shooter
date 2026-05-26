@@ -1106,8 +1106,36 @@ const BOSS_NAMES = {
   bomber:'BOMBARDIER', phantom:'PHANTOM', nemesis:'NEMESIS'
 };
 
-// Non-boss enemies scale up per level. 1.0 at level 1, ~3.32 at level 30, ~4.12 at level 40.
-function enemyScale(){ return 1 + levelIdx * 0.08; }
+// THREE-PHASE difficulty progression across the 40 levels (idx 0..39). The shape is
+// deliberately NOT linear: it's gentle early, ramps moderately mid-game, and spikes
+// hard at the end so late levels lean on meta-progression upgrades. All three pieces
+// are CONTINUOUS at the seams (idx 14->15, 23->24) and STRICTLY INCREASING in idx
+// (the headless balance assertions + the "boss HP rises within a tier" check rely on
+// monotonicity). To re-tune the whole curve, edit the three slopes / anchors here.
+//   Phase 1  L1-15  (idx 0-14): forgiving — introduce mechanics.
+//   Phase 2  L16-24 (idx 15-23): moderate, steady ramp.
+//   Phase 3  L25-40 (idx 24-39): sharp spike.
+// `difficultyRamp` is the EXTRA on top of 1.0 (so a multiplier is 1 + ramp).
+function difficultyRamp(idx){
+  if(idx <= 14) return idx * 0.03;                  // 0.00 .. 0.42
+  if(idx <= 23) return 0.42 + (idx - 14) * 0.07;    // 0.49 .. 1.05
+  return 1.05 + (idx - 23) * 0.16;                  // 1.21 .. 3.61 (idx 39)
+}
+// Non-boss enemy HP/speed multiplier. ~1.0 @L1, ~1.42 @L15, ~2.05 @L24, ~4.61 @L40.
+function enemyScale(){ return 1 + difficultyRamp(levelIdx); }
+// Boss HP multiplier — its own three-phase curve. The phase-1 slope (0.05) is steeper
+// than the enemy ramp ON PURPOSE: the smallest boss base HP is 24 (bruiser), and a
+// gentler slope would make consecutive within-tier HPs collide after Math.ceil (which
+// would fail the "boss HP strictly rises within each tier" assertion). Continuous at
+// the seams. ~1.0 @L1 (no-op), ~1.70 @L15, ~2.42 @L24, ~4.98 @L40.
+function bossHpScale(idx){
+  if(idx <= 14) return 1 + idx * 0.05;              // L1-15 : gentle (strict-after-ceil safe)
+  if(idx <= 23) return 1.70 + (idx - 14) * 0.08;    // L16-24: moderate (idx23 -> 2.42)
+  return 2.42 + (idx - 23) * 0.16;                  // L25-40: sharp    (idx39 -> 4.98)
+}
+// Boss speed multiplier — shares the enemy ramp shape but flattened so bosses never
+// get uncatchable. ~1.0 @L1, ~1.05 @L15, ~1.25 @L24, ~1.43 @L40.
+function bossSpdScale(idx){ return 1 + difficultyRamp(idx) * 0.12; }
 
 // ============================================================
 // STATE
@@ -1269,6 +1297,22 @@ function assistLevelFrac(lvl){
 // Gold to upgrade from `lvl` to `lvl+1` (rises each level).
 function assistUpgradeCost(lvl){
   return Math.round(ASSIST_UPGRADE_BASE * Math.pow(ASSIST_UPGRADE_GROWTH, lvl - 1));
+}
+// Live, level-scaled basic stats for an assistant, for the SHOP / LOADOUT readouts.
+// Builds a throwaway entity via createAssistant (which applies the CURRENT
+// profile.assistantLevels[key] via applyAssistantLevel), so the numbers shown reflect
+// the upgrade level. Returns [[label,value], ...]; never pushed into `entities`.
+function assistantStatLines(key){
+  const a = createAssistant(key);
+  const r0 = n => String(Math.round(n));
+  const r1 = n => String(Math.round(n * 10) / 10);
+  const rows = [['HP', r0(a.maxHp)]];
+  if(a.type === 'companion')        rows.push(['DMG', r1(a.dmg)],      ['RNG', r0(a.detectRange)],   ['ROF', r1(1 / a.fireRate) + '/s']);
+  else if(a.type === 'henchman' ||
+          a.type === 'nunchaku')    rows.push(['DMG', r1(a.swingDmg)], ['RNG', r0(a.attackRange)],   ['ROF', r1(1 / a.attackRate) + '/s']);
+  else if(a.type === 'bomber_ally') rows.push(['DMG', r1(a.bombDmg)],  ['BLAST', r0(a.explodeRadius)],['ROF', r1(1 / a.fireRate) + '/s']);
+  else if(a.type === 'poison_ally') rows.push(['DPS', r1(a.dps)],      ['RNG', r0(a.auraRadius)],    ['AURA', 'CONT']);
+  return rows;
 }
 
 // ---- Character profiles. X (sprint) and F (heal) are universal; C is the
@@ -2034,16 +2078,14 @@ function spawnBoss(kind){
   // Spawn the boss centered above the player so they don't have to chase across the larger arena.
   const sx = player ? clamp(player.x, 40, worldW - 40) : worldW / 2;
   const b = createEnemy(kind, sx, -25);
-  // Bosses scale per level so the same AI reused at higher levels actually
-  // feels harder. HP +7%/level, speed +1.5%/level. At L1 (bruiser) this is a
-  // no-op; at L30 (ANNIHILATOR) the nemesis ends up with ~515 HP / ~34 speed
-  // (base 170/24), and at L40 (APOCALYPSE) the phantom hits ~448 HP / ~48 speed
-  // (base 120/30).
-  const hpScale = 1 + levelIdx * 0.07;
-  const spdScale = 1 + levelIdx * 0.015;
-  b.hp = Math.ceil(b.hp * hpScale);
+  // Bosses scale per level on the same THREE-PHASE curve as enemies (bossHpScale /
+  // bossSpdScale), so the same AI reused later actually feels harder — gentle through
+  // L15, moderate to L24, sharp past L25. At L1 (bruiser) this is a no-op; e.g. the
+  // L30 nemesis ends up ~575 HP and the L40 phantom ~598 HP (vs 24/120 base), with
+  // late bosses tuned to demand the meta-progression damage/RMB upgrades.
+  b.hp = Math.ceil(b.hp * bossHpScale(levelIdx));
   b.maxHp = b.hp;
-  b.speed = b.speed * spdScale;
+  b.speed = b.speed * bossSpdScale(levelIdx);
   entities.push(b);
   // Flash the name of the boss that just arrived. The end boss uses the level's
   // bossName override; a mid-boss (different kind) uses its own BOSS_NAMES entry.
@@ -2299,17 +2341,16 @@ function updatePlaying(dt){
   }
 
   // Class RMB resources slowly self-regen (capped at max) so none is fully dependent
-  // on pickups: Syed's katana energy regens 0.2/s, Benjamin Wu's flamethrower fuel
-  // 0.1/s, Xu Yihui's laser power 0.6/s.
-  // Energy (Soldier) + Fuel (Tank) now regen ALWAYS, even while RMB is held — so the pool
-  // recovers DURING the 1s `rmbLockT` lockout (and a touch while firing). The lockout, not
-  // a regen pause, is what now blocks near-empty stutter-fire: a drained pool can't fire
-  // for a full second and only resumes once it has actually recovered some charge.
-  // Power (Scout) still regens only while RMB is NOT held — the Scout has no lockout, so
-  // regenerating mid-hold would let it trickle-fire laser volleys with the bar reading empty.
+  // on pickups: Syed's katana energy 0.2/s, Benjamin Wu's flamethrower fuel 0.1/s,
+  // Xu Yihui's laser power 0.6/s. ALL THREE now regen UNCONDITIONALLY — even while RMB
+  // is held — so the pool recovers DURING the 1s `rmbLockT` lockout that every class
+  // gets when its pool empties (see the RMB blocks below). The lockout, not a regen
+  // pause, is what blocks near-empty stutter-fire: a drained pool can't fire for a full
+  // second and only resumes once recovery has put real charge back. (The Scout used to
+  // be the exception — released-only regen + no lockout — but it now matches the others.)
   if(player.maxEnergy > 0) player.energy = Math.min(player.maxEnergy, player.energy + 0.2 * dt);
   if(player.maxFuel   > 0) player.fuel   = Math.min(player.maxFuel,   player.fuel   + 0.1 * dt);
-  if(!mouse.rdown && player.maxPower > 0) player.power = Math.min(player.maxPower, player.power + 0.6 * dt);
+  if(player.maxPower  > 0) player.power  = Math.min(player.maxPower,  player.power  + 0.6 * dt);
 
   // Xu Yihui's innate passive — HP REGEN: the mech slowly self-repairs at 0.5% of
   // maxHp per second (capped at maxHp; never while dead). Scout only.
@@ -2339,11 +2380,14 @@ function updatePlaying(dt){
   // fires three straight laser beams fanned around the aim. Every enemy lying on a
   // beam's line takes its full damage SIMULTANEOUSLY the instant the beam fires
   // (see fireLaserBeams). Gated behind laserCd (cadence) AND `power` — a ~20-volley
-  // pool that costs 1 per volley, self-regens 0.1/s, and is refilled by 'battery'.
-  if(player.char === 'scout' && mouse.rdown && player.laserCd <= 0 && player.power >= 1){
+  // pool that costs 1 per volley, self-regens 0.6/s (even while held), and is refilled
+  // by 'battery'. Like the Soldier/Tank, the Scout now also gets a 1s `rmbLockT` lockout
+  // the instant the pool can't pay for a volley, so an empty bar can't trickle-fire.
+  if(player.char === 'scout' && mouse.rdown && player.rmbLockT <= 0 && player.laserCd <= 0 && player.power >= 1){
     fireLaserBeams();
     player.power = Math.max(0, player.power - 1);
     player.laserCd = 0.22 * (player.laserScale || 1);
+    if(player.power < 1) player.rmbLockT = 1;   // drained this volley -> 1s no-fire lockout
   }
 
   if(player.invuln > 0) player.invuln -= dt;
@@ -3186,10 +3230,12 @@ function killEnemy(en){
       entities.push(e2);
     }
   }
-  // Random drop from non-boss (weighted: 4 basic-attack enhancers + support gear +
-  // the class resource). Elite mini-bosses drop far more often (only the gate
-  // changes — the pool weights stay summed to 1.0 so validator C5 is unaffected).
-  const dropGate = Math.min(DROP_GATE_MAX, (en.elite ? 0.55 : 0.22) + Math.min(DROP_LVL_CAP, (profile.level - 1) * DROP_LVL_PER));
+  // Random drop from non-boss. Drops are sparser AND less varied early (see the
+  // level-gate below) and ramp up at L16 / L25. The drop-RATE base is lower in phase 1
+  // ("basic and sparse"), then grows; elites always drop generously. The static pool
+  // weights still sum to 1.0 (validator C5) — variety is gated by a runtime filter.
+  const dropPhaseBase = en.elite ? 0.55 : (levelIdx <= 14 ? 0.16 : levelIdx <= 23 ? 0.22 : 0.26);
+  const dropGate = Math.min(DROP_GATE_MAX, dropPhaseBase + Math.min(DROP_LVL_CAP, (profile.level - 1) * DROP_LVL_PER));
   if(!en.isBoss && Math.random() < dropGate){
     // Drop pool. Weights MUST sum to 1.0 for the pickWeighted loop below to give
     // every entry its intended share — appending past the cumulative-1.0 mark means
@@ -3209,10 +3255,25 @@ function killEnemy(en){
       kinds   = ['health','battery','rapid','pierce','multi','damage','shield','armor','speed','slowmo','score2x','magnet'];
       weights = [ 0.14,   0.12,     0.10,   0.10,    0.10,   0.10,    0.07,    0.06,   0.07,   0.04,    0.04,     0.06    ];
     }
-    const r = Math.random();
-    let acc = 0;
-    let pick = 'health';
-    for(let i=0;i<kinds.length;i++){ acc += weights[i]; if(r < acc){ pick = kinds[i]; break; } }
+    // GATED VARIETY by the level being played (kinds[0]=health, kinds[1]=class
+    // resource are allowed in every phase so the filtered pool is never empty):
+    //   L1-15  : basics only (health, resource, rapid, shield).
+    //   L16-24 : + advanced enhancers/utility (pierce, multi, damage, speed, magnet).
+    //   L25-40 : full pool (also armor, slowmo, score2x).
+    let allow = null;   // null = no filter (full pool)
+    if(levelIdx <= 14)      allow = new Set(['health', kinds[1], 'rapid', 'shield']);
+    else if(levelIdx <= 23) allow = new Set(['health', kinds[1], 'rapid', 'shield', 'pierce', 'multi', 'damage', 'speed', 'magnet']);
+    let fk = kinds, fw = weights;
+    if(allow){
+      fk = []; fw = [];
+      for(let i = 0; i < kinds.length; i++){ if(allow.has(kinds[i])){ fk.push(kinds[i]); fw.push(weights[i]); } }
+    }
+    // Renormalize the surviving weights (the static arrays summed to 1.0; a filtered
+    // subset sums to < 1.0, so scale the roll by the surviving total).
+    const total = fw.reduce((a, b) => a + b, 0) || 1;
+    const r = Math.random() * total;
+    let acc = 0, pick = fk[0] || 'health';
+    for(let i = 0; i < fk.length; i++){ acc += fw[i]; if(r < acc){ pick = fk[i]; break; } }
     entities.push(createPickup(en.x, en.y, pick));
   }
 }
@@ -4959,6 +5020,17 @@ function shopCardRect(i){
   const col = i % cols, row = Math.floor(i / cols);
   return { x: xs + col * (cw + gap), y: 52 + row * (ch + 6), w: cw, h: ch };
 }
+// Assistants tab uses TALLER cards (the 5 allies fit on one row) so each can show its
+// level-scaled stat block (HP / DMG / RNG / ROF) above the buy/upgrade price.
+function shopAssistCardRect(i){
+  const cw = 90, ch = 96, gap = 6, cols = 5;
+  const totalW = cols * cw + (cols - 1) * gap;
+  const xs = Math.floor((W - totalW) / 2);
+  const col = i % cols, row = Math.floor(i / cols);
+  return { x: xs + col * (cw + gap), y: 50 + row * (ch + 6), w: cw, h: ch };
+}
+// The card rect for shop item `i` depends on the active tab (skills small, allies tall).
+function shopItemRect(i){ return shopTab === 'allies' ? shopAssistCardRect(i) : shopCardRect(i); }
 
 function drawShop(){
   ctx.textAlign = 'center';
@@ -4984,7 +5056,7 @@ function drawShop(){
   const items = shopTab === 'skills' ? SKILL_ORDER : SHOP_ASSIST_ORDER;
   for(let i = 0; i < items.length; i++){
     const id = items[i];
-    const r = shopCardRect(i);
+    const r = shopItemRect(i);
     const isSkill = shopTab === 'skills';
     const meta = isSkill ? SKILLS[id] : ASSISTANTS[id];
     const owned = isSkill ? profile.ownedSkills.includes(id) : profile.ownedAssistants.includes(id);
@@ -5010,30 +5082,43 @@ function drawShop(){
     ctx.font = 'bold 9px monospace';
     ctx.textAlign = 'center';
     ctx.fillText(isSkill ? meta.label : meta.name, r.x + r.w/2, r.y + 13);
-    // Sub line: skill tier, or assistant level / tags.
-    ctx.font = 'bold 6px monospace';
     if(isSkill){
+      ctx.font = 'bold 6px monospace';
       ctx.fillStyle = '#7f8c8d';
       ctx.fillText('TIER ' + meta.tier, r.x + r.w/2, r.y + 23);
-    } else if(owned){
-      ctx.fillStyle = '#f1c40f';
-      ctx.fillText('LV ' + lvl + ' / ' + ASSIST_MAX_LEVEL, r.x + r.w/2, r.y + 23);
-      // Level progress bar.
-      const bx = r.x + 12, bw2 = r.w - 24, byy = r.y + 27, bhh = 3;
-      ctx.fillStyle = '#2a2a30'; ctx.fillRect(bx, byy, bw2, bhh);
-      ctx.fillStyle = col; ctx.fillRect(bx, byy, Math.round(bw2 * lvl / ASSIST_MAX_LEVEL), bhh);
     } else {
-      ctx.fillStyle = '#7f8c8d';
-      ctx.fillText(meta.tags.join(' '), r.x + r.w/2, r.y + 23);
+      // Assistant: level + progress bar (owned) or tags (unowned), then the LEVEL-SCALED
+      // stat block (HP/DMG/RNG/ROF) — reflects profile.assistantLevels via assistantStatLines.
+      ctx.font = 'bold 6px monospace';
+      if(owned){
+        ctx.fillStyle = '#f1c40f';
+        ctx.fillText('LV ' + lvl + ' / ' + ASSIST_MAX_LEVEL, r.x + r.w/2, r.y + 22);
+        const bx = r.x + 12, bw2 = r.w - 24, byy = r.y + 26, bhh = 3;
+        ctx.fillStyle = '#2a2a30'; ctx.fillRect(bx, byy, bw2, bhh);
+        ctx.fillStyle = col; ctx.fillRect(bx, byy, Math.round(bw2 * lvl / ASSIST_MAX_LEVEL), bhh);
+      } else {
+        ctx.fillStyle = '#7f8c8d';
+        ctx.fillText(meta.tags.join(' '), r.x + r.w/2, r.y + 22);
+      }
+      const stats = assistantStatLines(id);
+      ctx.font = 'bold 7px monospace';
+      let sy = r.y + 40;
+      for(const [lab, val] of stats){
+        ctx.fillStyle = '#8b94a3'; ctx.textAlign = 'left';  ctx.fillText(lab, r.x + 10, sy);
+        ctx.fillStyle = '#eef2f7'; ctx.textAlign = 'right'; ctx.fillText(val, r.x + r.w - 10, sy);
+        sy += 10;
+      }
+      ctx.textAlign = 'center';
     }
-    // Bottom line: status / price.
+    // Bottom line: status / price (anchored to the bottom of whichever card height).
+    const priceY = isSkill ? r.y + 40 : r.y + r.h - 8;
     ctx.font = 'bold 8px monospace';
     if(done){
       ctx.fillStyle = '#2ecc71';
-      ctx.fillText(maxed ? 'MAX LV' : 'OWNED', r.x + r.w/2, r.y + 40);
+      ctx.fillText(maxed ? 'MAX LV' : 'OWNED', r.x + r.w/2, priceY);
     } else {
       ctx.fillStyle = afford ? '#f5d76e' : '#7d6608';
-      ctx.fillText((!isSkill && owned ? 'UP  G ' : 'G ') + cost, r.x + r.w/2, r.y + 40);
+      ctx.fillText((!isSkill && owned ? 'UP  G ' : 'G ') + cost, r.x + r.w/2, priceY);
     }
   }
 
@@ -5073,7 +5158,7 @@ function handleShop(){
   }
   const items = shopTab === 'skills' ? SKILL_ORDER : SHOP_ASSIST_ORDER;
   for(let i = 0; i < items.length; i++){
-    const r = shopCardRect(i);
+    const r = shopItemRect(i);
     if(!clickedRect(r.x, r.y, r.w, r.h)) continue;
     const id = items[i];
     if(shopTab === 'skills'){
@@ -5448,7 +5533,7 @@ function drawAssistantSelect(){
   ctx.fillText('LOADOUT', W / 2, 16);
   ctx.font = 'bold 7px monospace';
   ctx.fillStyle = '#bdc3c7';
-  ctx.fillText('ASSISTANTS — EQUIP UP TO 2  (' + profile.equippedAssistants.length + '/2)  ·  BUY / UPGRADE IN SHOP', W / 2, 30);
+  ctx.fillText('ASSISTANTS  ·  TAP TO EQUIP / UNEQUIP (UP TO 2)  ·  ' + profile.equippedAssistants.length + '/2 EQUIPPED', W / 2, 30);
 
   const owned = ownedAssistantList();
   for(let i = 0; i < owned.length; i++){
@@ -5466,18 +5551,23 @@ function drawAssistantSelect(){
     ctx.fillStyle = a.color;
     ctx.font = 'bold 9px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(a.name, r.x + r.w / 2, r.y + 13);
-    drawSpriteCentered(a.sprite(), r.x + r.w / 2, r.y + 34);
+    ctx.fillText(a.name, r.x + r.w / 2, r.y + 12);
+    drawSpriteCentered(a.sprite(), r.x + r.w / 2, r.y + 28);
+    // LEVEL-SCALED stat block (two compact rows of two stats) — reflects this ally's
+    // current profile.assistantLevels via assistantStatLines (same readout as the SHOP).
+    const st = assistantStatLines(key);
     ctx.font = 'bold 6px monospace';
-    ctx.fillStyle = '#7f8c8d';
-    ctx.fillText(a.tags.join(' · '), r.x + r.w / 2, r.y + 54);
+    ctx.fillStyle = '#cdd6df';
+    const pair = (a0, a1) => a0[0] + ' ' + a0[1] + '   ' + a1[0] + ' ' + a1[1];
+    ctx.fillText(pair(st[0], st[1]), r.x + r.w / 2, r.y + 45);
+    ctx.fillText(pair(st[2], st[3]), r.x + r.w / 2, r.y + 54);
     // Upgrade level (set/raised in the SHOP).
     ctx.fillStyle = '#f1c40f';
     ctx.font = 'bold 7px monospace';
-    ctx.fillText('LV ' + assistantLevel(key) + ' / ' + ASSIST_MAX_LEVEL, r.x + r.w / 2, r.y + 66);
+    ctx.fillText('LV ' + assistantLevel(key) + ' / ' + ASSIST_MAX_LEVEL, r.x + r.w / 2, r.y + 68);
     ctx.fillStyle = chosen ? '#2ecc71' : '#566573';
     ctx.font = 'bold 8px monospace';
-    ctx.fillText(chosen ? 'EQUIPPED' : 'TAP TO EQUIP', r.x + r.w / 2, r.y + r.h - 6);
+    ctx.fillText(chosen ? 'EQUIPPED ✓' : 'TAP TO EQUIP', r.x + r.w / 2, r.y + r.h - 6);
   }
 
   // ---- Skill loadout strip ----

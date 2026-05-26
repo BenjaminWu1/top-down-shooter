@@ -39,8 +39,8 @@ DOCX = os.path.normpath(os.path.join(HERE, "..", "Game-Overview.docx"))
 # ---------------------------------------------------------------------------
 REPLACEMENTS = [
     # 1. The big picture - refresh the line count.
-    ("index.html (~5,669 lines)",
-     "The entire game is one file: index.html (~5,873 lines). One <script> block, "
+    ("index.html (~5,873 lines)",
+     "The entire game is one file: index.html (~5,963 lines). One <script> block, "
      "vanilla JS, no build, no dependencies, no external assets. Sprites are inline "
      "ASCII-art arrays; all SFX are synthesized via Web Audio. It deploys by pushing "
      "to main (GitHub Pages serves the raw file)."),
@@ -199,6 +199,19 @@ INSERTS = [
         "Tab/Esc/click closes it. HP-regen is shown only for the Scout (0.5%/s) - the "
         "others read '-', because there is no universal HP-per-second regen.",
 
+        "RMB SECONDARY POOLS (uniform across classes): all three resources (Syed energy, "
+        "Benjamin fuel, Xu Yihui power) now self-regen ALWAYS - even while RMB is held - and "
+        "all three get a fixed 1-second no-fire LOCKOUT the instant the pool empties "
+        "(player.rmbLockT). The pay-per-use gate means the secondary deals ZERO damage while "
+        "the pool can't cover a use; the lockout (not a regen pause) is what stops near-empty "
+        "trickle-fire. applyLevelScaling grows the pool CAPACITY with account level.",
+
+        "ASSISTANT STAT READOUTS: the SHOP ASSISTANTS tab (taller cards) and the LOADOUT "
+        "screen both show each ally's level-scaled basic stats (HP / damage / range / rate of "
+        "fire, or DPS/blast for the bomber/poison) via assistantStatLines(key), which builds a "
+        "throwaway createAssistant so the numbers reflect the current profile.assistantLevels "
+        "upgrade level - upgrading an ally in the shop visibly raises them.",
+
         "CHARACTER PARAMETERS screen (STATE.PARAMETERS): a PARAMETERS button on the MENU "
         "(top-right, just below the profile bar's COINS line) opens a menu-side version of "
         "the same readout, with three class tabs. Since there is no live player on the "
@@ -208,6 +221,13 @@ INSERTS = [
         "stats that don't scale, like move speed / shield / regen / lifesteal).",
     ]),
     ("10. Allies", [
+        "THREE-PHASE difficulty curve (difficultyRamp / enemyScale / bossHpScale / "
+        "bossSpdScale): scaling is gentle through L1-15, ramps moderately L16-24, then spikes "
+        "sharply L25-40 so the late game depends on meta-progression upgrades. DROP variety is "
+        "also level-gated in killEnemy - basic & sparse in L1-15 (health/resource/rapid/shield), "
+        "widening at L16 (pierce/multi/damage/speed/magnet) and L25 (full pool) - while the "
+        "static drop arrays still sum to 1.0 (validator C5) and the runtime filter renormalizes.",
+
         "Reusable boss abilities (escalate by levelIdx, no-op for clones): bossInvuln "
         "(1.2s damage-absorb shield), bossSummonExploders, bossSpawnClone, bossGasBomb, "
         "bossHeal. The gas pool (bossGasBomb) spawns on the player but now ARMS for 0.5s "
