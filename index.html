@@ -2282,16 +2282,16 @@ function updatePlaying(dt){
 
   // Class RMB resources slowly self-regen (capped at max) so none is fully dependent
   // on pickups: Syed's katana energy regens 0.2/s, Benjamin Wu's flamethrower fuel
-  // 0.1/s, Xu Yihui's laser power 0.6/s. BUT only while the secondary is NOT being held
-  // (`!mouse.rdown`): regenerating mid-hold would let a near-empty pool trickle-fire the
-  // flamethrower/blade for free — visible damage after the bar already reads empty.
-  // Pausing regen while RMB is down means a drained pool STAYS empty (zero damage) until
-  // the player releases and lets it recover (pickups + the tank's kill-fuel still apply).
-  if(!mouse.rdown){
-    if(player.maxEnergy > 0) player.energy = Math.min(player.maxEnergy, player.energy + 0.2 * dt);
-    if(player.maxFuel   > 0) player.fuel   = Math.min(player.maxFuel,   player.fuel   + 0.1 * dt);
-    if(player.maxPower  > 0) player.power  = Math.min(player.maxPower,  player.power  + 0.6 * dt);
-  }
+  // 0.1/s, Xu Yihui's laser power 0.6/s.
+  // Energy (Soldier) + Fuel (Tank) now regen ALWAYS, even while RMB is held — so the pool
+  // recovers DURING the 1s `rmbLockT` lockout (and a touch while firing). The lockout, not
+  // a regen pause, is what now blocks near-empty stutter-fire: a drained pool can't fire
+  // for a full second and only resumes once it has actually recovered some charge.
+  // Power (Scout) still regens only while RMB is NOT held — the Scout has no lockout, so
+  // regenerating mid-hold would let it trickle-fire laser volleys with the bar reading empty.
+  if(player.maxEnergy > 0) player.energy = Math.min(player.maxEnergy, player.energy + 0.2 * dt);
+  if(player.maxFuel   > 0) player.fuel   = Math.min(player.maxFuel,   player.fuel   + 0.1 * dt);
+  if(!mouse.rdown && player.maxPower > 0) player.power = Math.min(player.maxPower, player.power + 0.6 * dt);
 
   // Xu Yihui's innate passive — HP REGEN: the mech slowly self-repairs at 0.5% of
   // maxHp per second (capped at maxHp; never while dead). Scout only.
