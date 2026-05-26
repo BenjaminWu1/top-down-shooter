@@ -2287,31 +2287,39 @@ function updatePlaying(dt){
   if(player.char === 'scout' && player.hp > 0)
     player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.005 * dt);
 
-  // ---- RMB depletion lockout ----
-  // Find this class's active RMB resource pool (only one max is ever > 0). Once it is
-  // fully drained the secondary is LOCKED — it won't fire (no damage) on right-click
-  // until the pool has recharged back up to RMB_RECHARGE_FRAC of its max. This stops
-  // the attack from stuttering on/off at near-empty and forces a real recovery window.
-  let rmbCur = -1, rmbMax = 0, rmbUseMin = 0.0001;
+  // ---- RMB depletion lockout (UNLOCK side) ----
+  // The secondary runs on a per-class pool (Tank fuel / Soldier energy / Scout power;
+  // only one max > 0). The lock is SET the instant a use can't be fully paid for —
+  // inside each block below — so an emptied pool deals ZERO damage on right-click. It
+  // is CLEARED here, once the pool has regenerated back to RMB_RECHARGE_FRAC of max.
+  // (Setting the lock on actual depletion, not a tiny "empty" epsilon, matters:
+  // fuel/energy regen ~0.0016/frame, which would lift the pool back above any epsilon
+  // every frame and let the attack stutter-fire damage for free.)
+  let rmbCur = -1, rmbMax = 0;
   if(player.maxFuel > 0)        { rmbCur = player.fuel;   rmbMax = player.maxFuel; }
   else if(player.maxEnergy > 0) { rmbCur = player.energy; rmbMax = player.maxEnergy; }
-  else if(player.maxPower > 0)  { rmbCur = player.power;  rmbMax = player.maxPower; rmbUseMin = 1; } // a laser volley costs 1
-  if(rmbMax > 0){
-    if(rmbCur < rmbUseMin) player.rmbLocked = true;
-    else if(player.rmbLocked && rmbCur >= rmbMax * RMB_RECHARGE_FRAC) player.rmbLocked = false;
-  }
+  else if(player.maxPower > 0)  { rmbCur = player.power;  rmbMax = player.maxPower; }
+  if(rmbMax > 0 && player.rmbLocked && rmbCur >= rmbMax * RMB_RECHARGE_FRAC) player.rmbLocked = false;
 
   // ---- Tank's second normal attack: flamethrower (right mouse) ----
-  if(player.char === 'tank' && mouse.rdown && player.fuel > 0 && !player.rmbLocked){
-    player.fuel = Math.max(0, player.fuel - dt);
-    fireFlamethrower(dt);
+  // Fires only when there's enough fuel to fully cover this frame's dt cost; the
+  // instant it can't, fuel is zeroed and the attack locks — dealing NO damage.
+  if(player.char === 'tank' && mouse.rdown && !player.rmbLocked){
+    if(player.fuel >= dt){
+      player.fuel -= dt;
+      fireFlamethrower(dt);
+      if(player.fuel <= 0){ player.fuel = 0; player.rmbLocked = true; }
+    } else { player.fuel = 0; player.rmbLocked = true; }
   }
   // ---- Syed's secondary: continuous katana slash (right mouse) ----
-  // Very-high-DPS melee swept over a wide obtuse arc; drains `energy` while held.
-  // Slowly self-regens (above) + refilled by the 'beverage' pickup (+1 s each).
-  if(player.char === 'soldier' && mouse.rdown && player.energy > 0 && !player.rmbLocked){
-    player.energy = Math.max(0, player.energy - dt);
-    fireKatana(dt);
+  // Same fuel-style gate on `energy` (refilled by 'beverage' + slow self-regen):
+  // no slash (no damage) once energy can't cover the frame.
+  if(player.char === 'soldier' && mouse.rdown && !player.rmbLocked){
+    if(player.energy >= dt){
+      player.energy -= dt;
+      fireKatana(dt);
+      if(player.energy <= 0){ player.energy = 0; player.rmbLocked = true; }
+    } else { player.energy = 0; player.rmbLocked = true; }
   }
   // ---- Scout's secondary: THREE straight-line laser BEAMS (right mouse) ----
   // Instant hitscan beams (NOT travelling projectiles): on each release the mech
@@ -2323,6 +2331,7 @@ function updatePlaying(dt){
     fireLaserBeams();
     player.power = Math.max(0, player.power - 1);
     player.laserCd = 0.22 * (player.laserScale || 1);
+    if(player.power < 1) player.rmbLocked = true;   // can't afford the next volley → lock (no more fire)
   }
 
   if(player.invuln > 0) player.invuln -= dt;
