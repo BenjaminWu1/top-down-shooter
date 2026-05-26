@@ -24,6 +24,12 @@
 // CONSTANTS & CANVAS
 // ============================================================
 const W = 480, H = 270;
+// Slight uniform enlargement applied to every world tier (all 4 map sizes) on top
+// of the per-block integer scale — 1.15x linear ≈ 1.32x area. Single tuning lever:
+// raise/lower to grow/shrink all four arenas together. NOTE: because it makes even
+// the 1x (L1-10) arena larger than the W*H viewport, the camera now follows on L1-10
+// too (updateCamera no longer collapses to 0,0 there).
+const MAP_EXPAND = 1.15;
 // PX = number of backing-store pixels per logical world unit.
 // Bumping from 1 to 2 doubles the canvas resolution (480x270 -> 960x540 backing)
 // while keeping all gameplay math in the original 480x270 logical space.
@@ -31,9 +37,11 @@ const W = 480, H = 270;
 const PX = 2;
 
 // World vs viewport: W/H are the on-screen viewport (fixed). worldW/worldH are
-// the gameplay arena, which can be larger than the viewport (L14-L20 use 2x).
-// camX/camY track the camera's top-left corner in world space. When worldW===W
-// the camera stays at 0,0 and there is no scrolling.
+// the gameplay arena, which is always larger than the viewport (every tier is at
+// least 1x*MAP_EXPAND > W*H, so the camera scrolls on every level now).
+// camX/camY track the camera's top-left corner in world space. The worldW===W
+// no-scroll case only applies to the pre-level default below (updateCamera still
+// collapses to 0,0 whenever maxX/maxY are 0, so it stays correct either way).
 let worldW = W, worldH = H;
 let camX = 0, camY = 0;
 const canvas = document.getElementById('game');
@@ -1867,13 +1875,13 @@ function startLevel(idx){
   bossGapTimer = 0;
   gapSpawnTimer = 0;
   paused = false;
-  // World sizing by 10-level block — arena AREA GROWS with the block:
-  // L1-10 = 1x (480x270, no camera), L11-20 = 2x, L21-30 = 3x, L31-40 = 4x.
-  // The view stays W*H; a camera follows the player whenever worldW > W
-  // (updateCamera collapses to (0,0) at 1x).
+  // World sizing by 10-level block — arena AREA GROWS with the block, then every
+  // tier is enlarged a further MAP_EXPAND (1.15x linear). Base scales: L1-10 = 1x,
+  // L11-20 = 2x, L21-30 = 3x, L31-40 = 4x. The view stays W*H; a camera follows the
+  // player whenever worldW > W — which is now ALL tiers (even 1x is > the viewport).
   let worldScale = Math.floor(idx / 10) + 1;
-  worldW = W * worldScale;
-  worldH = H * worldScale;
+  worldW = Math.round(W * worldScale * MAP_EXPAND);
+  worldH = Math.round(H * worldScale * MAP_EXPAND);
   camX = 0; camY = 0;
   entities = entities.filter(e => e.type === 'player');
   particles = [];

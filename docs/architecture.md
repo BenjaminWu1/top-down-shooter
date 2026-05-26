@@ -39,16 +39,16 @@
 
 ## Coordinate system
 
-World is logical, viewport is 480×270. There are four world-size tiers, one per 10-level block, picked inside `startLevel(idx)` via `worldScale = Math.floor(idx/10) + 1`. **Arena AREA grows with the block** (deliberately — the late game is the most open):
+World is logical, viewport is 480×270. There are four world-size tiers, one per 10-level block, picked inside `startLevel(idx)` via `worldScale = Math.floor(idx/10) + 1`, then every tier is enlarged a further **`MAP_EXPAND = 1.15`** (1.15× linear ≈ 1.32× area) and rounded: `worldW = round(W*worldScale*MAP_EXPAND)`. **Arena AREA grows with the block** (deliberately — the late game is the most open):
 
-- **L1-L10 (idx ≤ 9)** — 1× world, `worldW = 480, worldH = 270`. Camera stays at (0,0).
-- **L11-L20 (10 ≤ idx ≤ 19)** — 2× world, `worldW = 960, worldH = 540`. Camera follows the player.
-- **L21-L30 (20 ≤ idx ≤ 29)** — 3× world, `worldW = 1440, worldH = 810`. Camera follows the player.
-- **L31-L40 (idx ≥ 30)** — 4× world, `worldW = 1920, worldH = 1080`. Camera follows the player.
+- **L1-L10 (idx ≤ 9)** — 1× world, `worldW = 552, worldH = 311`. Camera now follows the player (the 1× arena is larger than the W×H viewport).
+- **L11-L20 (10 ≤ idx ≤ 19)** — 2× world, `worldW = 1104, worldH = 621`. Camera follows the player.
+- **L21-L30 (20 ≤ idx ≤ 29)** — 3× world, `worldW = 1656, worldH = 932`. Camera follows the player.
+- **L31-L40 (idx ≥ 30)** — 4× world, `worldW = 2208, worldH = 1242`. Camera follows the player.
 
 Each 10-level block also gets a distinct theme via `themeForLevel(idx) = THEME_ORDER[floor(idx/10)]` over `['forest','lava','ice','void']`. `drawDecor`'s `areaScale` is capped at 6× so the 4× (16×-area) arenas don't draw ~1000 decor specks/frame.
 
-A camera follows the player on the 2×/3×/4× tiers. The relevant globals near the top of the script:
+A camera follows the player on **every** tier now (all four arenas exceed the viewport after `MAP_EXPAND`). The relevant globals near the top of the script:
 
 - `W, H` — constants, 480×270. The on-screen viewport. **Use for HUD / menu / mouse-screen-space math.**
 - `worldW, worldH` — mutable, set in `startLevel(idx)`. The playable arena. **Use for entity clamps, bullet despawn/bounce, spawn-edge calculations, world-center positions, decor placement.**
