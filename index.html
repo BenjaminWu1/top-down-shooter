@@ -1449,20 +1449,20 @@ const CHARACTERS = {
 // skills are a much more expensive long-term goal. Tier 1 (200-600), tier 2 (1400-
 // 2400), tier 3 (4000-5800), nuke (top, 9000).
 const SKILLS = {
-  heal:      { label:'HEAL',    color:'#2ecc71', cd:20,  cost:0,    tier:0 },
-  sprint:    { label:'SPRINT',  color:'#1abc9c', cd:20,  cost:200,  tier:1 },
-  dash:      { label:'DASH',    color:'#f1c40f', cd:3.5, cost:320,  tier:1 },
-  grenade:   { label:'GRENADE', color:'#e67e22', cd:6,   cost:450,  tier:1 },
-  blast:     { label:'BLAST',   color:'#e67e22', cd:20,  cost:600,  tier:1 },
-  blink:     { label:'BLINK',   color:'#f1c40f', cd:5,   cost:1400, tier:2 },
-  slowmo:    { label:'SLOWMO',  color:'#3498db', cd:18,  cost:1700, tier:2 },
-  invuln:    { label:'INVINC',  color:'#7fe9ff', cd:20,  cost:2000, tier:2 },
-  summon:    { label:'KNIGHT',  color:'#f1c40f', cd:25,  cost:2400, tier:2 },
-  wall:      { label:'WALL',    color:'#27ae60', cd:18,  cost:4000, tier:3 },
-  flameburst:{ label:'NAPALM',  color:'#e67e22', cd:20,  cost:4600, tier:3 },
-  barrage:   { label:'BARRAGE', color:'#e67e22', cd:24,  cost:5200, tier:3 },
-  vsummon:   { label:'BLADE+',  color:'#f39c12', cd:25,  cost:5800, tier:3 },
-  nuke:      { label:'NUKE',    color:'#e74c3c', cd:60,  cost:9000, tier:3 }
+  heal:      { label:'HEAL',    color:'#2ecc71', cd:20,  cost:0,     tier:0 },
+  sprint:    { label:'SPRINT',  color:'#1abc9c', cd:20,  cost:250,   tier:1 },
+  dash:      { label:'DASH',    color:'#f1c40f', cd:3.5, cost:400,   tier:1 },
+  grenade:   { label:'GRENADE', color:'#e67e22', cd:6,   cost:550,   tier:1 },
+  blast:     { label:'BLAST',   color:'#e67e22', cd:20,  cost:750,   tier:1 },
+  blink:     { label:'BLINK',   color:'#f1c40f', cd:5,   cost:2000,  tier:2 },
+  slowmo:    { label:'SLOWMO',  color:'#3498db', cd:18,  cost:2600,  tier:2 },
+  invuln:    { label:'INVINC',  color:'#7fe9ff', cd:20,  cost:3200,  tier:2 },
+  summon:    { label:'KNIGHT',  color:'#f1c40f', cd:25,  cost:4000,  tier:2 },
+  wall:      { label:'WALL',    color:'#27ae60', cd:18,  cost:7500,  tier:3 },
+  flameburst:{ label:'NAPALM',  color:'#e67e22', cd:20,  cost:9500,  tier:3 },
+  barrage:   { label:'BARRAGE', color:'#e67e22', cd:24,  cost:12000, tier:3 },
+  vsummon:   { label:'BLADE+',  color:'#f39c12', cd:25,  cost:15000, tier:3 },
+  nuke:      { label:'NUKE',    color:'#e74c3c', cd:60,  cost:22000, tier:3 }
 };
 // Shop ordering (ids except the free default heal), grouped by tier, cheapest-first.
 const SKILL_ORDER = ['sprint','dash','grenade','blast','blink','slowmo','invuln','summon','wall','flameburst','barrage','vsummon','nuke'];
@@ -2762,12 +2762,16 @@ function tickFlameburst(dt){
 function fireFlamethrower(dt){
   const baseX = player.x + Math.cos(player.angle) * 7;
   const baseY = player.y + Math.sin(player.angle) * 7;
-  const range = 210;       // longer reach for the tank's signature attack
-  const halfAngle = 0.7;   // ~40° cone (wider than before)
+  const range = 140;       // SHORTER reach — a close-quarters flamethrower now
+  const halfAngle = 0.52;  // ~60° cone (tighter than before)
   // The DAMAGE powerup (red explosion icon) now boosts flamethrower DPS too,
   // matching how it boosts bullet damage in fireWeapon.
   const dps = 7 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
-  // Damage every enemy inside the cone, scaled by dt.
+  // Damage every enemy inside the cone, scaled by dt AND by distance: the flame is
+  // HOTTEST at the nozzle and cools toward the edge of its reach — point-blank enemies
+  // take ~1.9x, enemies at max range take ~0.4x (a steep close-up bonus that rewards
+  // the high-HP tank for face-tanking). DIST_NEAR/DIST_FAR are the two falloff anchors.
+  const DIST_NEAR = 1.9, DIST_FAR = 0.4;
   for(const en of entities){
     if(en.type !== 'enemy' || en.dead) continue;
     const dx = en.x - player.x, dy = en.y - player.y;
@@ -2777,7 +2781,8 @@ function fireFlamethrower(dt){
     while(diff >  Math.PI) diff -= 2 * Math.PI;
     while(diff < -Math.PI) diff += 2 * Math.PI;
     if(Math.abs(diff) > halfAngle) continue;
-    damageEnemy(en, dps * dt, true);
+    const distMult = DIST_NEAR + (DIST_FAR - DIST_NEAR) * Math.min(1, d / range);
+    damageEnemy(en, dps * distMult * dt, true);
   }
   // Visual flame particles spraying down the cone.
   for(let i = 0; i < 4; i++){
@@ -4424,7 +4429,7 @@ function drawStats(){
     secName = 'FLAMETHROWER';
     secDmg  = fmt(7 * dm) + ' DPS';
     capLabel = 'FUEL';    capVal = fmt(p.fuel) + ' / ' + fmt(p.maxFuel) + ' s';
-    regenVal = '0.1 /s';  rmbExtra = '40° cone';
+    regenVal = '0.1 /s';  rmbExtra = '~60° cone · ×1.9 near→×0.4 far';
   }
 
   // HP regen is a SCOUT-ONLY passive (0.5%/maxHp/s); the others have none.
