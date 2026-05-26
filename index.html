@@ -884,12 +884,12 @@ const SPR = {
     "23332",
     "11111"
   ]),
-  // Blue laser-light dot — Scout's LMB primary (round glowing bolt, not the beam).
-  bullet_dot_blue: S({'.':null,'1':'#1e88e5','2':'#bbdefb'}, [
-    ".11.",
-    "1221",
-    "1221",
-    ".11."
+  // Light blue laser-light dot — Scout's LMB primary. A small, pale glowing speck
+  // (lighter/airier than a solid bolt): 3x3 with a near-white core.
+  bullet_dot_blue: S({'.':null,'1':'#81d4fa','2':'#e1f5fe'}, [
+    ".1.",
+    "121",
+    ".1."
   ]),
   bullet_rocket: S({'.':null,'1':'#7f8c8d','2':'#e67e22','3':'#fff'}, [
     ".11..",
@@ -987,13 +987,18 @@ function noiseHit(dur=0.08, gain=0.15, freq=1200){
 const sfx = {
   shoot: () => tone(880, 0.05, 'square', 220, 0.06),
   laser: () => tone(1400, 0.08, 'sawtooth', 700, 0.05),
-  // Syed RMB — a blade "swish": bright bandpass-noise sweep + a quick high→low whoosh.
-  slash: () => { noiseHit(0.13, 0.09, 2600); tone(1800, 0.09, 'sawtooth', 420, 0.04); },
+  // Syed RMB — a fast knife "whisk": a short, sharp high-freq swish. Fired on a
+  // rapid cadence (see fireKatana) so it reads as a knife being swung very quickly.
+  slash: () => { noiseHit(0.06, 0.08, 3400); tone(2600, 0.04, 'sawtooth', 800, 0.03); },
   // Xu Yihui RMB — a sci-fi laser "pew": high sawtooth diving down + a short zap fizz.
   laserBeam: () => { tone(2200, 0.13, 'sawtooth', 380, 0.06); noiseHit(0.04, 0.025, 3200); },
-  // Benjamin Wu RMB — flames burning: a low noise rumble + a higher crackle layer.
-  // Fired on a fast cadence while RMB is held (see fireFlamethrower) so it sustains.
-  flame: () => { noiseHit(0.22, 0.05, 560); noiseHit(0.13, 0.03, 1500); },
+  // Benjamin Wu RMB — firewood burning: a quiet low ember bed + frequent random
+  // sharp crackle-pops (irregular freq/length), fired on a fast cadence so the pops
+  // overlap into the uneven crackle of burning wood rather than a steady jet roar.
+  flame: () => {
+    noiseHit(0.14, 0.025, 420);
+    if(Math.random() < 0.7) noiseHit(0.02 + Math.random()*0.04, 0.06, 2000 + Math.random()*2200);
+  },
   rocket: () => { noiseHit(0.1, 0.08, 400); tone(220, 0.2, 'sawtooth', 80, 0.08); },
   explode: () => { noiseHit(0.25, 0.18, 350); tone(110, 0.35, 'sawtooth', 40, 0.12); },
   hit: () => noiseHit(0.07, 0.1),
@@ -2334,11 +2339,12 @@ function fireKatana(dt){
     });
   }
   if(particles.length > 300) particles.length = 300;
-  // Blade-slice "swish" on a cadence — this fn runs every frame while RMB is held,
-  // so throttle the sound to one swish per ~0.22s instead of 60/sec. The `||0` guard
-  // means no createPlayer field is needed and the first frame fires immediately.
+  // Rapid knife "whisk" on a fast cadence — this fn runs every frame while RMB is
+  // held, so throttle the sound to ~10 swishes/sec (a quickly-swung knife) instead
+  // of 60/sec. The `||0` guard means no createPlayer field is needed and the first
+  // frame fires immediately.
   player.slashSfxT = (player.slashSfxT || 0) - dt;
-  if(player.slashSfxT <= 0){ sfx.slash(); player.slashSfxT = 0.22; }
+  if(player.slashSfxT <= 0){ sfx.slash(); player.slashSfxT = 0.1; }
 }
 
 // Scout RMB: THREE instant straight-line laser beams. Each beam is a line segment
@@ -2460,10 +2466,10 @@ function fireWeapon(mx, my){
     // (AoE for Scout comes from the rocket/spread pickups, not the base weapon.)
     entities.push(createBullet(mx, my, player.angle, 'player', {
       dmg: 0.85 * dmgMult, speed: 360, radius: 2, life: 1.0,
-      sprite: SPR.bullet_dot_blue   // fires dots of blue laser light
+      sprite: SPR.bullet_dot_blue   // fires light dots of blue laser light
     }));
     player.fireCooldown = 0.06 * rapidFactor;
-    emit(mx, my, 2, '#4fc3f7', 30, 110, 0.14);
+    emit(mx, my, 2, '#b3e5fc', 30, 110, 0.14);
     sfx.shoot();
     return;
   }
@@ -3871,7 +3877,7 @@ function drawPlayer(p){
     // Sweeping blade: a bright crescent edge + a radial blade line whose angle
     // oscillates across the obtuse arc, so the attack reads as an actual slicing
     // swing rather than a static cone. Locked to KATANA_RANGE/KATANA_HALF.
-    const bladeA = p.angle + Math.sin(stateTime * 22) * KATANA_HALF;
+    const bladeA = p.angle + Math.sin(stateTime * 75) * KATANA_HALF;
     ctx.strokeStyle = 'rgba(255,255,255,0.9)';
     ctx.lineWidth = 2;
     ctx.beginPath();
