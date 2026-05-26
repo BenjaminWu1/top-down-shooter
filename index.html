@@ -1169,6 +1169,7 @@ const LVL_DMG_PER = 0.015, LVL_DMG_CAP = 0.60;   // +1.5%/lvl damage, max +60%
 const LVL_FIRE_PER = 0.010, LVL_FIRE_CAP = 0.40; // -1%/lvl fire cooldown, floor at 60%
 const LVL_HP_PER = 6,        LVL_HP_CAP = 8;      // +1 maxHp every 6 levels, max +8
 const RMB_BASE_FRAC = 0.4;                        // level-1 RMB pool = 40% of base ("very short")
+const RMB_RECHARGE_FRAC = 0.3;                    // after a full drain, RMB re-enables only once the pool refills to 30% of max
 const RMB_DUR_PER = 0.06,    RMB_DUR_CAP = 2.0;   // RMB-secondary duration grows ~3x by high level
 const DROP_LVL_PER = 0.004, DROP_LVL_CAP = 0.15, DROP_GATE_MAX = 0.75; // gate-only drop scaling
 // ---- Assistant leveling (each owned ally has its own level 1..10, upgraded with
@@ -1495,6 +1496,9 @@ function createPlayer(charKey){
     // 'battery' pickup. Mirrors Soldier energy / Tank fuel.
     power: charKey === 'scout' ? 20 : 0,
     maxPower: charKey === 'scout' ? 20 : 0,
+    // RMB depletion lockout: once the active resource (fuel/energy/power) empties,
+    // the secondary stops firing until the pool refills to RMB_RECHARGE_FRAC of max.
+    rmbLocked: false,
     // Passive powerups (temporary buffs)
     speedTime:0, damageTime:0, magnetTime:0, scoreTime:0,
     // X-skill sprint buff timer (+30% move speed for 5s). Stacks multiplicatively
@@ -2283,15 +2287,29 @@ function updatePlaying(dt){
   if(player.char === 'scout' && player.hp > 0)
     player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.005 * dt);
 
+  // ---- RMB depletion lockout ----
+  // Find this class's active RMB resource pool (only one max is ever > 0). Once it is
+  // fully drained the secondary is LOCKED — it won't fire (no damage) on right-click
+  // until the pool has recharged back up to RMB_RECHARGE_FRAC of its max. This stops
+  // the attack from stuttering on/off at near-empty and forces a real recovery window.
+  let rmbCur = -1, rmbMax = 0, rmbUseMin = 0.0001;
+  if(player.maxFuel > 0)        { rmbCur = player.fuel;   rmbMax = player.maxFuel; }
+  else if(player.maxEnergy > 0) { rmbCur = player.energy; rmbMax = player.maxEnergy; }
+  else if(player.maxPower > 0)  { rmbCur = player.power;  rmbMax = player.maxPower; rmbUseMin = 1; } // a laser volley costs 1
+  if(rmbMax > 0){
+    if(rmbCur < rmbUseMin) player.rmbLocked = true;
+    else if(player.rmbLocked && rmbCur >= rmbMax * RMB_RECHARGE_FRAC) player.rmbLocked = false;
+  }
+
   // ---- Tank's second normal attack: flamethrower (right mouse) ----
-  if(player.char === 'tank' && mouse.rdown && player.fuel > 0){
+  if(player.char === 'tank' && mouse.rdown && player.fuel > 0 && !player.rmbLocked){
     player.fuel = Math.max(0, player.fuel - dt);
     fireFlamethrower(dt);
   }
   // ---- Syed's secondary: continuous katana slash (right mouse) ----
   // Very-high-DPS melee swept over a wide obtuse arc; drains `energy` while held.
   // Slowly self-regens (above) + refilled by the 'beverage' pickup (+1 s each).
-  if(player.char === 'soldier' && mouse.rdown && player.energy > 0){
+  if(player.char === 'soldier' && mouse.rdown && player.energy > 0 && !player.rmbLocked){
     player.energy = Math.max(0, player.energy - dt);
     fireKatana(dt);
   }
@@ -2301,7 +2319,7 @@ function updatePlaying(dt){
   // beam's line takes its full damage SIMULTANEOUSLY the instant the beam fires
   // (see fireLaserBeams). Gated behind laserCd (cadence) AND `power` — a ~20-volley
   // pool that costs 1 per volley, self-regens 0.1/s, and is refilled by 'battery'.
-  if(player.char === 'scout' && mouse.rdown && player.laserCd <= 0 && player.power >= 1){
+  if(player.char === 'scout' && mouse.rdown && player.laserCd <= 0 && player.power >= 1 && !player.rmbLocked){
     fireLaserBeams();
     player.power = Math.max(0, player.power - 1);
     player.laserCd = 0.22 * (player.laserScale || 1);
@@ -4487,41 +4505,28 @@ function drawHUD(){
   }
   // RMB resource bar (Tank FUEL / Soldier ENERGY / Scout POWER). Only one of the
   // three maxes is ever > 0, so they share the one slot at hudY (under the enhancers).
-  if(player.maxFuel > 0){
+  // While the pool is depleted (player.rmbLocked) the secondary can't fire: the fill
+  // shows dim red + "RECHARGING", and a tick marks the RMB_RECHARGE_FRAC re-enable point.
+  let rmbBar = null;
+  if(player.maxFuel > 0)        rmbBar = { cur:player.fuel,   max:player.maxFuel,   label:'FUEL',   back:'#3a1a08', fill:'#e67e22' };
+  else if(player.maxEnergy > 0) rmbBar = { cur:player.energy, max:player.maxEnergy, label:'ENERGY', back:'#0b2e1a', fill:'#2ecc71' };
+  else if(player.maxPower > 0)  rmbBar = { cur:player.power,  max:player.maxPower,  label:'POWER',  back:'#082a33', fill:'#19f0ff' };
+  if(rmbBar){
+    const locked = player.rmbLocked;
     ctx.fillStyle = '#000';
     ctx.fillRect(6, hudY, 66, 6);
-    ctx.fillStyle = '#3a1a08';
+    ctx.fillStyle = rmbBar.back;
     ctx.fillRect(7, hudY + 1, 64, 4);
-    ctx.fillStyle = '#e67e22';
-    ctx.fillRect(7, hudY + 1, Math.floor(64 * (player.fuel / player.maxFuel)), 4);
+    ctx.fillStyle = locked ? '#8c3a3a' : rmbBar.fill;
+    ctx.fillRect(7, hudY + 1, Math.floor(64 * (rmbBar.cur / rmbBar.max)), 4);
+    if(locked){   // recharge-threshold tick: the secondary re-enables once the fill passes here
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(7 + Math.floor(64 * RMB_RECHARGE_FRAC), hudY, 1, 6);
+    }
     ctx.font = 'bold 6px monospace';
-    ctx.fillStyle = '#fff';
+    ctx.fillStyle = locked ? '#ff6b6b' : '#fff';
     ctx.textAlign = 'left';
-    ctx.fillText('FUEL', 8, hudY + 5);
-  }
-  if(player.maxEnergy > 0){
-    ctx.fillStyle = '#000';
-    ctx.fillRect(6, hudY, 66, 6);
-    ctx.fillStyle = '#0b2e1a';
-    ctx.fillRect(7, hudY + 1, 64, 4);
-    ctx.fillStyle = '#2ecc71';
-    ctx.fillRect(7, hudY + 1, Math.floor(64 * (player.energy / player.maxEnergy)), 4);
-    ctx.font = 'bold 6px monospace';
-    ctx.fillStyle = '#fff';
-    ctx.textAlign = 'left';
-    ctx.fillText('ENERGY', 8, hudY + 5);
-  }
-  if(player.maxPower > 0){
-    ctx.fillStyle = '#000';
-    ctx.fillRect(6, hudY, 66, 6);
-    ctx.fillStyle = '#082a33';
-    ctx.fillRect(7, hudY + 1, 64, 4);
-    ctx.fillStyle = '#19f0ff';
-    ctx.fillRect(7, hudY + 1, Math.floor(64 * (player.power / player.maxPower)), 4);
-    ctx.font = 'bold 6px monospace';
-    ctx.fillStyle = '#fff';
-    ctx.textAlign = 'left';
-    ctx.fillText('POWER', 8, hudY + 5);
+    ctx.fillText(locked ? 'RECHARGING' : rmbBar.label, 8, hudY + 5);
   }
 
   // Score & level (top-right)
