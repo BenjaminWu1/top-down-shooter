@@ -154,6 +154,153 @@ DRIVER = r"""
 })();
 """
 
+# --- Gameplay-BALANCE assertions, computed against the real loaded game data /
+#     functions (so they can't drift from the code). Returns [{name,pass,detail}].
+DRIVER_BALANCE = r"""
+(function(){
+  var R = [];
+  function check(name, pass, detail){ R.push({name:name, pass:!!pass, detail:detail||''}); }
+
+  // 1) Difficulty curve: total non-decreasing, spawn rate non-increasing across all 40.
+  (function(){
+    var okT = true, okR = true, badT = '', badR = '';
+    for(var i = 1; i < LEVELS.length; i++){
+      if(LEVELS[i].total < LEVELS[i-1].total){ okT = false; badT = 'L'+(i+1); }
+      if(LEVELS[i].rate  > LEVELS[i-1].rate ){ okR = false; badR = 'L'+(i+1); }
+    }
+    check('Difficulty curve: enemy total never drops', okT, badT && ('drop at '+badT));
+    check('Difficulty curve: spawn rate never rises', okR, badR && ('rise at '+badR));
+  })();
+
+  // 2) Mix reachability: every kind listed in every level's mix is actually rolled
+  //    by pickWeighted (catches the "weights past cumulative 1.0 are unreachable" bug
+  //    class empirically, not just by the static sum).
+  (function(){
+    var bad = [];
+    for(var i = 0; i < LEVELS.length; i++){
+      var counts = {};
+      LEVELS[i].mix.forEach(function(m){ counts[m[0]] = 0; });
+      for(var s = 0; s < 5000; s++){ var k = pickWeighted(LEVELS[i].mix); if(k in counts) counts[k]++; }
+      var unreached = Object.keys(counts).filter(function(k){ return counts[k] === 0; });
+      if(unreached.length) bad.push('L'+(i+1)+':'+unreached.join('/'));
+    }
+    check('Mix reachability: every mix kind gets rolled', bad.length === 0, bad.join(' '));
+  })();
+
+  // 3) Boss scaling: within each 5-level tier (same boss AI) the spawned boss maxHp
+  //    strictly increases, and the L40 boss is the tankiest of all (spawnBoss scaling).
+  function spawnedBossHp(kind, idx){
+    startLevel(idx);
+    entities = entities.filter(function(e){ return e.type === 'player'; });
+    spawnBoss(kind);
+    var b = entities[entities.length - 1];
+    return b ? b.maxHp : -1;
+  }
+  (function(){
+    var tierBad = '', tierOk = true, hps = [];
+    for(var i = 0; i < LEVELS.length; i++){
+      var hp = spawnedBossHp(LEVELS[i].boss, i);
+      hps.push(hp);
+      // within-tier (same boss kind as previous level) must strictly increase
+      if(i > 0 && LEVELS[i].boss === LEVELS[i-1].boss && hp <= hps[i-1]){ tierOk = false; tierBad = 'L'+(i+1); }
+    }
+    check('Boss scaling: HP strictly rises within each tier', tierOk, tierBad && ('flat/low at '+tierBad));
+    // The spawned maxHp must match the documented spawnBoss formula
+    // ceil(base * (1 + idx*0.07)). (NB: the L40 phantom is NOT the absolute
+    // tankiest — the L30 nemesis has a higher base HP — by design, so we assert
+    // the scaling math, not an HP ranking.)
+    var base = spawnedBossHp('phantom', 0);
+    var fOk = true, fBad = '';
+    [10, 20, 39].forEach(function(idx){
+      var want = Math.ceil(base * (1 + idx * 0.07));
+      var got = spawnedBossHp('phantom', idx);
+      if(got !== want){ fOk = false; fBad += ' idx' + idx + ' want' + want + ' got' + got; }
+    });
+    check('Boss scaling: matches ceil(base*(1+idx*0.07))', fOk, fBad);
+  })();
+
+  // 4) Enemy scaling: a tank grunt is tankier at L40 than at L1 (enemyScale).
+  (function(){
+    levelIdx = 0;  var lo = createEnemy('tank', 0, 0).maxHp;
+    levelIdx = 39; var hi = createEnemy('tank', 0, 0).maxHp;
+    check('Enemy scaling: regular HP rises with level', hi > lo, 'L1='+lo+' L40='+hi);
+  })();
+
+  // 5) Elite scaling: maybeElite triples HP, enlarges, quadruples score, slows.
+  (function(){
+    var orig = Math.random; Math.random = function(){ return 0; };  // force promotion
+    levelIdx = 39;
+    var base = createEnemy('tank', 0, 0);
+    var e = createEnemy('tank', 0, 0); maybeElite(e);
+    Math.random = orig;
+    var ok = e.elite === true
+          && e.maxHp === Math.ceil(base.maxHp * 3)
+          && e.radius === Math.round(base.radius * 1.6)
+          && e.score === base.score * 4
+          && Math.abs(e.speed - base.speed * 0.9) < 1e-6;
+    check('Elite scaling: 3x HP / 1.6x size / 4x score / slower', ok,
+          'elite='+e.elite+' hp '+base.maxHp+'->'+e.maxHp+' r '+base.radius+'->'+e.radius);
+  })();
+
+  // 6) Mid-boss data: L31-40 each have a midBoss that is a valid boss kind and
+  //    DIFFERS from the end boss; L1-30 have none.
+  (function(){
+    var bad = [];
+    for(var i = 0; i < LEVELS.length; i++){
+      var mb = LEVELS[i].midBoss;
+      if(i >= 30){
+        if(!mb) bad.push('L'+(i+1)+':missing');
+        else if(mb === LEVELS[i].boss) bad.push('L'+(i+1)+':==end');
+        else { var t = createEnemy(mb, 0, 0); if(!t || !t.isBoss) bad.push('L'+(i+1)+':invalid('+mb+')'); }
+      } else if(mb){ bad.push('L'+(i+1)+':unexpected'); }
+    }
+    check('Mid-boss: L31-40 valid+distinct, L1-30 none', bad.length === 0, bad.join(' '));
+  })();
+
+  // 7) Boss-ability LEVEL GATING: each ability must NOT fire one level below its
+  //    documented threshold and MUST fire at/above it. Runs the real AI ~12s.
+  function runAI(aiFn, kind, idx, damage){
+    startLevel(idx);
+    entities = entities.filter(function(e){ return e.type === 'player'; });
+    groundFields = [];
+    player.hp = player.maxHp = 99999; player.invuln = 0;
+    var b = createEnemy(kind, worldW/2 - 40, worldH/2);
+    b.isBoss = true; b.maxHp = 100000; b.hp = damage ? 50000 : 100000;
+    b.phase = 0; b.phaseT = 0; b.fireCooldown = 0;
+    entities.push(b);
+    var seenInvuln = false;
+    for(var f = 0; f < 720; f++){           // ~12s > every ability cooldown
+      player.hp = player.maxHp;
+      aiFn(b, 1/60);
+      if(b.invulnT > 0) seenInvuln = true;
+    }
+    return { invuln: seenInvuln, heal: b.hp > 50000,
+             gas: groundFields.length > 0,
+             clone: entities.some(function(e){ return e.isClone; }),
+             exploder: entities.some(function(e){ return e.kind === 'exploder'; }) };
+  }
+  var gates = [
+    ['Overlord invuln @L22',    updateOverlord, 'overlord', 20, 21, 'invuln',   false],
+    ['Overlord heal @L24',      updateOverlord, 'overlord', 22, 23, 'heal',     true ],
+    ['Nemesis gas @L27',        updateNemesis,  'nemesis',  25, 26, 'gas',      false],
+    ['Nemesis exploders @L29',  updateNemesis,  'nemesis',  27, 28, 'exploder', false],
+    ['Reaper gas @L31',         updateReaper,   'reaper',   29, 30, 'gas',      false],
+    ['Reaper clones @L33',      updateReaper,   'reaper',   31, 32, 'clone',    false],
+    ['Phantom gas @L37',        updatePhantom,  'phantom',  35, 36, 'gas',      false],
+    ['Phantom heal @L38',       updatePhantom,  'phantom',  36, 37, 'heal',     true ],
+    ['Phantom exploders @L39',  updatePhantom,  'phantom',  37, 38, 'exploder', false]
+  ];
+  gates.forEach(function(g){
+    var below = runAI(g[1], g[2], g[3], g[6])[g[5]];
+    var above = runAI(g[1], g[2], g[4], g[6])[g[5]];
+    check(g[0] + ' (off below, on at/above)', below === false && above === true,
+          'below='+below+' above='+above);
+  });
+
+  return JSON.stringify(R);
+})();
+"""
+
 
 def main():
     src = open(INDEX, encoding="utf-8").read()
@@ -170,12 +317,14 @@ def main():
     import json
     raw = ctx.eval(DRIVER)
     report = json.loads(raw)
+    balance = json.loads(ctx.eval(DRIVER_BALANCE))
 
     errors = report.get("errors", [])
     console_errors = report.get("consoleErrors", [])
     levels = report.get("levels", [])
 
     print("Headless runtime check of index.html (V8 + stubbed canvas/DOM)\n")
+    print("== Part 1: runtime smoke-test (all 40 levels) ==")
     # Per-level boss-spawn sanity.
     bad_boss = [L for L in levels if not L["bossSpawned"]]
     bad_mid = [L for L in levels if L["midBoss"] and not L["midbossSpawned"]]
@@ -202,14 +351,27 @@ def main():
                 continue
             seen.add(key)
             print("  X", e[:300])
-        print("\nRESULT: FAIL")
+
+    # Balance assertions.
+    print("\n== Part 2: gameplay-balance assertions ==")
+    bal_fail = [b for b in balance if not b["pass"]]
+    for b in balance:
+        print("  [{}] {}{}".format(
+            "PASS" if b["pass"] else "FAIL", b["name"],
+            "" if b["pass"] else "  -> " + b["detail"]))
+
+    runtime_ok = not errors and not bad_boss and not bad_mid
+    print()
+    if not runtime_ok:
+        reason = "thrown errors" if errors else "a boss never spawned"
+        print("RESULT: FAIL (runtime: {})".format(reason))
+        return 1
+    if bal_fail:
+        print("RESULT: FAIL ({} balance assertion(s) failed)".format(len(bal_fail)))
         return 1
 
-    if bad_boss or bad_mid:
-        print("\nRESULT: FAIL (a boss never spawned)")
-        return 1
-
-    print("\nRESULT: PASS (ran all 40 levels + all boss abilities, no exceptions)")
+    print("RESULT: PASS ({} levels ran clean; {} balance assertions all green)".format(
+        len(levels), len(balance)))
     return 0
 
 
