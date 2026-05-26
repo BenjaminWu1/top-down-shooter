@@ -1092,7 +1092,7 @@ let player = null;
 let allies = [];              // the chosen assistant entities live in here (also in `entities`)
 let entities = [];
 let particles = [];
-let groundFields = [];   // boss poison-gas pools: {x,y,radius,life,maxLife}
+let groundFields = [];   // boss poison-gas pools: {x,y,radius,life,maxLife,warn} (warn = arming delay, no damage)
 let levelIdx = 0;
 let levelData = null;
 let spawnTimer = 0;
@@ -1824,13 +1824,16 @@ function bossSpawnClone(e){
   entities.push(c);
 }
 // Drop a small lingering poison-gas pool at the player's feet (must move out of it).
+// The pool spawns ON the player, so it gets a `warn` arming delay: it deals NO damage
+// and renders as a pulsing telegraph ring for `warn` seconds, giving the player time
+// to step out of the radius before it becomes lethal (no 100%-hit instant chip).
 function bossGasBomb(e, dt){
   if(e.isClone) return;
   e.gasCd = (e.gasCd || 0) - dt;
   if(e.gasCd <= 0){
     e.gasCd = 5.5;
     if(groundFields.length < 12){
-      groundFields.push({ x: player.x, y: player.y, radius: 34, life: 3, maxLife: 3 });
+      groundFields.push({ x: player.x, y: player.y, radius: 34, life: 3, maxLife: 3, warn: 0.5 });
       emit(player.x, player.y, 18, '#27ae60', 20, 70, 0.6);
       sfx.explode();
     }
@@ -2098,6 +2101,9 @@ function updatePlaying(dt){
 
   // ---- Boss poison-gas pools: small lingering AoE that drains the player ----
   for(const gf of groundFields){
+    // Arming window: pool spawns on the player, so for the first `warn` seconds it
+    // does no damage (telegraph only) — time to walk out before it can chip you.
+    if(gf.warn > 0){ gf.warn -= dt; continue; }
     gf.life -= dt;
     const rr = gf.radius + player.radius;
     if(player.hp > 0 && player.invuln <= 0 && dist2(gf, player) < rr*rr) damagePlayer(1);
@@ -3799,6 +3805,18 @@ function drawPause(){
 function drawGame(){
   // Boss poison-gas pools: translucent green discs drawn beneath the entities.
   for(const gf of groundFields){
+    if(gf.warn > 0){
+      // Arming telegraph: pulsing hollow yellow ring (no damage yet) so the player
+      // can read the danger zone and step out before the pool goes live.
+      ctx.globalAlpha = 0.45 + 0.4 * Math.sin(stateTime * 18);
+      ctx.strokeStyle = '#f1c40f';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(Math.floor(gf.x), Math.floor(gf.y), gf.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      continue;
+    }
     const a = clamp(gf.life / gf.maxLife, 0, 1);
     ctx.globalAlpha = 0.16 + 0.12 * a;
     ctx.fillStyle = '#27ae60';
