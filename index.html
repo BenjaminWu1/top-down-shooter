@@ -1148,6 +1148,87 @@ function saveCleared(){
   localStorage.setItem('shooter_cleared', JSON.stringify([...clearedLevels]));
 }
 
+// ============================================================
+// META-PROGRESSION PROFILE (persistent, shared across all characters)
+// ============================================================
+// One account profile saved under 'shooter_profile': level, XP, gold, owned skills
+// & assistants, the key->skill loadout, and the equipped assistants. XP earned on
+// ANY character credits this single profile, so all characters level up together.
+// ---- TUNABLE leveling / scaling knobs ----
+const XP_BASE = 60;           // XP needed for level 1 -> 2
+const XP_GROWTH = 1.18;       // geometric growth of the per-level XP requirement
+const XP_KILL_DIV = 5;        // per-kill XP = ceil(enemy.score / this)
+const XP_LEVEL_CLEAR = 120;   // XP for clearing a level
+const XP_VICTORY = 600;       // extra XP for the final victory
+const GOLD_PER_KILL_DIV = 10; // per-kill gold = floor(enemy.score / this)
+const GOLD_LEVEL_CLEAR = 80;  // gold for clearing a level
+const LEVEL_CAP = 40;         // soft cap (bounds stat scaling)
+const LVL_DMG_PER = 0.015, LVL_DMG_CAP = 0.60;   // +1.5%/lvl damage, max +60%
+const LVL_FIRE_PER = 0.010, LVL_FIRE_CAP = 0.40; // -1%/lvl fire cooldown, floor at 60%
+const LVL_HP_PER = 6,        LVL_HP_CAP = 8;      // +1 maxHp every 6 levels, max +8
+const RMB_BASE_FRAC = 0.4;                        // level-1 RMB pool = 40% of base ("very short")
+const RMB_DUR_PER = 0.06,    RMB_DUR_CAP = 2.0;   // RMB-secondary duration grows ~3x by high level
+const DROP_LVL_PER = 0.004, DROP_LVL_CAP = 0.15, DROP_GATE_MAX = 0.75; // gate-only drop scaling
+
+function DEFAULT_PROFILE(){
+  return { v:1, level:1, xp:0, gold:0,
+           ownedSkills:['heal'], ownedAssistants:['drone'],
+           loadout:{ x:null, c:null, b:null, v:null },
+           defaultAssistant:'drone', equippedAssistants:['drone'] };
+}
+function loadProfile(){
+  const raw = localStorage.getItem('shooter_profile');
+  // Headless V8 stubs localStorage as a no-op Proxy (returns a non-string); first
+  // run returns null. In both cases fall back to a fresh profile rather than
+  // JSON.parse-ing a non-string (which would throw and break the headless run).
+  if(typeof raw !== 'string') return DEFAULT_PROFILE();
+  let p;
+  try { p = JSON.parse(raw); } catch(e){ return DEFAULT_PROFILE(); }
+  if(!p || typeof p !== 'object') return DEFAULT_PROFILE();
+  const d = DEFAULT_PROFILE();
+  const out = {
+    v:1,
+    level: Math.max(1, Math.floor(p.level) || 1),
+    xp: Math.max(0, +p.xp || 0),
+    gold: Math.max(0, Math.floor(p.gold) || 0),
+    ownedSkills: Array.isArray(p.ownedSkills) ? p.ownedSkills.slice() : d.ownedSkills,
+    ownedAssistants: Array.isArray(p.ownedAssistants) ? p.ownedAssistants.slice() : d.ownedAssistants,
+    loadout: { x:null, c:null, b:null, v:null },
+    defaultAssistant: p.defaultAssistant || 'drone',
+    equippedAssistants: Array.isArray(p.equippedAssistants) ? p.equippedAssistants.slice() : d.equippedAssistants
+  };
+  if(!out.ownedSkills.includes('heal')) out.ownedSkills.unshift('heal');
+  if(!out.ownedAssistants.includes('drone')) out.ownedAssistants.unshift('drone');
+  const lo = p.loadout || {};   // keep only owned skills (defends a stale older-build save)
+  for(const k of ['x','c','b','v']){
+    if(lo[k] && out.ownedSkills.includes(lo[k])) out.loadout[k] = lo[k];
+  }
+  out.equippedAssistants = out.equippedAssistants.filter(k => out.ownedAssistants.includes(k)).slice(0, 2);
+  return out;
+}
+function saveProfile(){
+  try { localStorage.setItem('shooter_profile', JSON.stringify(profile)); } catch(e){}
+}
+let profile = loadProfile();
+
+// XP curve + grant helpers. Stat scaling is applied at RUN START (createPlayer ->
+// applyLevelScaling), not mid-run, so a level-up never causes a jarring mid-fight jump.
+function xpToNext(level){ return Math.round(XP_BASE * Math.pow(XP_GROWTH, level - 1)); }
+function grantXp(amount){
+  profile.xp += amount;
+  while(profile.level < LEVEL_CAP && profile.xp >= xpToNext(profile.level)){
+    profile.xp -= xpToNext(profile.level);
+    profile.level++;
+    if(sfx && sfx.levelComplete) sfx.levelComplete();
+  }
+  if(profile.level >= LEVEL_CAP) profile.xp = 0;
+  saveProfile();
+}
+function grantGold(amount){ profile.gold += amount; saveProfile(); }
+// Loadout slot gating: +1 equippable skill slot per 5 levels (cap 4 = X/C/B/V).
+const SLOT_ORDER = ['x','c','b','v'];
+function unlockedSlots(){ return Math.min(4, Math.floor(profile.level / 5)); }
+
 // ---- Character profiles. X (sprint) and F (heal) are universal; C is the
 // class-unique slot (slowmo / wall); the optional V slot is Tank-only. ----
 const CHARACTERS = {
@@ -1170,6 +1251,33 @@ const CHARACTERS = {
     skillLabels:{ x:'SPRINT', c:'WALL', v:'BLADE+', f:'HEAL', b:'BLAST' }
   }
 };
+// NOTE: the per-class `skills`/`skillLabels` maps above are now LEGACY/vestigial —
+// the live game drives active skills from the player's LOADOUT (profile.loadout +
+// resolvePlayerLoadout), not these. They are kept only so validator C7 stays green.
+
+// ---- SKILL CATALOG (shop + loadout) ----
+// Every `id` is a real triggerSkill() case. `cd` MUST equal the skillCdMax entry for
+// that id (a slot bound to an id missing from skillCdMax silently can't re-fire).
+// Tiers: 1 = cheap/small, 3 = expensive/big. heal (tier 0) is the free default.
+const SKILLS = {
+  heal:      { label:'HEAL',    color:'#2ecc71', cd:20,  cost:0,   tier:0 },
+  sprint:    { label:'SPRINT',  color:'#1abc9c', cd:20,  cost:120, tier:1 },
+  dash:      { label:'DASH',    color:'#f1c40f', cd:3.5, cost:150, tier:1 },
+  blast:     { label:'BLAST',   color:'#e67e22', cd:20,  cost:180, tier:1 },
+  grenade:   { label:'GRENADE', color:'#e67e22', cd:6,   cost:160, tier:1 },
+  blink:     { label:'BLINK',   color:'#f1c40f', cd:5,   cost:300, tier:2 },
+  invuln:    { label:'INVINC',  color:'#7fe9ff', cd:20,  cost:340, tier:2 },
+  slowmo:    { label:'SLOWMO',  color:'#3498db', cd:18,  cost:320, tier:2 },
+  summon:    { label:'KNIGHT',  color:'#f1c40f', cd:25,  cost:360, tier:2 },
+  wall:      { label:'WALL',    color:'#27ae60', cd:18,  cost:520, tier:3 },
+  flameburst:{ label:'NAPALM',  color:'#e67e22', cd:20,  cost:560, tier:3 },
+  barrage:   { label:'BARRAGE', color:'#e67e22', cd:24,  cost:600, tier:3 },
+  vsummon:   { label:'BLADE+',  color:'#f39c12', cd:25,  cost:640, tier:3 },
+  nuke:      { label:'NUKE',    color:'#e74c3c', cd:60,  cost:900, tier:3 }
+};
+// Shop ordering (ids except the free default heal), grouped by tier.
+const SKILL_ORDER = ['sprint','dash','blast','grenade','blink','invuln','slowmo','summon','wall','flameburst','barrage','vsummon','nuke'];
+
 let selectedChar = 'soldier';
 let selectedLevel = 0;
 let lastClearedLevel = -1; // remembered for the LEAVE/CONTINUE screen
@@ -1284,9 +1392,39 @@ function playerSprites(charKey){
   return { a: SPR.player_a, b: SPR.player_b };
 }
 
+// Resolve the active-skill loadout from the profile. F is always HEAL. Each of
+// X/C/B/V is filled only if its slot is unlocked by level AND assigned AND owned.
+function resolvePlayerLoadout(){
+  const n = unlockedSlots();
+  const out = { f:'heal', x:null, c:null, b:null, v:null };
+  SLOT_ORDER.forEach((slot, i) => {
+    if(i < n){
+      const id = profile.loadout[slot];
+      if(id && profile.ownedSkills.includes(id) && SKILLS[id]) out[slot] = id;
+    }
+  });
+  return out;
+}
+// Apply meta-level base-stat scaling at run start: damage, rate-of-fire / attack
+// speed (lower LMB cooldown + Scout RMB cadence), max health, and the RMB
+// "second basic attack" duration (its fuel/energy/power pool — short at L1, grows).
+function applyLevelScaling(p){
+  const L = Math.max(0, (profile.level || 1) - 1);
+  p.damageMult *= 1 + Math.min(LVL_DMG_CAP, L * LVL_DMG_PER);
+  const fireBonus = Math.min(LVL_FIRE_CAP, L * LVL_FIRE_PER);
+  p.fireRate *= (1 - fireBonus);
+  p.laserScale = (1 - fireBonus);
+  p.maxHp += Math.min(LVL_HP_CAP, Math.floor(L / LVL_HP_PER));
+  p.hp = p.maxHp;
+  const rmbMul = RMB_BASE_FRAC * (1 + Math.min(RMB_DUR_CAP, L * RMB_DUR_PER));
+  [['maxFuel','fuel'],['maxEnergy','energy'],['maxPower','power']].forEach(([mx, cur]) => {
+    if(p[mx] > 0){ p[mx] = Math.max(1, Math.round(p[mx] * rmbMul)); p[cur] = p[mx]; }
+  });
+}
+
 function createPlayer(charKey){
   const ch = CHARACTERS[charKey] || CHARACTERS.soldier;
-  return {
+  const p = {
     type:'player', x:W/2, y:H/2, vx:0, vy:0, angle:0, radius:6,
     hp:ch.hp, maxHp:ch.hp, speed:ch.speed,
     char:charKey || 'soldier',
@@ -1326,9 +1464,15 @@ function createPlayer(charKey){
     // C is class-specific (per CHARACTERS.skills); each class now also fills the V
     // slot (Soldier barrage / Scout dash / Tank vsummon).
     skillCd:{ x:0, c:0, v:0, f:0, b:0 },
-    skillCdMax:{ x:4, c:12, blink:5, dash:3.5, wall:18, summon:25, vsummon:25, flameburst:20, barrage:24, sprint:20, heal:20, blast:20, invuln:20 },
+    skillCdMax:{ x:4, c:12, blink:5, dash:3.5, wall:18, summon:25, vsummon:25, flameburst:20, barrage:24, sprint:20, heal:20, blast:20, invuln:20, grenade:6, slowmo:18, nuke:60 },
+    // RMB cadence scale (Scout laser): 1 until applyLevelScaling lowers it.
+    laserScale:1,
+    // Active-skill LOADOUT (F=heal always; X/C/B/V from profile, gated by level + ownership).
+    loadout: resolvePlayerLoadout(),
     hitFlash:0, invuln:0, frame:0, frameT:0, dead:false
   };
+  applyLevelScaling(p);
+  return p;
 }
 
 function createEnemy(kind, x, y){
@@ -2018,21 +2162,15 @@ function updatePlaying(dt){
     player.flameburstTime -= dt;
     tickFlameburst(dt);
   }
-  const charSkills = CHARACTERS[player.char].skills;
-  if(keys['KeyX'] && player.skillCd.x <= 0){
-    if(triggerSkill(charSkills.x, dx, dy, mag)) player.skillCd.x = player.skillCdMax[charSkills.x];
-  }
-  if(keys['KeyC'] && player.skillCd.c <= 0){
-    if(triggerSkill(charSkills.c, dx, dy, mag)) player.skillCd.c = player.skillCdMax[charSkills.c];
-  }
-  if(keys['KeyF'] && player.skillCd.f <= 0 && charSkills.f){
-    if(triggerSkill(charSkills.f, dx, dy, mag)) player.skillCd.f = player.skillCdMax[charSkills.f];
-  }
-  if(keys['KeyB'] && player.skillCd.b <= 0 && charSkills.b){
-    if(triggerSkill(charSkills.b, dx, dy, mag)) player.skillCd.b = player.skillCdMax[charSkills.b];
-  }
-  if(keys['KeyV'] && player.skillCd.v <= 0 && charSkills.v){
-    if(triggerSkill(charSkills.v, dx, dy, mag)) player.skillCd.v = player.skillCdMax[charSkills.v];
+  // Skill dispatch from the LOADOUT (not the legacy per-class kit). F is always HEAL;
+  // X/C/B/V come from player.loadout (already gated by unlocked slots + ownership in
+  // resolvePlayerLoadout). A null slot is simply skipped, so low levels just have HEAL.
+  const SKILL_KEYS = [['KeyF','f'],['KeyX','x'],['KeyC','c'],['KeyB','b'],['KeyV','v']];
+  for(const [code, slot] of SKILL_KEYS){
+    const id = player.loadout[slot];
+    if(id && keys[code] && player.skillCd[slot] <= 0){
+      if(triggerSkill(id, dx, dy, mag)) player.skillCd[slot] = player.skillCdMax[id];
+    }
   }
 
   // ---- Shooting / Weapon dispatch ----
@@ -2081,7 +2219,7 @@ function updatePlaying(dt){
   if(player.char === 'scout' && mouse.rdown && player.laserCd <= 0 && player.power >= 1){
     fireLaserBeams();
     player.power = Math.max(0, player.power - 1);
-    player.laserCd = 0.22;
+    player.laserCd = 0.22 * (player.laserScale || 1);
   }
 
   if(player.invuln > 0) player.invuln -= dt;
@@ -2272,7 +2410,11 @@ function updatePlaying(dt){
     clearedLevels.add(levelIdx);
     saveCleared();
     lastClearedLevel = levelIdx;
-    if(levelIdx >= LEVELS.length - 1){
+    const finalWin = levelIdx >= LEVELS.length - 1;
+    // Bank the run's accrued kill XP/gold + the level-clear award; resolves level-ups + persists.
+    grantXp(XP_LEVEL_CLEAR + (finalWin ? XP_VICTORY : 0));
+    grantGold(GOLD_LEVEL_CLEAR);
+    if(finalWin){
       state = STATE.VICTORY; stateTime = 0; sfx.victory();
       if(score > highScore){ highScore = score; localStorage.setItem('shooter_high', String(highScore)); }
     } else {
@@ -2282,6 +2424,7 @@ function updatePlaying(dt){
   if(player.hp <= 0){
     state = STATE.GAME_OVER; stateTime = 0; sfx.gameOver();
     shakeTime = 0; shakeAmt = 0;
+    grantXp(0);     // resolve + persist the accrued kill XP/gold even on a loss
     if(score > highScore){ highScore = score; localStorage.setItem('shooter_high', String(highScore)); }
   }
 }
@@ -2881,6 +3024,10 @@ function killEnemy(en){
     player.fuel = Math.min(player.maxFuel, player.fuel + 0.2);
   const scoreMult = player.scoreTime > 0 ? 2 : 1;
   score += en.score * scoreMult;
+  // Meta-progression: accrue XP + gold per kill. NOT saved per-kill (that would be
+  // thousands of localStorage writes/run) — banked at the level-transition points.
+  profile.xp   += Math.max(1, Math.ceil(en.score / XP_KILL_DIV));
+  profile.gold += Math.max(0, Math.floor(en.score / GOLD_PER_KILL_DIV));
   emit(en.x, en.y, en.isBoss ? 40 : 14,
        en.isBoss ? '#9b59b6' : '#c0392b', 50, 200, en.isBoss ? 0.9 : 0.6);
   if(en.kind === 'tank'){
@@ -2917,7 +3064,8 @@ function killEnemy(en){
   // Random drop from non-boss (weighted: 4 basic-attack enhancers + support gear +
   // the class resource). Elite mini-bosses drop far more often (only the gate
   // changes — the pool weights stay summed to 1.0 so validator C5 is unaffected).
-  if(!en.isBoss && Math.random() < (en.elite ? 0.55 : 0.22)){
+  const dropGate = Math.min(DROP_GATE_MAX, (en.elite ? 0.55 : 0.22) + Math.min(DROP_LVL_CAP, (profile.level - 1) * DROP_LVL_PER));
+  if(!en.isBoss && Math.random() < dropGate){
     // Drop pool. Weights MUST sum to 1.0 for the pickWeighted loop below to give
     // every entry its intended share — appending past the cumulative-1.0 mark means
     // the item never drops (the old fuel bug). Each class uses its own pool so its
@@ -4355,23 +4503,13 @@ function drawWeaponHUD(){
 
 function drawSkillHUD(){
   const y = H - 30;
-  const ch = CHARACTERS[player.char] || CHARACTERS.soldier;
-  const skillColor = { dash:'#f1c40f', blink:'#f1c40f', slowmo:'#3498db', wall:'#27ae60',
-                       nuke:'#e74c3c', grenade:'#e67e22', summon:'#f1c40f', vsummon:'#f39c12', flameburst:'#e67e22',
-                       barrage:'#e67e22',
-                       sprint:'#1abc9c', heal:'#2ecc71', blast:'#e67e22', invuln:'#7fe9ff' };
-  const skills = [
-    { key:'X', label:ch.skillLabels.x, cd:player.skillCd.x, max:player.skillCdMax[ch.skills.x], color:skillColor[ch.skills.x] },
-    { key:'C', label:ch.skillLabels.c, cd:player.skillCd.c, max:player.skillCdMax[ch.skills.c], color:skillColor[ch.skills.c] }
-  ];
-  if(ch.skills.f){
-    skills.push({ key:'F', label:ch.skillLabels.f, cd:player.skillCd.f, max:player.skillCdMax[ch.skills.f], color:skillColor[ch.skills.f] });
-  }
-  if(ch.skills.b){
-    skills.push({ key:'B', label:ch.skillLabels.b, cd:player.skillCd.b, max:player.skillCdMax[ch.skills.b], color:skillColor[ch.skills.b] });
-  }
-  if(ch.skills.v){
-    skills.push({ key:'V', label:ch.skillLabels.v, cd:player.skillCd.v, max:player.skillCdMax[ch.skills.v], color:skillColor[ch.skills.v] });
+  // Chips come from the LOADOUT (F=heal always; X/C/B/V from player.loadout), label
+  // + color pulled from the SKILLS catalog. Unassigned / locked slots are skipped.
+  const skills = [];
+  for(const [key, slot] of [['F','f'],['X','x'],['C','c'],['B','b'],['V','v']]){
+    const id = player.loadout[slot];
+    if(!id || !SKILLS[id]) continue;
+    skills.push({ key, label:SKILLS[id].label, cd:player.skillCd[slot], max:player.skillCdMax[id], color:SKILLS[id].color });
   }
   ctx.textAlign = 'left';
   let x = 6;
