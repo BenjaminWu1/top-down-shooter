@@ -1300,23 +1300,23 @@ const CHARACTERS = {
 // Every `id` is a real triggerSkill() case. `cd` MUST equal the skillCdMax entry for
 // that id (a slot bound to an id missing from skillCdMax silently can't re-fire).
 // Tiers: 1 = cheap/small, 3 = expensive/big. heal (tier 0) is the free default.
-// Skill gold costs were raised across the board (a skill is a bigger investment than
-// an assistant upgrade level): tier 1 ~300, tier 2 ~700, tier 3 ~1200, nuke 2000.
+// Skill gold costs were raised again (~2.2x) so skills are a serious gold sink:
+// tier 1 ~600-850, tier 2 ~1400-1750, tier 3 ~2500-3200, nuke 4500.
 const SKILLS = {
   heal:      { label:'HEAL',    color:'#2ecc71', cd:20,  cost:0,    tier:0 },
-  sprint:    { label:'SPRINT',  color:'#1abc9c', cd:20,  cost:280,  tier:1 },
-  dash:      { label:'DASH',    color:'#f1c40f', cd:3.5, cost:340,  tier:1 },
-  blast:     { label:'BLAST',   color:'#e67e22', cd:20,  cost:400,  tier:1 },
-  grenade:   { label:'GRENADE', color:'#e67e22', cd:6,   cost:360,  tier:1 },
-  blink:     { label:'BLINK',   color:'#f1c40f', cd:5,   cost:680,  tier:2 },
-  invuln:    { label:'INVINC',  color:'#7fe9ff', cd:20,  cost:760,  tier:2 },
-  slowmo:    { label:'SLOWMO',  color:'#3498db', cd:18,  cost:720,  tier:2 },
-  summon:    { label:'KNIGHT',  color:'#f1c40f', cd:25,  cost:820,  tier:2 },
-  wall:      { label:'WALL',    color:'#27ae60', cd:18,  cost:1150, tier:3 },
-  flameburst:{ label:'NAPALM',  color:'#e67e22', cd:20,  cost:1250, tier:3 },
-  barrage:   { label:'BARRAGE', color:'#e67e22', cd:24,  cost:1350, tier:3 },
-  vsummon:   { label:'BLADE+',  color:'#f39c12', cd:25,  cost:1450, tier:3 },
-  nuke:      { label:'NUKE',    color:'#e74c3c', cd:60,  cost:2000, tier:3 }
+  sprint:    { label:'SPRINT',  color:'#1abc9c', cd:20,  cost:600,  tier:1 },
+  dash:      { label:'DASH',    color:'#f1c40f', cd:3.5, cost:720,  tier:1 },
+  blast:     { label:'BLAST',   color:'#e67e22', cd:20,  cost:850,  tier:1 },
+  grenade:   { label:'GRENADE', color:'#e67e22', cd:6,   cost:760,  tier:1 },
+  blink:     { label:'BLINK',   color:'#f1c40f', cd:5,   cost:1500, tier:2 },
+  invuln:    { label:'INVINC',  color:'#7fe9ff', cd:20,  cost:1650, tier:2 },
+  slowmo:    { label:'SLOWMO',  color:'#3498db', cd:18,  cost:1550, tier:2 },
+  summon:    { label:'KNIGHT',  color:'#f1c40f', cd:25,  cost:1750, tier:2 },
+  wall:      { label:'WALL',    color:'#27ae60', cd:18,  cost:2500, tier:3 },
+  flameburst:{ label:'NAPALM',  color:'#e67e22', cd:20,  cost:2750, tier:3 },
+  barrage:   { label:'BARRAGE', color:'#e67e22', cd:24,  cost:3000, tier:3 },
+  vsummon:   { label:'BLADE+',  color:'#f39c12', cd:25,  cost:3200, tier:3 },
+  nuke:      { label:'NUKE',    color:'#e74c3c', cd:60,  cost:4500, tier:3 }
 };
 // Shop ordering (ids except the free default heal), grouped by tier.
 const SKILL_ORDER = ['sprint','dash','blast','grenade','blink','invuln','slowmo','summon','wall','flameburst','barrage','vsummon','nuke'];
