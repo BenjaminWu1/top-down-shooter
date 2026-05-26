@@ -1156,7 +1156,9 @@ function saveCleared(){
 // ANY character credits this single profile, so all characters level up together.
 // ---- TUNABLE leveling / scaling knobs ----
 const XP_BASE = 60;           // XP needed for level 1 -> 2
-const XP_GROWTH = 1.18;       // geometric growth of the per-level XP requirement
+const XP_GROWTH = 1.18;       // geometric growth of the per-level XP requirement (<= L15)
+const XP_HARD_LEVEL = 15;     // past this level the curve gets steeper (harder to level)
+const XP_HARD_GROWTH = 1.42;  // per-level growth used at/above XP_HARD_LEVEL
 const XP_KILL_DIV = 5;        // per-kill XP = ceil(enemy.score / this)
 const XP_LEVEL_CLEAR = 120;   // XP for clearing a level
 const XP_VICTORY = 600;       // extra XP for the final victory
@@ -1227,7 +1229,15 @@ let profile = loadProfile();
 
 // XP curve + grant helpers. Stat scaling is applied at RUN START (createPlayer ->
 // applyLevelScaling), not mid-run, so a level-up never causes a jarring mid-fight jump.
-function xpToNext(level){ return Math.round(XP_BASE * Math.pow(XP_GROWTH, level - 1)); }
+// XP to advance FROM `level` to the next. Up to XP_HARD_LEVEL it grows by XP_GROWTH;
+// at/above XP_HARD_LEVEL the curve is anchored to the L15 requirement and grows by the
+// steeper XP_HARD_GROWTH, so leveling up gets markedly harder past level 15. Continuous
+// and strictly increasing at the seam (the headless XP-curve assertion relies on that).
+function xpToNext(level){
+  if(level < XP_HARD_LEVEL) return Math.round(XP_BASE * Math.pow(XP_GROWTH, level - 1));
+  const base = XP_BASE * Math.pow(XP_GROWTH, XP_HARD_LEVEL - 1);   // requirement at L15
+  return Math.round(base * Math.pow(XP_HARD_GROWTH, level - XP_HARD_LEVEL));
+}
 function grantXp(amount){
   profile.xp += amount;
   while(profile.level < LEVEL_CAP && profile.xp >= xpToNext(profile.level)){
