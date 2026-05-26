@@ -153,10 +153,16 @@ DRIVER = r"""
   });
 
   // Exercise every draw state (menus / select / overlays) for draw-time errors.
-  ['MENU','HOWTO','CHARACTER_SELECT','ASSISTANT_SELECT','SHOP','PLAYING',
+  ['MENU','HOWTO','CHARACTER_SELECT','ASSISTANT_SELECT','SHOP','PARAMETERS','PLAYING',
    'LEVEL_COMPLETE','GAME_OVER','VICTORY'].forEach(function(s){
     if(STATE[s] === undefined){ report.notes.push('no STATE.' + s); return; }
     safe('draw ' + s, function(){ state = STATE[s]; draw(); });
+  });
+
+  // PARAMETERS screen reads per-class scaled stats for each tab — exercise all three.
+  safe('draw PARAMETERS tabs', function(){
+    state = STATE.PARAMETERS;
+    ['soldier','scout','tank'].forEach(function(c){ paramChar = c; draw(); });
   });
 
   // Exercise the CHARACTER STATS window (Tab overlay) for all three classes —

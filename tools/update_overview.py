@@ -39,8 +39,8 @@ DOCX = os.path.normpath(os.path.join(HERE, "..", "Game-Overview.docx"))
 # ---------------------------------------------------------------------------
 REPLACEMENTS = [
     # 1. The big picture - refresh the line count.
-    ("index.html (~4,943 lines)",
-     "The entire game is one file: index.html (~5,669 lines). One <script> block, "
+    ("index.html (~5,669 lines)",
+     "The entire game is one file: index.html (~5,873 lines). One <script> block, "
      "vanilla JS, no build, no dependencies, no external assets. Sprites are inline "
      "ASCII-art arrays; all SFX are synthesized via Web Audio. It deploys by pushing "
      "to main (GitHub Pages serves the raw file)."),
@@ -198,6 +198,14 @@ INSERTS = [
         "freezes the tick like pause (update() skips updatePlaying while showStats); "
         "Tab/Esc/click closes it. HP-regen is shown only for the Scout (0.5%/s) - the "
         "others read '-', because there is no universal HP-per-second regen.",
+
+        "CHARACTER PARAMETERS screen (STATE.PARAMETERS): a PARAMETERS button on the MENU "
+        "(top-right, just below the profile bar's COINS line) opens a menu-side version of "
+        "the same readout, with three class tabs. Since there is no live player on the "
+        "menu, values come from scaledStatsFor(charKey, level) - a pure mirror of "
+        "applyLevelScaling - and each numeric row also shows its GAIN PER ACCOUNT LEVEL as "
+        "a (+x) token (computed by diffing the helper at level vs level+1; '(+0)' for "
+        "stats that don't scale, like move speed / shield / regen / lifesteal).",
     ]),
     ("10. Allies", [
         "Reusable boss abilities (escalate by levelIdx, no-op for clones): bossInvuln "

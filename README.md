@@ -114,6 +114,7 @@ Enemies drop attack enhancers, defenses, and buffs. The drop pool is tuned per c
 - 40 levels across 8 boss tiers, with growing scrolling arenas
 - Equipment, powerups, and class-specific resource pickups
 - Particle effects, hit-flash, invulnerability blinking, pause
+- Character-stats readouts: an in-run **Tab** window (live values) and a **PARAMETERS** button on the menu (base stats + the gain per account level)
 - High score persisted in `localStorage`
 
 ## Development

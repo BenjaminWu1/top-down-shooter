@@ -1112,7 +1112,7 @@ function enemyScale(){ return 1 + levelIdx * 0.08; }
 // ============================================================
 // STATE
 // ============================================================
-const STATE = { MENU:0, HOWTO:1, PLAYING:2, LEVEL_COMPLETE:3, GAME_OVER:4, VICTORY:5, CHARACTER_SELECT:6, ASSISTANT_SELECT:7, SHOP:8 };
+const STATE = { MENU:0, HOWTO:1, PLAYING:2, LEVEL_COMPLETE:3, GAME_OVER:4, VICTORY:5, CHARACTER_SELECT:6, ASSISTANT_SELECT:7, SHOP:8, PARAMETERS:9 };
 let state = STATE.MENU;
 let player = null;
 let allies = [];              // the chosen assistant entities live in here (also in `entities`)
@@ -2220,6 +2220,7 @@ function update(dt){
   if(bossSpawnPulse > 0) bossSpawnPulse -= dt;
   if(state === STATE.MENU || state === STATE.HOWTO) handleMenu();
   else if(state === STATE.SHOP) handleShop();
+  else if(state === STATE.PARAMETERS) handleParameters();
   else if(state === STATE.CHARACTER_SELECT) handleCharacterSelect();
   else if(state === STATE.ASSISTANT_SELECT) handleAssistantSelect();
   else if(state === STATE.LEVEL_COMPLETE) handleLevelComplete();
@@ -3832,6 +3833,12 @@ function handleMenu(){
       state = STATE.SHOP; stateTime = 0; initAudio();
       return;
     }
+    const pb = parametersButtonRect();
+    if(clickedRect(pb.x, pb.y, pb.w, pb.h)){
+      paramChar = selectedChar || 'soldier';
+      state = STATE.PARAMETERS; stateTime = 0;
+      return;
+    }
     for(let i = 0; i < LEVELS.length; i++){
       const b = levelBoxRect(i);
       if(clickedRect(b.x, b.y, b.w, b.h)){
@@ -4045,8 +4052,10 @@ function draw(){
     else if(state === STATE.CHARACTER_SELECT) drawCharacterSelect();
     else if(state === STATE.ASSISTANT_SELECT) drawAssistantSelect();
     else if(state === STATE.SHOP) drawShop();
+    else if(state === STATE.PARAMETERS) drawParameters();
     // Persistent level/XP/gold bar overlays every non-game screen (upper-right).
-    drawProfileBar();
+    // The PARAMETERS screen shows the account level itself, so skip the bar there.
+    if(state !== STATE.PARAMETERS) drawProfileBar();
   }
 
   ctx.restore();
@@ -4856,6 +4865,20 @@ function drawMenu(){
   ctx.textAlign = 'center';
   ctx.fillText('SHOP', shb.x + shb.w / 2, shb.y + 11);
 
+  // PARAMETERS button — top-right, just BELOW the profile bar's COINS line. Opens
+  // the CHARACTER PARAMETERS screen (current base stats + per-level growth).
+  const pb = parametersButtonRect();
+  const pHov = clickedRect(pb.x, pb.y, pb.w, pb.h);
+  ctx.fillStyle = pHov ? '#2980b9' : '#1b4f6b';
+  ctx.fillRect(pb.x, pb.y, pb.w, pb.h);
+  ctx.strokeStyle = '#5dade2';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(pb.x + 0.5, pb.y + 0.5, pb.w - 1, pb.h - 1);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 7px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('PARAMETERS', pb.x + pb.w / 2, pb.y + 10);
+
   ctx.fillStyle = '#5d6d7e';
   ctx.font = 'bold 7px monospace';
   ctx.fillText('CLICK A LEVEL  ·  SHOP TO UPGRADE  ·  WASD MOVE', W/2, 250);
@@ -4886,6 +4909,9 @@ function levelBoxRect(i){
 // PROFILE BAR + SHOP (meta-progression UI)
 // ============================================================
 function shopButtonRect(){ return { x: 8, y: H - 22, w: 56, h: 16 }; }
+// PARAMETERS button: same right edge / width as the profile bar (drawProfileBar uses
+// bw=96, x=W-96-8), sitting just BELOW its COINS line (which ends ~y=31).
+function parametersButtonRect(){ return { x: W - 96 - 8, y: 34, w: 96, h: 14 }; }
 
 // Persistent strip flush in the TOP-RIGHT corner on every non-game screen:
 // LV + the XP bar (DARK fill = current XP, LIGHT = remaining to next level), with
@@ -4923,6 +4949,7 @@ const ASSISTANT_COST = { drone:0, henchman:200, nunchaku:280, bomber:320, poison
 const SHOP_ASSIST_ORDER = ['drone','henchman','nunchaku','bomber','poison'];
 let shopTab = 'skills';      // 'skills' | 'allies'
 let shopMsgUntil = 0;        // stateTime until which the "NOT ENOUGH GOLD" flash shows
+let paramChar = 'soldier';   // which class the PARAMETERS screen is currently showing
 
 function shopTabRect(i){ return { x: W/2 - 86 + i * 88, y: 26, w: 84, h: 14 }; }
 function shopCardRect(i){
@@ -5091,6 +5118,183 @@ function charCardRect(i){
   return { x: xs + i * (cw + gap), y: 56, w: cw, h: ch };
 }
 function backButtonRect(){ return { x: 8, y: 8, w: 50, h: 16 }; }
+
+// ---- CHARACTER PARAMETERS screen (reachable from the MENU button) ----
+// Compute a class's level-scaled base stats for an ARBITRARY account level — a pure
+// mirror of applyLevelScaling()/createPlayer() (base LMB cooldown 0.14, base RMB pools
+// 12/6/20), so the screen can show both the current values AND the per-level gain
+// (by diffing this at level vs level+1) without needing a live player.
+function scaledStatsFor(charKey, level){
+  const ch = CHARACTERS[charKey] || CHARACTERS.soldier;
+  const L = Math.max(0, (level || 1) - 1);
+  const dmgMult = (ch.damageMult || 1) * (1 + Math.min(LVL_DMG_CAP, L * LVL_DMG_PER));
+  const fireBonus = Math.min(LVL_FIRE_CAP, L * LVL_FIRE_PER);
+  const fireRate = 0.14 * (1 - fireBonus);
+  const laserScale = (1 - fireBonus);
+  const maxHp = ch.hp + Math.min(LVL_HP_CAP, Math.floor(L / LVL_HP_PER));
+  const rmbMul = RMB_BASE_FRAC * (1 + Math.min(RMB_DUR_CAP, L * RMB_DUR_PER));
+  const pool = base => base > 0 ? Math.max(1, Math.round(base * rmbMul)) : 0;
+  return {
+    ch, dmgMult, fireRate, laserScale, maxHp,
+    maxFuel:   pool(charKey === 'tank'    ? 12 : 0),
+    maxEnergy: pool(charKey === 'soldier' ?  6 : 0),
+    maxPower:  pool(charKey === 'scout'   ? 20 : 0)
+  };
+}
+function paramTabRect(i){ return { x: W/2 - 126 + i * 86, y: 28, w: 80, h: 14 }; }
+
+function drawParameters(){
+  ctx.fillStyle = '#0c0c18';
+  ctx.fillRect(0, 0, W, H);
+
+  const key = paramChar;
+  const ch = CHARACTERS[key] || CHARACTERS.soldier;
+  const lvl = profile.level || 1;
+  const atCap = lvl >= LEVEL_CAP;
+  const cur = scaledStatsFor(key, lvl);
+  const nxt = scaledStatsFor(key, Math.min(LEVEL_CAP, lvl + 1));  // clamps -> deltas 0 at cap
+  const fmt = n => isFinite(n) ? String(Math.round(n * 100) / 100) : '∞';
+  // Delta token "(+x)" — gain when you add one level (0 where the stat doesn't scale).
+  const dl = d => {
+    const r = Math.round(d * 100) / 100;
+    return r > 0 ? '(+' + fmt(r) + ')' : (r < 0 ? '(' + fmt(r) + ')' : '(+0)');
+  };
+
+  // Per-class basic-attack base values (same constants fireWeapon / the RMB fns use).
+  const lmbBase = key === 'scout' ? 0.85 : key === 'tank' ? 2 : 1;
+  const lmbName = key === 'scout' ? 'LASER DOTS' : key === 'tank' ? 'HEAVY SLUG' : 'PISTOL';
+  const lmbCd   = key === 'scout' ? 0.06 : null;   // scout LMB cadence is FIXED (not fireRate)
+  const lmbRate    = key === 'scout' ? 1 / 0.06 : 1 / cur.fireRate;
+  const lmbRateNxt = key === 'scout' ? 1 / 0.06 : 1 / nxt.fireRate;
+
+  let secName, secBase, secUnit, capLabel, capCur, capNxt, capUnit, regenVal, secExtra;
+  if(key === 'soldier'){
+    secName = 'BLADE SLASH'; secBase = 40; secUnit = ' DPS';
+    capLabel = 'ENERGY'; capCur = cur.maxEnergy; capNxt = nxt.maxEnergy; capUnit = ' s';
+    regenVal = '0.2 /s'; secExtra = ['LIFESTEAL', '2%'];
+  } else if(key === 'scout'){
+    secName = '3× LASER BEAM'; secBase = 3; secUnit = ' /beam';
+    capLabel = 'POWER'; capCur = cur.maxPower; capNxt = nxt.maxPower; capUnit = ' shots';
+    regenVal = '0.6 /s'; secExtra = ['LIFESTEAL', '—'];
+  } else {
+    secName = 'FLAMETHROWER'; secBase = 7; secUnit = ' DPS';
+    capLabel = 'FUEL'; capCur = cur.maxFuel; capNxt = nxt.maxFuel; capUnit = ' s';
+    regenVal = '0.1 /s'; secExtra = ['LIFESTEAL', '—'];
+  }
+  const hpRegen = key === 'scout' ? '0.5%/s' : '—';
+  const shieldStr = (key === 'tank' ? 4 : 0) + ' / ' + (key === 'tank' ? 5 : 3);
+
+  // Column rows: {h:'HEADER'} or [label, value, deltaTokenOrNull].
+  const left = [
+    { h:'DEFENCE' },
+    ['HP', String(cur.maxHp), dl(nxt.maxHp - cur.maxHp)],
+    ['SHIELD', shieldStr, dl(0)],
+    ['HP REGEN', hpRegen, dl(0)],
+    { h:'MOBILITY' },
+    ['MOVE SPEED', fmt(ch.speed), dl(0)],
+    { h:'PRIMARY ATTACK (LMB)' },
+    ['WEAPON', lmbName, null],
+    ['DAMAGE', fmt(lmbBase * cur.dmgMult) + ' /hit', dl(lmbBase * (nxt.dmgMult - cur.dmgMult))],
+    ['FIRE RATE', fmt(Math.round(lmbRate * 10) / 10) + ' /s', dl(lmbRateNxt - lmbRate)]
+  ];
+  const right = [
+    { h:'SECONDARY ATTACK (RMB)' },
+    ['WEAPON', secName, null],
+    ['DAMAGE', fmt(secBase * cur.dmgMult) + secUnit, dl(secBase * (nxt.dmgMult - cur.dmgMult))],
+    [capLabel + ' CAP.', fmt(capCur) + capUnit, dl(capNxt - capCur)],
+    [capLabel + ' REGEN', regenVal, dl(0)],
+    { h:'GENERAL' },
+    ['DAMAGE MULT', '×' + fmt(cur.dmgMult), dl(nxt.dmgMult - cur.dmgMult)],
+    [secExtra[0], secExtra[1], dl(0)]
+  ];
+
+  // Title + account level
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 13px monospace';
+  ctx.fillStyle = ch.color || '#fff';
+  ctx.fillText('CHARACTER PARAMETERS', W/2, 16);
+  ctx.font = 'bold 8px monospace';
+  ctx.fillStyle = atCap ? '#f1c40f' : '#bdc3c7';
+  ctx.fillText('ACCOUNT LV ' + lvl + (atCap ? '  (MAX)' : ''), W/2, 25);
+
+  // Character tabs
+  ['soldier','scout','tank'].forEach((k, i) => {
+    const r = paramTabRect(i);
+    const on = k === key;
+    const hov = clickedRect(r.x, r.y, r.w, r.h);
+    ctx.fillStyle = on ? (CHARACTERS[k].color || '#3498db') : (hov ? '#2a3340' : '#1a222c');
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = CHARACTERS[k].color || '#7f8c8d';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+    ctx.fillStyle = on ? '#0c0c18' : '#cdd6df';
+    ctx.font = 'bold 8px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(CHARACTERS[k].name, r.x + r.w/2, r.y + 10);
+  });
+
+  // Hint: explain the parentheses
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 7px monospace';
+  ctx.fillStyle = '#7fd1a0';
+  ctx.fillText('( + ) = GAIN PER ACCOUNT LEVEL', W/2, 52);
+
+  // Two columns
+  const renderCol = (rows, labelX, valX) => {
+    let y = 68;
+    for(const r of rows){
+      if(r.h){
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 8px monospace';
+        ctx.fillStyle = ch.color || '#4fc3f7';
+        ctx.fillText(r.h, labelX, y);
+        y += 14;
+      } else {
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 8px monospace';
+        ctx.fillStyle = '#8b94a3';
+        ctx.fillText(r[0], labelX + 4, y);
+        ctx.textAlign = 'right';
+        if(r[2]){
+          ctx.fillStyle = r[2] === '(+0)' ? '#5f6b7a' : '#7fd1a0';
+          ctx.fillText(r[2], valX, y);
+          const dw = ctx.measureText(r[2]).width;
+          ctx.fillStyle = '#eef2f7';
+          ctx.fillText(r[1], valX - dw - 4, y);
+        } else {
+          ctx.fillStyle = '#eef2f7';
+          ctx.fillText(r[1], valX, y);
+        }
+        y += 13;
+      }
+    }
+  };
+  renderCol(left,  16,      W/2 - 12);
+  renderCol(right, W/2 + 8, W - 14);
+
+  // Back button
+  const bb = backButtonRect();
+  const hovB = clickedRect(bb.x, bb.y, bb.w, bb.h);
+  ctx.fillStyle = hovB ? '#34495e' : '#1a242f';
+  ctx.fillRect(bb.x, bb.y, bb.w, bb.h);
+  ctx.strokeStyle = '#7f8c8d';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(bb.x + 0.5, bb.y + 0.5, bb.w - 1, bb.h - 1);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 8px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('< BACK', bb.x + bb.w/2, bb.y + 11);
+}
+
+function handleParameters(){
+  if(!mouse.clicked) return;
+  const bb = backButtonRect();
+  if(clickedRect(bb.x, bb.y, bb.w, bb.h)){ state = STATE.MENU; stateTime = 0; return; }
+  ['soldier','scout','tank'].forEach((k, i) => {
+    const r = paramTabRect(i);
+    if(clickedRect(r.x, r.y, r.w, r.h)) paramChar = k;
+  });
+}
 
 function drawCharacterSelect(){
   ctx.fillStyle = '#0c0c18';
