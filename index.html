@@ -2273,12 +2273,18 @@ function updatePlaying(dt){
     fireWeapon(mx, my);
   }
 
-  // Class RMB resources slowly self-regen (capped at max) so none is fully
-  // dependent on pickups: Syed's katana energy regens 0.2/s, Benjamin Wu's
-  // flamethrower fuel regens 0.1/s, Xu Yihui's laser power regens 0.6/s (6x fuel).
-  if(player.maxEnergy > 0) player.energy = Math.min(player.maxEnergy, player.energy + 0.2 * dt);
-  if(player.maxFuel   > 0) player.fuel   = Math.min(player.maxFuel,   player.fuel   + 0.1 * dt);
-  if(player.maxPower  > 0) player.power  = Math.min(player.maxPower,  player.power  + 0.6 * dt);
+  // Class RMB resources slowly self-regen (capped at max) so none is fully dependent
+  // on pickups: Syed's katana energy regens 0.2/s, Benjamin Wu's flamethrower fuel
+  // 0.1/s, Xu Yihui's laser power 0.6/s. BUT only while the secondary is NOT being held
+  // (`!mouse.rdown`): regenerating mid-hold would let a near-empty pool trickle-fire the
+  // flamethrower/blade for free — visible damage after the bar already reads empty.
+  // Pausing regen while RMB is down means a drained pool STAYS empty (zero damage) until
+  // the player releases and lets it recover (pickups + the tank's kill-fuel still apply).
+  if(!mouse.rdown){
+    if(player.maxEnergy > 0) player.energy = Math.min(player.maxEnergy, player.energy + 0.2 * dt);
+    if(player.maxFuel   > 0) player.fuel   = Math.min(player.maxFuel,   player.fuel   + 0.1 * dt);
+    if(player.maxPower  > 0) player.power  = Math.min(player.maxPower,  player.power  + 0.6 * dt);
+  }
 
   // Xu Yihui's innate passive — HP REGEN: the mech slowly self-repairs at 0.5% of
   // maxHp per second (capped at maxHp; never while dead). Scout only.
