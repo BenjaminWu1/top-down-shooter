@@ -128,12 +128,13 @@ REPLACEMENTS = [
      "the state variable."),
 
     # 3. Run setup flow - now a loadout screen + shop, not 'pick exactly 2'.
-    ("ASSISTANT_SELECT (pick exactly 2 of 5)",
+    # (SHOP button moved lower-left -> top-right under PARAMETERS; re-key on the OLD text.)
+    ("opens from a lower-left",
      "Run setup flow: MENU (pick level) -> CHARACTER_SELECT (pick class) -> "
      "ASSISTANT_SELECT (the LOADOUT screen: equip 0-2 OWNED assistants + assign "
-     "owned skills to X/C/B/V) -> PLAYING. SHOP (the ARMORY) opens from a lower-left "
-     "MENU button. The real entry point is startSelectedRun() (uses selectedChar + "
-     "selectedLevel + the persistent profile)."),
+     "owned skills to X/C/B/V) -> PLAYING. SHOP (the ARMORY) opens from a top-right "
+     "MENU button, stacked under the PARAMETERS button. The real entry point is "
+     "startSelectedRun() (uses selectedChar + selectedLevel + the persistent profile)."),
 
     # Shop now buys AND upgrades assistants (10 levels); UI layout move.
     # (find anchors on current docx text and must NOT recur in new, or it re-fires.)

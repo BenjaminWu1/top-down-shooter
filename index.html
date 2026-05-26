@@ -5183,7 +5183,8 @@ function drawMenu(){
   ctx.textAlign = 'center';
   ctx.fillText('? GUIDE', gb.x + gb.w / 2, gb.y + 11);
 
-  // SHOP button (lower-left) — opens the ARMORY (spend Gold on skills + assistants).
+  // SHOP button — stacked directly under PARAMETERS (top-right). Opens the ARMORY
+  // (spend Gold on skills + assistants).
   const shb = shopButtonRect();
   const shHov = clickedRect(shb.x, shb.y, shb.w, shb.h);
   ctx.fillStyle = shHov ? '#b9770e' : '#6e4a06';
@@ -5194,7 +5195,7 @@ function drawMenu(){
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 8px monospace';
   ctx.textAlign = 'center';
-  ctx.fillText('SHOP', shb.x + shb.w / 2, shb.y + 11);
+  ctx.fillText('SHOP', shb.x + shb.w / 2, shb.y + 10);
 
   // PARAMETERS button — top-right, just BELOW the profile bar's COINS line. Opens
   // the CHARACTER PARAMETERS screen (current base stats + per-level growth).
@@ -5239,10 +5240,11 @@ function levelBoxRect(i){
 // ============================================================
 // PROFILE BAR + SHOP (meta-progression UI)
 // ============================================================
-function shopButtonRect(){ return { x: 8, y: H - 22, w: 56, h: 16 }; }
 // PARAMETERS button: same right edge / width as the profile bar (drawProfileBar uses
 // bw=96, x=W-96-8), sitting just BELOW its COINS line (which ends ~y=31).
 function parametersButtonRect(){ return { x: W - 96 - 8, y: 34, w: 96, h: 14 }; }
+// SHOP button: stacked directly UNDER the PARAMETERS button (same x/width), just below it.
+function shopButtonRect(){ return { x: W - 96 - 8, y: 51, w: 96, h: 14 }; }
 
 // Persistent strip flush in the TOP-RIGHT corner on every non-game screen:
 // LV + the XP bar (DARK fill = current XP, LIGHT = remaining to next level), with
