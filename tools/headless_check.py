@@ -102,8 +102,16 @@ DRIVER = r"""
     entities = entities.filter(function(e){ return e.type !== 'enemy' || e.isBoss; });
     // Run ~13s so the mid-boss (50% gate) + end boss spawn AND every ability
     // cooldown (gas 5.5s, exploders 5s, heal 6s, invuln 8s, clone 9s) fires.
+    // L31-40 new flow: the end boss is gated behind the mid-boss DYING + a 15-30s
+    // gap. Since the headless player never shoots, kill the mid-boss once it's up
+    // and zero the gap each frame so the end boss arrives early and its AI still
+    // gets the rest of Phase B to run (preserving the old single-boss coverage).
     for(var g = 0; g < 800; g++){
       player.hp = player.maxHp;
+      if(levelData.midBoss && midbossSpawned && !midbossDefeated){
+        entities.forEach(function(e){ if(e.type === 'enemy' && e.kind === levelData.midBoss) e.dead = true; });
+      }
+      if(levelData.midBoss && midbossDefeated) bossGapTimer = 0;
       safe('updB L' + idx, function(){ update(1/60); });
       safe('drawB L' + idx, function(){ draw(); });
     }
@@ -296,6 +304,42 @@ DRIVER_BALANCE = r"""
     check(g[0] + ' (off below, on at/above)', below === false && above === true,
           'below='+below+' above='+above);
   });
+
+  // 8) L31-40 boss gap: after the mid-boss DIES the end boss must wait a 15-30s
+  //    gap (the two bosses never co-exist), and a trickle of monsters must appear
+  //    during that gap so the arena is never empty. Drives the real spawn flow.
+  (function(){
+    var bad = [];
+    [30, 39].forEach(function(idx){
+      startLevel(idx);
+      state = STATE.PLAYING; paused = false;
+      player.hp = player.maxHp = 99999;
+      spawnedCount = levelData.total;                          // skip the main wave
+      entities = entities.filter(function(e){ return e.type === 'player'; });
+      var guard = 0;
+      while(!midbossSpawned && guard++ < 120) update(1/60);     // release the mid-boss
+      if(!midbossSpawned){ bad.push('L'+(idx+1)+':no-midboss'); return; }
+      // Kill the mid-boss; the next tick should open the gap.
+      entities.forEach(function(e){ if(e.type==='enemy' && e.kind===levelData.midBoss) e.dead = true; });
+      update(1/60);
+      if(!midbossDefeated){ bad.push('L'+(idx+1)+':not-defeated'); return; }
+      if(bossGapTimer < 15 || bossGapTimer > 30){ bad.push('L'+(idx+1)+':gap='+bossGapTimer.toFixed(1)); return; }
+      // 14s in (< the 15s minimum gap): end boss must NOT be up yet; monsters appear.
+      var sawMonster = false;
+      for(var f = 0; f < 14*60; f++){
+        player.hp = player.maxHp;
+        update(1/60);
+        if(entities.some(function(e){ return e.type==='enemy' && !e.isBoss; })) sawMonster = true;
+      }
+      if(bossSpawned){ bad.push('L'+(idx+1)+':boss-too-early'); return; }
+      if(!sawMonster){ bad.push('L'+(idx+1)+':no-gap-monsters'); return; }
+      // Let the rest of the gap (<=30s) elapse: the end boss must then arrive.
+      for(var f2 = 0; f2 < 18*60 && !bossSpawned; f2++){ player.hp = player.maxHp; update(1/60); }
+      if(!bossSpawned) bad.push('L'+(idx+1)+':boss-never');
+    });
+    check('Boss gap: end boss waits 15-30s after mid-boss + monsters fill gap',
+          bad.length === 0, bad.join(' '));
+  })();
 
   return JSON.stringify(R);
 })();

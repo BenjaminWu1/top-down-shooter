@@ -1099,6 +1099,10 @@ let spawnTimer = 0;
 let spawnedCount = 0;
 let bossSpawned = false;
 let midbossSpawned = false;   // L31-40: the mid-level transitional boss has been released
+let midbossRef = null;        // L31-40: reference to the live mid-boss entity (to detect its death)
+let midbossDefeated = false;  // L31-40: mid-boss is dead — start the gap before the end boss
+let bossGapTimer = 0;         // L31-40: 15-30s gap between mid-boss death and end-boss arrival
+let gapSpawnTimer = 0;        // L31-40: cadence for the trickle of monsters during that gap
 let score = 0;
 let highScore = parseInt(localStorage.getItem('shooter_high') || '0', 10);
 let shakeTime = 0;
@@ -1771,6 +1775,7 @@ function spawnBoss(kind){
   bossSpawnPulse = 1;
   sfx.bossSpawn();
   shakeTime = 0.4; shakeAmt = 5;
+  return b;
 }
 
 // ============================================================
@@ -1857,6 +1862,10 @@ function startLevel(idx){
   spawnedCount = 0;
   bossSpawned = false;
   midbossSpawned = false;
+  midbossRef = null;
+  midbossDefeated = false;
+  bossGapTimer = 0;
+  gapSpawnTimer = 0;
   paused = false;
   // World sizing by 10-level block — arena AREA GROWS with the block:
   // L1-10 = 1x (480x270, no camera), L11-20 = 2x, L21-30 = 3x, L31-40 = 4x.
@@ -2064,20 +2073,46 @@ function updatePlaying(dt){
     }
   }
   // L31-40 mid-level transitional boss: a DIFFERENT boss kind released at ~50%
-  // spawn progress, fought amid the wave before the tier's end boss arrives. It
-  // is isBoss (so it does NOT delay the end-boss gate below, which only counts
-  // non-boss regulars) and must die before the level can complete (the win check
-  // already requires zero living enemies of any kind).
+  // spawn progress, fought amid the wave. The end boss is then held back until the
+  // mid-boss DIES plus a 15-30s gap (see the gap block below), so the two bosses
+  // never share the arena. midbossRef lets us detect the mid-boss's death.
   if(levelData.midBoss && !midbossSpawned && spawnedCount >= Math.floor(levelData.total * 0.5)){
     midbossSpawned = true;
-    spawnBoss(levelData.midBoss);
+    midbossRef = spawnBoss(levelData.midBoss);
   }
-  // Spawn boss after all regular enemies have spawned and most are dead
-  if(!bossSpawned && spawnedCount >= levelData.total){
+  // Mid-boss just died → open the 15-30s gap before the end boss arrives.
+  if(levelData.midBoss && midbossSpawned && !midbossDefeated && (!midbossRef || midbossRef.dead)){
+    midbossDefeated = true;
+    bossGapTimer = rand(15, 30);
+  }
+  // During the gap, keep a trickle of monsters spawning so the arena is never empty
+  // while the player waits for the end boss. (The leftover main wave keeps spawning
+  // too if it hasn't finished; these gap monsters are bonus and don't count toward
+  // `total`, so they never block the win check.)
+  if(midbossDefeated && bossGapTimer > 0){
+    bossGapTimer -= dt;
+    gapSpawnTimer -= dt;
     const aliveRegular = entities.filter(e => e.type === 'enemy' && !e.isBoss).length;
-    if(aliveRegular <= Math.max(2, Math.floor(levelData.total * 0.2))){
-      bossSpawned = true;
-      spawnBoss(levelData.boss);
+    if(gapSpawnTimer <= 0 && aliveRegular < 10 && entities.length < 480){
+      spawnEnemyAtEdge(pickWeighted(levelData.mix));
+      gapSpawnTimer = levelData.rate * rand(1.5, 2.5);
+    }
+  }
+  // Spawn the end boss. With a mid-boss: only after it's dead AND the gap elapses, so
+  // it never overlaps the mid-boss. Without one (L1-30): the original gate — after all
+  // regulars have spawned and most are dead.
+  if(!bossSpawned){
+    if(levelData.midBoss){
+      if(midbossDefeated && bossGapTimer <= 0){
+        bossSpawned = true;
+        spawnBoss(levelData.boss);
+      }
+    } else if(spawnedCount >= levelData.total){
+      const aliveRegular = entities.filter(e => e.type === 'enemy' && !e.isBoss).length;
+      if(aliveRegular <= Math.max(2, Math.floor(levelData.total * 0.2))){
+        bossSpawned = true;
+        spawnBoss(levelData.boss);
+      }
     }
   }
 
