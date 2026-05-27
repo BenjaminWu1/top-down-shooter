@@ -1322,7 +1322,7 @@ const SKILL_UP_BASE_MIN = 400;       // upgrade-cost base for free skills (heal 
 // passiveValue() returns 0 unless the passive is equipped, so an unequipped passive
 // contributes nothing at every core-loop call site. ----
 const PASSIVE_MAX_LEVEL = 10;
-const PASSIVE_BUY_BASE = 300;        // gold to BUY a passive (level 0 -> 1)
+const PASSIVE_BUY_BASE = 400;        // gold to BUY a passive (level 0 -> 1) — slightly raised from 300
 const PASSIVE_UP_GROWTH = 1.45;      // each further level costs ~45% more (cheap early, steep late)
 const pctFmt = v => '+' + Math.round(v * 100) + '%';
 const PASSIVES = {
@@ -6359,7 +6359,9 @@ function drawCharacterSelectPassives(){
     if(id){
       const lvl = passiveLevel(id);
       ctx.fillStyle = PASSIVES[id].color;
-      ctx.fillText(PASSIVES[id].label + '  L' + lvl, s.x + s.w/2, s.y + 8);
+      // Manifest the EFFECT value (e.g. "+1.1%"), not the level number; the bar below
+      // still conveys level/progress visually.
+      ctx.fillText(PASSIVES[id].label + '  ' + PASSIVES[id].fmt(passiveValueAt(id, lvl)), s.x + s.w/2, s.y + 8);
       const bx = s.x + 8, bw = s.w - 16, by = s.y + 12, bh = 2;
       ctx.fillStyle = '#2a2a30'; ctx.fillRect(bx, by, bw, bh);
       ctx.fillStyle = PASSIVES[id].color; ctx.fillRect(bx, by, Math.round(bw * lvl / PASSIVE_MAX_LEVEL), bh);
