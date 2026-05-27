@@ -4539,6 +4539,7 @@ function handleMenu(){
         selectedLevel = i;
         state = STATE.CHARACTER_SELECT;
         stateTime = 0;
+        passiveMenuSlot = -1;
         initAudio();
         return;
       }
@@ -5760,19 +5761,14 @@ function drawPassiveShop(){
     ctx.font = 'bold 8px monospace';
     if(maxed){ ctx.fillStyle = '#2ecc71'; ctx.fillText('MAX LV', r.x + r.w/2, r.y + 52); }
     else { ctx.fillStyle = afford ? '#f5d76e' : '#7d6608'; ctx.fillText((owned ? 'UP  G ' : 'BUY G ') + cost, r.x + r.w/2, r.y + 52); }
-    // EQUIP / EQUIPPED toggle (greyed when unowned)
-    const eqHov = clickedRect(eqR.x, eqR.y, eqR.w, eqR.h);
-    ctx.fillStyle = equipped ? '#1e6840' : (owned ? (eqHov ? '#2a3340' : '#1a1f29') : '#161616');
-    ctx.fillRect(eqR.x, eqR.y, eqR.w, eqR.h);
-    ctx.strokeStyle = equipped ? '#2ecc71' : (owned ? '#566573' : '#333');
-    ctx.lineWidth = 1; ctx.strokeRect(eqR.x + 0.5, eqR.y + 0.5, eqR.w - 1, eqR.h - 1);
-    ctx.fillStyle = equipped ? '#2ecc71' : (owned ? '#fff' : '#555');
+    // Equip STATUS (read-only here — equipping is done on the CHARACTER SELECT screen).
     ctx.font = 'bold 7px monospace';
-    ctx.fillText(equipped ? 'EQUIPPED' : 'EQUIP', eqR.x + eqR.w/2, eqR.y + 9);
+    if(equipped){ ctx.fillStyle = '#2ecc71'; ctx.fillText('✓ EQUIPPED', r.x + r.w/2, eqR.y + 9); }
+    else if(owned){ ctx.fillStyle = '#5d6d7e'; ctx.fillText('EQUIP ON CHAR-SEL', r.x + r.w/2, eqR.y + 9); }
   }
   ctx.textAlign = 'center'; ctx.font = 'bold 9px monospace';
   ctx.fillStyle = active >= slots ? '#f5d76e' : '#9fb4c9';
-  ctx.fillText('ACTIVE PASSIVES: ' + active + ' / ' + slots, W/2, 224);
+  ctx.fillText('EQUIPPED: ' + active + ' / ' + slots + '  (equip on character select)', W/2, 224);
 }
 
 function drawShop(){
@@ -5925,7 +5921,7 @@ function drawShop(){
       ? 'BUY WITH GOLD  ·  EQUIP IN THE LOADOUT SCREEN'
       : shopTab === 'allies'
       ? 'BUY / UPGRADE WITH GOLD  ·  HIGHER LEVEL = STRONGER ALLY'
-      : 'UPGRADE WITH GOLD  ·  EQUIP UP TO ' + maxPassiveSlots() + ' AT ONCE', W/2, H - 26);
+      : 'BUY / UPGRADE WITH GOLD  ·  EQUIP ON THE CHARACTER-SELECT SCREEN', W/2, H - 26);
   }
 
   // Back button
@@ -5949,22 +5945,10 @@ function handleShop(){
     const r = shopTabRect(i);
     if(clickedRect(r.x, r.y, r.w, r.h)){ shopTab = SHOP_TABS[i][0]; return; }
   }
-  // PASSIVES tab: equip toggle (checked first) + buy/upgrade.
+  // PASSIVES tab: BUY / UPGRADE only (equipping moved to the CHARACTER SELECT screen).
   if(shopTab === 'passives'){
     for(let i = 0; i < PASSIVE_ORDER.length; i++){
       const id = PASSIVE_ORDER[i];
-      const eqR = shopPassiveEquipRect(i);
-      if(clickedRect(eqR.x, eqR.y, eqR.w, eqR.h)){
-        if(!Array.isArray(profile.equippedPassives)) profile.equippedPassives = [];
-        const idx = profile.equippedPassives.indexOf(id);
-        if(idx >= 0){ profile.equippedPassives.splice(idx, 1); }      // unequip
-        else if(passiveLevel(id) < 1){ return; }                      // can't equip unowned
-        else if(profile.equippedPassives.length >= maxPassiveSlots()){ // at capacity
-          shopMsgText = 'NO FREE SLOTS'; shopMsgUntil = stateTime + 1.2; return;
-        } else { profile.equippedPassives.push(id); }
-        saveProfile(); if(sfx.pickup) sfx.pickup();
-        return;
-      }
       const r = shopPassiveCardRect(i);
       if(!clickedRect(r.x, r.y, r.w, r.h)) continue;
       const lvl = passiveLevel(id);
@@ -6031,10 +6015,40 @@ function handleShop(){
 // ---- CHARACTER SELECT ----
 const CHAR_ORDER = ['soldier', 'scout', 'tank'];
 function charCardRect(i){
-  const cw = 130, ch = 172, gap = 10;
+  const cw = 130, ch = 160, gap = 10;
   const totalW = 3 * cw + 2 * gap;
   const xs = Math.floor((W - totalW) / 2);
-  return { x: xs + i * (cw + gap), y: 56, w: cw, h: ch };
+  return { x: xs + i * (cw + gap), y: 52, w: cw, h: ch };
+}
+// ---- PASSIVE picker (lives on the CHARACTER SELECT screen, below the cards). Each
+// equipped passive occupies a slot; the slot count = maxPassiveSlots() (grows with
+// account level). Clicking a slot opens a dropdown of OWNED passives to choose from
+// (so the player sees + chooses passives every run, before every level). Equipping is
+// ONLY here now — the SHOP just buys/upgrades. ----
+let passiveMenuSlot = -1;   // which passive slot's dropdown is open (-1 = none)
+function passiveSlotRect(i){
+  const n = Math.max(1, maxPassiveSlots()), sw = 86, sh = 18, gap = 6;
+  const totalW = n * sw + (n - 1) * gap, xs = Math.floor((W - totalW) / 2);
+  return { x: xs + i * (sw + gap), y: 226, w: sw, h: sh };
+}
+// Dropdown options for a slot: a leading "— EMPTY —" (null) + every OWNED passive.
+function passiveMenuOptions(){ return [null].concat(PASSIVE_ORDER.filter(k => passiveLevel(k) > 0)); }
+function passiveMenuRects(slot){
+  const opts = passiveMenuOptions(), base = passiveSlotRect(slot), oh = 12;
+  let y0 = base.y - opts.length * oh - 2;          // stack upward over the cards
+  if(y0 < 42) y0 = 42;                             // keep below the title
+  return opts.map((id, k) => ({ x: base.x, y: y0 + k * oh, w: base.w, h: oh, id: id }));
+}
+// Set passive slot `i` to `id` (null = clear). Treats equippedPassives as an ordered,
+// duplicate-free list capped at maxPassiveSlots(); picking an already-equipped passive
+// moves it into this slot.
+function setPassiveSlot(i, id){
+  let eq = (profile.equippedPassives || []).filter(k => PASSIVES[k] && passiveLevel(k) > 0);
+  const old = eq[i];
+  eq = eq.filter(k => k !== old && k !== id);      // drop this slot's old occupant + any dup of id
+  if(id) eq.splice(Math.min(i, eq.length), 0, id);
+  profile.equippedPassives = eq.slice(0, maxPassiveSlots());
+  saveProfile();
 }
 function backButtonRect(){ return { x: 8, y: 8, w: 50, h: 16 }; }
 
@@ -6298,16 +6312,16 @@ function drawCharacterSelect(){
     ctx.fillText('RMB ' + rmbN, r.x + 12, sy); sy += 8;
     ctx.fillStyle = '#5dade2';
     ctx.fillText('SKILLS: LOADOUT', r.x + 12, sy); sy += 8;
-
-    // Passives are now UNIVERSAL + account-wide (bought/equipped in the SHOP), not
-    // class-locked — so the card points the player there instead of naming one.
-    sy += 2;
-    ctx.font = 'bold 7px monospace';
+    // Passives are universal + account-wide — chosen in the shared bar below the cards.
     ctx.fillStyle = '#2ecc71';
-    ctx.fillText('PASSIVES: SHOP / EQUIP', r.x + 12, sy);
+    ctx.fillText('PASSIVES ↓ BELOW', r.x + 12, sy);
 
     ctx.textAlign = 'center';
   }
+
+  // Shared PASSIVE picker bar (below the cards). Slot count = maxPassiveSlots(); each
+  // slot shows its equipped passive + LEVEL (the progress), or "+ EMPTY".
+  drawCharacterSelectPassives();
 
   // Back button
   const bb = backButtonRect();
@@ -6323,21 +6337,91 @@ function drawCharacterSelect(){
 
   ctx.font = 'bold 7px monospace';
   ctx.fillStyle = '#5d6d7e';
-  ctx.fillText('CLICK A CHARACTER — THEN SET YOUR LOADOUT', W/2, H - 14);
+  ctx.fillText('PICK PASSIVES BELOW  ·  CLICK A CHARACTER TO SET YOUR LOADOUT', W/2, H - 8);
+}
+
+// The shared passive-slot bar + its click-to-choose dropdown (drawn on top of the cards).
+function drawCharacterSelectPassives(){
+  const slots = maxPassiveSlots();
+  const eq = (profile.equippedPassives || []).filter(k => PASSIVES[k] && passiveLevel(k) > 0);
+  ctx.textAlign = 'center'; ctx.font = 'bold 8px monospace';
+  ctx.fillStyle = eq.length >= slots ? '#f5d76e' : '#9fb4c9';
+  ctx.fillText('PASSIVES  ' + eq.length + ' / ' + slots + '   (click a slot to choose)', W/2, 218);
+  for(let i = 0; i < slots; i++){
+    const s = passiveSlotRect(i), id = eq[i];
+    const open = i === passiveMenuSlot, hov = clickedRect(s.x, s.y, s.w, s.h) || open;
+    ctx.fillStyle = id ? '#16241c' : (hov ? '#23303f' : '#141822');
+    ctx.fillRect(s.x, s.y, s.w, s.h);
+    ctx.strokeStyle = id ? PASSIVES[id].color : '#566573';
+    ctx.lineWidth = hov ? 2 : 1;
+    ctx.strokeRect(s.x + 0.5, s.y + 0.5, s.w - 1, s.h - 1);
+    ctx.font = 'bold 7px monospace'; ctx.textAlign = 'center';
+    if(id){
+      const lvl = passiveLevel(id);
+      ctx.fillStyle = PASSIVES[id].color;
+      ctx.fillText(PASSIVES[id].label + '  L' + lvl, s.x + s.w/2, s.y + 8);
+      const bx = s.x + 8, bw = s.w - 16, by = s.y + 12, bh = 2;
+      ctx.fillStyle = '#2a2a30'; ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = PASSIVES[id].color; ctx.fillRect(bx, by, Math.round(bw * lvl / PASSIVE_MAX_LEVEL), bh);
+    } else {
+      ctx.fillStyle = '#7f8c8d';
+      ctx.fillText('+ EMPTY', s.x + s.w/2, s.y + 11);
+    }
+  }
+  // Dropdown overlay (on top), if a slot is open.
+  if(passiveMenuSlot >= 0 && passiveMenuSlot < slots){
+    const equippedNow = profile.equippedPassives || [];
+    for(const o of passiveMenuRects(passiveMenuSlot)){
+      const hov = clickedRect(o.x, o.y, o.w, o.h);
+      ctx.fillStyle = hov ? '#2c3a4c' : '#0f1622';
+      ctx.fillRect(o.x, o.y, o.w, o.h);
+      ctx.strokeStyle = '#46586c'; ctx.lineWidth = 1;
+      ctx.strokeRect(o.x + 0.5, o.y + 0.5, o.w - 1, o.h - 1);
+      ctx.textAlign = 'left'; ctx.font = 'bold 7px monospace';
+      if(o.id){
+        const lvl = passiveLevel(o.id);
+        ctx.fillStyle = PASSIVES[o.id].color;
+        ctx.fillText(PASSIVES[o.id].label + ' L' + lvl + (equippedNow.indexOf(o.id) >= 0 ? ' ✓' : ''), o.x + 5, o.y + 9);
+        ctx.textAlign = 'right'; ctx.fillStyle = '#cfd8e3';
+        ctx.fillText(PASSIVES[o.id].fmt(passiveValueAt(o.id, lvl)), o.x + o.w - 5, o.y + 9);
+      } else {
+        ctx.fillStyle = '#9fb4c9';
+        ctx.fillText('— EMPTY —', o.x + 5, o.y + 9);
+      }
+    }
+  }
+  ctx.textAlign = 'center';
 }
 
 function handleCharacterSelect(){
   if(!mouse.clicked) return;
   const bb = backButtonRect();
   if(clickedRect(bb.x, bb.y, bb.w, bb.h)){
-    state = STATE.MENU; stateTime = 0; return;
+    state = STATE.MENU; stateTime = 0; passiveMenuSlot = -1; return;
+  }
+  // PASSIVE picker (handled before card selection so a slot/dropdown click never
+  // proceeds to the loadout screen).
+  if(passiveMenuSlot >= 0){
+    for(const o of passiveMenuRects(passiveMenuSlot)){
+      if(clickedRect(o.x, o.y, o.w, o.h)){
+        setPassiveSlot(passiveMenuSlot, o.id);
+        passiveMenuSlot = -1; if(sfx.pickup) sfx.pickup();
+        return;
+      }
+    }
+    passiveMenuSlot = -1;   // click outside the open dropdown → close, don't proceed
+    return;
+  }
+  for(let i = 0; i < maxPassiveSlots(); i++){
+    const s = passiveSlotRect(i);
+    if(clickedRect(s.x, s.y, s.w, s.h)){ passiveMenuSlot = i; return; }
   }
   for(let i = 0; i < CHAR_ORDER.length; i++){
     const r = charCardRect(i);
     if(clickedRect(r.x, r.y, r.w, r.h)){
       selectedChar = CHAR_ORDER[i];
       // Character chosen → pick assistants next.
-      state = STATE.ASSISTANT_SELECT; stateTime = 0; loadoutMenuSlot = -1;
+      state = STATE.ASSISTANT_SELECT; stateTime = 0; loadoutMenuSlot = -1; passiveMenuSlot = -1;
       return;
     }
   }
@@ -6540,7 +6624,7 @@ function handleAssistantSelect(){
   if(!mouse.clicked) return;
   const bb = backButtonRect();
   if(clickedRect(bb.x, bb.y, bb.w, bb.h)){
-    state = STATE.CHARACTER_SELECT; stateTime = 0; loadoutMenuSlot = -1; return;
+    state = STATE.CHARACTER_SELECT; stateTime = 0; loadoutMenuSlot = -1; passiveMenuSlot = -1; return;
   }
   // Dropdown pick (takes priority — it's drawn on top of everything else).
   if(loadoutMenuSlot >= 1){

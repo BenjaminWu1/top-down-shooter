@@ -193,6 +193,18 @@ DRIVER = r"""
     profile = DEFAULT_PROFILE();
   });
 
+  // CHARACTER SELECT passive picker: draw the slot bar with some equipped + the
+  // click-to-choose dropdown OPEN (every option branch), then closed.
+  safe('draw CHARACTER_SELECT passive picker', function(){
+    profile = DEFAULT_PROFILE(); profile.level = 40;
+    profile.passiveLevels = { lifesteal:3, greed:10, swiftness:6 };
+    profile.equippedPassives = ['lifesteal','greed'];
+    state = STATE.CHARACTER_SELECT;
+    passiveMenuSlot = 0; draw();    // dropdown open on slot 0
+    passiveMenuSlot = -1; draw();   // closed
+    profile = DEFAULT_PROFILE();
+  });
+
   // Exercise the CHARACTER STATS window (Tab overlay) for all three classes —
   // its per-class branches read different RMB-pool / regen / damage fields.
   safe('draw stats window', function(){
@@ -688,8 +700,22 @@ DRIVER_BALANCE = r"""
       if(lp.equippedPassives.length > 1){ ok = false; d.push('slotCapFail'); }   // L1 = 1 slot
       if(lp.equippedPassives.indexOf('vitality') >= 0){ ok = false; d.push('equipUnowned'); }
     }
+    // setPassiveSlot (the CHARACTER-SELECT picker): equips into a slot, dedupes a passive
+    // across slots, clears on null, and never exceeds maxPassiveSlots().
+    profile = DEFAULT_PROFILE(); profile.level = 40;   // 5 slots
+    profile.passiveLevels = { lifesteal:3, greed:5, swiftness:2 }; profile.equippedPassives = [];
+    setPassiveSlot(0, 'lifesteal'); setPassiveSlot(1, 'greed');
+    if(profile.equippedPassives.join(',') !== 'lifesteal,greed'){ ok = false; d.push('equipSlots'); }
+    setPassiveSlot(1, 'lifesteal');   // moving an already-equipped passive must not duplicate it
+    if(profile.equippedPassives.filter(function(k){ return k === 'lifesteal'; }).length !== 1){ ok = false; d.push('dupSlot'); }
+    setPassiveSlot(0, null);          // clear a slot
+    if(profile.equippedPassives.indexOf('lifesteal') < 0 && profile.equippedPassives.length !== 0){ /* ok */ }
+    profile.level = 1;                // 1 slot -> setPassiveSlot caps
+    profile.equippedPassives = [];
+    setPassiveSlot(0, 'lifesteal'); setPassiveSlot(1, 'greed');
+    if(profile.equippedPassives.length > 1){ ok = false; d.push('slotCapSet'); }
     profile = saved;
-    check('Passives: slots/value/cost scale + sanitize caps equipped', ok, d.join(' '));
+    check('Passives: slots/value/cost scale + sanitize + setPassiveSlot caps/dedupes', ok, d.join(' '));
   })();
 
   // 28) Class passives removed + universal ones apply: the old soldierLifesteal symbol is

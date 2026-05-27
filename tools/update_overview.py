@@ -236,12 +236,17 @@ REPLACEMENTS = [
      "3 / 4 / 5 slots at account level 1 / 9 / 17 / 25 / 33. Returning players start with a "
      "CLEAN SLATE (no passives owned). No new keyboard keys (mouse-driven, GAMEPLAY_KEYS "
      "untouched); scavenger only widens the drop GATE so validator C5 stays green."),
-    ("+0.2 fuel per kill: in killEnemy",
-     "SHOP has a third PASSIVES tab (a 4x2 card grid + per-card EQUIP/EQUIPPED toggle + an "
-     "ACTIVE n/max indicator). The Tab STATS window and the menu PARAMETERS screen show the "
-     "live equipped-passive values (and '-' for unequipped). Effects apply at damageEnemy "
-     "(lifesteal), updatePlaying (hpregen), killEnemy (resource/greed/scholar/scavenger), "
-     "playerSpeedMult (swiftness) and applyLevelScaling (vitality)."),
+    # (re-anchored after equipping moved off the shop) The SHOP PASSIVES tab BUYS/UPGRADES
+    # only; EQUIPPING is on the CHARACTER SELECT screen now. find = current docx text.
+    ("per-card EQUIP/EQUIPPED toggle",
+     "The SHOP PASSIVES tab BUYS + UPGRADES passives only. EQUIPPING is done on the "
+     "CHARACTER SELECT screen: a shared slot bar below the cards (one slot per "
+     "maxPassiveSlots, each showing the equipped passive + its level/progress) with a "
+     "click-to-choose dropdown of owned passives. The Tab STATS window and the menu "
+     "PARAMETERS screen show the live equipped-passive values (and '-' for unequipped). "
+     "Effects apply at damageEnemy (lifesteal), updatePlaying (hpregen), killEnemy "
+     "(resource/greed/scholar/scavenger), playerSpeedMult (swiftness), applyLevelScaling "
+     "(vitality)."),
 ]
 
 # INSERTS: bullets added immediately before the paragraph whose text contains the
