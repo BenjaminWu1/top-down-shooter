@@ -2635,8 +2635,12 @@ function damageEnemy(en, dmg, fromPlayer){
 function explode(x, y, radius, dmg, fromPlayer){
   emit(x, y, 22, '#f39c12', 60, 180, 0.6, true);
   emit(x, y, 12, '#fff', 40, 150, 0.4, true);
-  setShake(0.25, 5);
-  hitStop(50);
+  // NO screen shake / hit-stop here: explode() is the shared AoE primitive fired by
+  // bomber-ally bombs, drone missiles, exploder enemies, grenades AND the blast skill —
+  // shaking on every one of those (especially the auto-firing ally bombs/missiles) was
+  // the real screen-shake fatigue. Explosions read via the bloom particles + scorch
+  // decal + sfx instead. The deliberate player ULTIMATES (nuke / barrage / fanfire) still
+  // shake once at cast via their own setShake, and boss death/spawn still shake.
   spawnDecal(x, y, Math.max(10, radius * 0.9), 'scorch');
   sfx.explode();
   // Snapshot the enemy list — killEnemy can push splitter children into entities,
