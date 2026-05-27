@@ -2280,9 +2280,13 @@ function createBullet(x,y,angle,owner,opts={}){
     sprite: opts.sprite ?? (owner==='player' ? SPR.bullet_p : SPR.bullet_e),
     // Optional render/behaviour tag (e.g. 'pellet' for Leo's shotgun line-tracers).
     kind: opts.kind ?? null,
-    // Vector glow colour (energy/plasma look): hot white core fading to this. Enemy
-    // bullets default to red; player projectiles set it per class in fireWeapon.
+    // Render colour. For ENERGY bullets it's the glow tint (hot white core -> this,
+    // additive); for KINETIC bullets it's the metallic body tint (solid, source-over).
     glow: opts.glow ?? (owner==='enemy' ? '#ff6b6b' : '#ffe08a'),
+    // kinetic = a tangible metallic slug (no bloom/glow, source-over); else energy/plasma
+    // (radial-gradient bloom under 'lighter'). tracer = a thin sharp air-distortion trail.
+    kinetic: opts.kinetic ?? false,
+    tracer: opts.tracer ?? false,
     hitSet: opts.pierce ? new Set() : null,
     // `fromAlly` marks an owner:'player' bullet that was actually fired by an ally
     // (drone/bomber), so Syed's lifesteal passive doesn't credit him for it.
@@ -3168,16 +3172,23 @@ function updatePlaying(dt){
         const dr = b.radius + en.radius;
         if(dist2(b, en) < dr*dr){
           damageEnemy(en, b.dmg, !b.fromAlly);
-          if(b.kind === 'pellet'){
-            // Shotgun pellet impact: bright sparks + a couple of expanding gray smoke puffs.
-            emit(b.x, b.y, 5, '#ffd700', 40, 140, 0.3);
+          if(b.kind === 'pellet' || b.kinetic){
+            // KINETIC impact: sharp yellow/orange SPARK shards + a grey SMOKE puff that
+            // rapidly loses opacity — solid, source-over, NOT a glowing plasma burst.
+            for(let s = 0; s < 4; s++){
+              if(particles.length >= 300) break;
+              const a = Math.random() * TAU, sp = 70 + Math.random() * 130;
+              particles.push({ spark:true, x: b.x, y: b.y, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp,
+                w: 2 + Math.random()*1.5, h: 1, life: 0.18, maxLife: 0.18, color: Math.random() < 0.5 ? '#ffd24a' : '#ff8c42' });
+            }
             for(let s = 0; s < 2; s++){
               if(particles.length >= 300) break;
               particles.push({ smoke:true, x: b.x, y: b.y, vx:(Math.random()-0.5)*20, vy:(Math.random()-0.5)*20,
-                r0: 1, r1: 5 + Math.random()*3, color: '#9aa0a6', life: 0.4, maxLife: 0.4 });
+                r0: 1, r1: 4 + Math.random()*3, color: '#9aa0a6', life: 0.35, maxLife: 0.35 });
             }
           } else {
-            emit(b.x, b.y, 4, '#fff', 30, 90, 0.25);
+            // ENERGY impact: a small additive plasma burst in the bullet's glow colour.
+            emit(b.x, b.y, 5, b.glow || '#fff', 30, 110, 0.25, true);
           }
           if(b.explosive){
             explode(b.x, b.y, b.explodeRadius, b.dmg, !b.fromAlly);
@@ -3602,21 +3613,25 @@ function fireWeapon(mx, my){
     opts = { dmg: 0.85 * dmgMult, speed: 360, radius: 2, life: 1.0, sprite: SPR.bullet_dot_blue, glow: '#4fc3f7' };
     cd = 0.06; flashN = 2; flashCol = '#b3e5fc'; flashSpd = 110; flashLife = 0.14;
   } else if(player.char === 'tank'){
-    // Heavy slug: 2× base damage, slightly larger/slower projectile, pistol cadence.
-    opts = { dmg: 2 * dmgMult, radius: 3, speed: 300, life: 1.6, glow: '#ffb24a' };
+    // Heavy slug: 2× base damage. KINETIC — a gunmetal artillery slug, not a glow orb.
+    opts = { dmg: 2 * dmgMult, radius: 3, speed: 300, life: 1.6, kinetic: true, glow: '#b0b6bd' };
     cd = player.fireRate; flashN = 4; flashCol = '#e67e22'; flashSpd = 100; flashLife = 0.22;
   } else if(player.char === 'bounty_hunter'){
     // Shotgun: a 3-pellet spread, short range (low `life`), slow cadence. Heavy burst
     // up close where all pellets land; falls off at range. `spread` is the weapon FORM.
-    opts = { dmg: 1.1 * dmgMult, speed: 340, radius: 2, life: 0.45, spread: [-0.18, 0, 0.18], kind: 'pellet' };
+    // KINETIC (pellet tracers — sharp grey lines, no glow).
+    opts = { dmg: 1.1 * dmgMult, speed: 340, radius: 2, life: 0.45, spread: [-0.18, 0, 0.18], kind: 'pellet', kinetic: true };
     cd = 0.5; flashN = 5; flashCol = '#e67e22'; flashSpd = 120; flashLife = 0.2; fireSfx = sfx.shotgun;
   } else if(player.char === 'cyborg'){
-    // Large-caliber magnum: slow cadence, single heavy high-damage slug, moderate range.
-    opts = { dmg: 3.4 * dmgMult, radius: 3, speed: 300, life: 1.2, glow: '#dfefff' };
+    // Large-caliber magnum: slow cadence, single heavy high-damage slug. KINETIC railgun
+    // — a metallic-white slug with a thin sharp air-distortion tracer, no plasma glow.
+    opts = { dmg: 3.4 * dmgMult, radius: 3, speed: 300, life: 1.2, kinetic: true, tracer: true, glow: '#eaf2ff' };
     cd = 0.34; flashN = 4; flashCol = '#fff'; flashSpd = 120; flashLife = 0.2;
   } else {
-    // Soldier default pistol (createBullet defaults: bullet_p sprite, base speed/life).
-    opts = { dmg: 1 * dmgMult, glow: '#ffe08a' };
+    // Soldier default pistol. KINETIC at base (Tiers 1-2) — a brass bullet. (When a
+    // weapon-tier system exists, flip kinetic->false at Tier 3+ so it evolves into a
+    // plasma bolt with the energy glow; no tier system today, so it stays kinetic.)
+    opts = { dmg: 1 * dmgMult, kinetic: true, glow: '#ffd24a' };
     cd = player.fireRate; flashN = 3; flashCol = '#f1c40f'; flashSpd = 100; flashLife = 0.18;
   }
   if(player.pierceTime > 0) opts.pierce = true;
@@ -5940,23 +5955,51 @@ function drawPoisonAlly(s){
 }
 
 function drawBulletEntity(b){
-  // Leo's shotgun pellets render as fast neon line-tracers with a short grayish-white
-  // trail + a bright head (sub-pixel, additive).
+  // --- Leo's shotgun PELLETS: sharp, SOLID grey/white tracers (kinetic, source-over,
+  // no glow/bloom) — a thin air-distortion line + a small solid head. ---
   if(b.kind === 'pellet'){
     const sp = Math.hypot(b.vx, b.vy) || 1;
     const tlx = b.x - (b.vx / sp) * 7, tly = b.y - (b.vy / sp) * 7;
-    ctx.globalCompositeOperation = 'lighter';
     ctx.lineCap = 'round';
-    ctx.strokeStyle = '#cfd8dc'; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.85;
+    ctx.strokeStyle = '#b8c0c7'; ctx.lineWidth = 1.2; ctx.globalAlpha = 0.6;
     ctx.beginPath(); ctx.moveTo(tlx, tly); ctx.lineTo(b.x, b.y); ctx.stroke();
     ctx.globalAlpha = 1; ctx.fillStyle = '#fdfdff';
     ctx.beginPath(); ctx.arc(b.x, b.y, 1.3, 0, TAU); ctx.fill();
     ctx.lineCap = 'butt';
-    ctx.globalCompositeOperation = 'source-over';
     return;
   }
-  // All other player/enemy projectiles: a vector "plasma" orb — a hot white core
-  // fading out into the bullet's glow colour, drawn additively so overlaps bloom.
+  // --- KINETIC / PHYSICAL bullets (Tank slug, Ong magnum, Soldier pistol): a tangible
+  // metallic slug, NEVER 'lighter'. An elongated capsule oriented along the velocity,
+  // a cross-axis linear gradient for a metal sheen, a bright nose, and (tracer:true) a
+  // thin sharp white air-distortion line — no glowing plasma wake. ---
+  if(b.kinetic){
+    const r = b.radius || 2;
+    if(b.tracer){
+      const sp = Math.hypot(b.vx, b.vy) || 1;
+      const tlx = b.x - (b.vx / sp) * 11, tly = b.y - (b.vy / sp) * 11;
+      ctx.strokeStyle = '#e8eef2'; ctx.lineWidth = 1; ctx.globalAlpha = 0.45; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(tlx, tly); ctx.lineTo(b.x, b.y); ctx.stroke();
+      ctx.globalAlpha = 1; ctx.lineCap = 'butt';
+    }
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.rotate(b.angle);
+    // Metal sheen across the short axis: white highlight -> body tint -> dark underside.
+    const g = ctx.createLinearGradient(0, -r, 0, r);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0.45, b.glow || '#cfd8dc');
+    g.addColorStop(1, '#4a4f57');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 2.0, r * 0.95, 0, 0, TAU); ctx.fill();
+    // Bright nose.
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.ellipse(r * 1.2, 0, r * 0.5, r * 0.5, 0, 0, TAU); ctx.fill();
+    ctx.restore();
+    return;
+  }
+  // --- ENERGY / PLASMA bullets (Scout SMG dots, Ong bio-glob, enemy shots): a vector
+  // orb — a hot white core fading into the glow colour, drawn ADDITIVELY so overlaps
+  // bloom. (Soldier pistol joins this branch at Tier 3+ when a tier system exists.) ---
   const col = b.glow || '#ffe08a';
   const R = (b.radius || 2) * 2.6;
   ctx.save();
@@ -5967,13 +6010,11 @@ function drawBulletEntity(b){
   g.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = g;
   ctx.beginPath(); ctx.arc(b.x, b.y, R, 0, TAU); ctx.fill();
-  // Solid bright core for a crisp center.
   ctx.fillStyle = '#ffffff';
   ctx.beginPath(); ctx.arc(b.x, b.y, Math.max(1, (b.radius || 2) * 0.6), 0, TAU); ctx.fill();
   ctx.restore();
   ctx.globalCompositeOperation = 'source-over';
   if(b.pierce){
-    // Pierce trail: a soft green wake.
     ctx.globalAlpha = 0.4;
     ctx.fillStyle = '#27ae60';
     ctx.beginPath(); ctx.arc(b.x, b.y, 2, 0, TAU); ctx.fill();
