@@ -218,6 +218,30 @@ REPLACEMENTS = [
      "also manifests the DISTANCE UNIT (px = game pixels of the 480x270 world): MOVE "
      "SPEED in px/s, a RANGE row for LMB (projectile reach) and RMB (reach + scope) in "
      "px, and a bottom legend."),
+
+    # The old class-locked passives were REPLACED by a universal equippable system.
+    # Rewrite the stale section heading + its 3 class-passive bullets in place. (find
+    # anchors on the CURRENT docx text and must NOT recur in the new text.)
+    ("Per-class passives",
+     "Universal passives (account-wide, bought/upgraded/equipped in the SHOP)"),
+    ("soldierLifesteal(dmg) heals 2% of damage",
+     "PASSIVES OVERHAUL: the three class-locked passives were REMOVED and replaced by 8 "
+     "UNIVERSAL passives in profile.passiveLevels - lifesteal, hpregen, resource (refills "
+     "the class's active RMB pool on kill), greed (+gold), scholar (+xp), scavenger (+drop "
+     "rate), swiftness (+move speed), vitality (+max HP). passiveValue(key) returns 0 "
+     "unless the passive is EQUIPPED, so each core-loop hook is a no-op until equipped."),
+    ("0.5%/s HP regen: hp += maxHp",
+     "Each passive upgrades 1..10 with gold (cheap early, steep late) and must be EQUIPPED "
+     "into a level-gated slot: maxPassiveSlots() = min(5, floor((level-1)/8)+1) -> 1 / 2 / "
+     "3 / 4 / 5 slots at account level 1 / 9 / 17 / 25 / 33. Returning players start with a "
+     "CLEAN SLATE (no passives owned). No new keyboard keys (mouse-driven, GAMEPLAY_KEYS "
+     "untouched); scavenger only widens the drop GATE so validator C5 stays green."),
+    ("+0.2 fuel per kill: in killEnemy",
+     "SHOP has a third PASSIVES tab (a 4x2 card grid + per-card EQUIP/EQUIPPED toggle + an "
+     "ACTIVE n/max indicator). The Tab STATS window and the menu PARAMETERS screen show the "
+     "live equipped-passive values (and '-' for unequipped). Effects apply at damageEnemy "
+     "(lifesteal), updatePlaying (hpregen), killEnemy (resource/greed/scholar/scavenger), "
+     "playerSpeedMult (swiftness) and applyLevelScaling (vitality)."),
 ]
 
 # INSERTS: bullets added immediately before the paragraph whose text contains the

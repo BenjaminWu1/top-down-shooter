@@ -182,6 +182,17 @@ DRIVER = r"""
     profile = DEFAULT_PROFILE();
   });
 
+  // SHOP PASSIVES tab: render with a mix of owned/unowned/equipped passives so every
+  // card branch (buy / upgrade / maxed / equipped / NOT OWNED) is drawn at least once.
+  safe('draw SHOP passives tab', function(){
+    profile = DEFAULT_PROFILE(); profile.level = 20; profile.gold = 5000;
+    profile.passiveLevels = { lifesteal:3, hpregen:10, greed:1, vitality:5 };
+    profile.equippedPassives = ['lifesteal','greed'];
+    shopTab = 'passives'; state = STATE.SHOP; draw();
+    shopTab = 'skills';
+    profile = DEFAULT_PROFILE();
+  });
+
   // Exercise the CHARACTER STATS window (Tab overlay) for all three classes —
   // its per-class branches read different RMB-pool / regen / damage fields.
   safe('draw stats window', function(){
@@ -634,6 +645,88 @@ DRIVER_BALANCE = r"""
     if(!sawMissile){ ok = false; d.push('drone:noMissile'); }
     profile = savedP;
     check('Assistant evolutions: L10 AIs run clean + drone fires missiles', ok, d.join(' '));
+  })();
+
+  // 27) Universal PASSIVE system: slot formula by account level; passiveValue is 0 when
+  //     NOT equipped and strictly rises L1->L10 when equipped; passiveUpgradeCost rises
+  //     with level; loadProfile sanitize caps equipped to owned AND the level's slots.
+  (function(){
+    var saved = profile, ok = true, d = [];
+    // Slots: thresholds 1 / 9 / 17 / 25 / 33 -> 1..5 (capped 5).
+    [[1,1],[8,1],[9,2],[16,2],[17,3],[25,4],[33,5],[41,5],[50,5]].forEach(function(pair){
+      profile = DEFAULT_PROFILE(); profile.level = pair[0];
+      if(maxPassiveSlots() !== pair[1]){ ok = false; d.push('slots@' + pair[0] + '=' + maxPassiveSlots()); }
+    });
+    // Unequipped -> 0; equipped -> strictly rising L1..L10; cost strictly rising.
+    profile = DEFAULT_PROFILE(); profile.level = 40;
+    if(passiveValue('greed') !== 0){ ok = false; d.push('unowned!=0'); }
+    profile.passiveLevels = { greed:5 };
+    if(passiveValue('greed') !== 0){ ok = false; d.push('owned-unequipped!=0'); }   // owned but not equipped
+    profile.equippedPassives = ['greed'];
+    var prevV = -1, prevC = -1;
+    for(var L = 1; L <= PASSIVE_MAX_LEVEL; L++){
+      profile.passiveLevels.greed = L;
+      var v = passiveValue('greed');
+      if(!(v > prevV)){ ok = false; d.push('val!rise@' + L); }
+      prevV = v;
+      if(L < PASSIVE_MAX_LEVEL){
+        var c = passiveUpgradeCost('greed');
+        if(!(c > prevC)){ ok = false; d.push('cost!rise@' + L); }
+        prevC = c;
+      } else if(passiveUpgradeCost('greed') !== null){ ok = false; d.push('maxCost!null'); }
+    }
+    // Sanitize: equipped is capped to owned AND the level's slot count, owned levels
+    // clamped. Only assert when localStorage actually round-trips the string (a real
+    // browser); the headless Proxy stub returns a non-string, so loadProfile falls back
+    // to DEFAULT_PROFILE and there's nothing to check.
+    var fake = JSON.stringify({ level:1, passiveLevels:{ greed:99, lifesteal:3, bogus:2 }, equippedPassives:['greed','lifesteal','vitality'] });
+    localStorage.setItem('shooter_profile', fake);
+    if(localStorage.getItem('shooter_profile') === fake){
+      var lp = loadProfile();
+      if(lp.passiveLevels.greed !== PASSIVE_MAX_LEVEL){ ok = false; d.push('clampHi'); }
+      if('bogus' in lp.passiveLevels){ ok = false; d.push('bogusKept'); }
+      if(lp.equippedPassives.length > 1){ ok = false; d.push('slotCapFail'); }   // L1 = 1 slot
+      if(lp.equippedPassives.indexOf('vitality') >= 0){ ok = false; d.push('equipUnowned'); }
+    }
+    profile = saved;
+    check('Passives: slots/value/cost scale + sanitize caps equipped', ok, d.join(' '));
+  })();
+
+  // 28) Class passives removed + universal ones apply: the old soldierLifesteal symbol is
+  //     gone; an equipped lifesteal heals via damageEnemy(...,true); a kill with RESOURCE
+  //     equipped refills the active RMB pool; GREED/SCHOLAR scale per-kill gold/xp.
+  (function(){
+    var savedC = selectedChar, savedP = profile, ok = true, d = [];
+    if(typeof soldierLifesteal !== 'undefined'){ ok = false; d.push('soldierLifesteal still defined'); }
+    profile = DEFAULT_PROFILE(); profile.level = 40;
+    selectedChar = 'tank'; startGame(); state = STATE.PLAYING;
+    // (a) lifesteal heals on player-sourced damage when equipped.
+    profile.passiveLevels = { lifesteal:10 }; profile.equippedPassives = ['lifesteal'];
+    player = createPlayer('tank'); player.hp = 1; entities = [player];
+    var en = createEnemy('grunt', player.x + 10, player.y); en.hp = en.maxHp = 99999; entities.push(en);
+    damageEnemy(en, 20, true);
+    if(!(player.hp > 1)){ ok = false; d.push('noLifesteal'); }
+    // (b) RESOURCE refills the active pool (tank fuel) on kill.
+    profile.passiveLevels = { resource:10 }; profile.equippedPassives = ['resource'];
+    player = createPlayer('tank'); player.fuel = 0; entities = [player];
+    var en2 = createEnemy('grunt', player.x, player.y); entities.push(en2);
+    killEnemy(en2);
+    if(!(player.fuel > 0)){ ok = false; d.push('noResource'); }
+    // (c) GREED / SCHOLAR scale per-kill gold/xp vs an unequipped baseline.
+    function killGain(equip){
+      profile = DEFAULT_PROFILE(); profile.level = 40; profile.passiveLevels = { greed:10, scholar:10 };
+      profile.equippedPassives = equip ? ['greed','scholar'] : [];
+      player = createPlayer('tank'); entities = [player];
+      var g0 = profile.gold, x0 = profile.xp;
+      var e = createEnemy('grunt', player.x, player.y); e.score = 100; entities.push(e);
+      killEnemy(e);
+      return { g: profile.gold - g0, x: profile.xp - x0 };
+    }
+    var base = killGain(false), boost = killGain(true);
+    if(!(boost.g > base.g)){ ok = false; d.push('greed!scale'); }
+    if(!(boost.x > base.x)){ ok = false; d.push('scholar!scale'); }
+    selectedChar = savedC; profile = savedP;
+    check('Passives: class passives removed + universal lifesteal/resource/greed/scholar apply', ok, d.join(' '));
   })();
 
   return JSON.stringify(R);

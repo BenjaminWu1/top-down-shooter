@@ -1316,12 +1316,33 @@ const ASSIST_UPGRADE_GROWTH = 1.5;   // each subsequent level costs ~50% more
 const SKILL_MAX_TIER = 5;
 const SKILL_UP_MUL = { 2:1.5, 3:3, 4:6, 5:12 };
 const SKILL_UP_BASE_MIN = 400;       // upgrade-cost base for free skills (heal has cost 0)
+// ---- Universal PASSIVES (replace the old class-locked passives). Each is bought +
+// upgraded 1..10 with gold in the SHOP and must be EQUIPPED into a level-gated slot to
+// take effect. `a`/`b` are the Level-1 / Level-10 values (smooth lerp between them);
+// passiveValue() returns 0 unless the passive is equipped, so an unequipped passive
+// contributes nothing at every core-loop call site. ----
+const PASSIVE_MAX_LEVEL = 10;
+const PASSIVE_BUY_BASE = 300;        // gold to BUY a passive (level 0 -> 1)
+const PASSIVE_UP_GROWTH = 1.45;      // each further level costs ~45% more (cheap early, steep late)
+const pctFmt = v => '+' + Math.round(v * 100) + '%';
+const PASSIVES = {
+  lifesteal: { label:'LIFESTEAL', color:'#e74c3c', a:0.01, b:0.06, fmt:pctFmt },
+  hpregen:   { label:'HP REGEN',  color:'#2ecc71', a:0.10, b:1.00, fmt:v => (Math.round(v*100)/100) + '/s' },
+  resource:  { label:'RESOURCE',  color:'#f1c40f', a:0.15, b:1.00, fmt:v => (Math.round(v*100)/100) + '/kill' },
+  greed:     { label:'GREED',     color:'#f5d76e', a:0.05, b:0.50, fmt:pctFmt },
+  scholar:   { label:'SCHOLAR',   color:'#5dade2', a:0.05, b:0.50, fmt:pctFmt },
+  scavenger: { label:'SCAVENGER', color:'#1abc9c', a:0.02, b:0.20, fmt:pctFmt },
+  swiftness: { label:'SWIFTNESS', color:'#9b59b6', a:0.02, b:0.20, fmt:pctFmt },
+  vitality:  { label:'VITALITY',  color:'#e67e22', a:0.03, b:0.30, fmt:pctFmt }
+};
+const PASSIVE_ORDER = ['lifesteal','hpregen','resource','greed','scholar','scavenger','swiftness','vitality'];
 
 function DEFAULT_PROFILE(){
   return { v:1, level:1, xp:0, gold:0,
            ownedSkills:['heal'], ownedAssistants:['drone'],
            assistantLevels:{ drone:1 },
            skillLevels:{ heal:1 },
+           passiveLevels:{}, equippedPassives:[],
            loadout:{ x:null, c:null, b:null, v:null },
            defaultAssistant:'drone', equippedAssistants:['drone'] };
 }
@@ -1367,6 +1388,17 @@ function loadProfile(){
     out.skillLevels[k] = Math.max(1, Math.min(SKILL_MAX_TIER, Math.floor(sl[k]) || 1));
   }
   if(!out.skillLevels.heal) out.skillLevels.heal = 1;
+  // Universal passives (clean slate for returning players: only keys actually owned in
+  // the save are kept, clamped 1..10; equipped is capped to owned AND the level's slots).
+  const ps = (p.passiveLevels && typeof p.passiveLevels === 'object') ? p.passiveLevels : {};
+  out.passiveLevels = {};
+  for(const k in PASSIVES){
+    const lv = Math.floor(ps[k]);
+    if(lv >= 1) out.passiveLevels[k] = Math.min(PASSIVE_MAX_LEVEL, lv);
+  }
+  const maxS = Math.min(5, Math.floor((out.level - 1) / 8) + 1);
+  out.equippedPassives = (Array.isArray(p.equippedPassives) ? p.equippedPassives : [])
+    .filter(k => PASSIVES[k] && out.passiveLevels[k]).slice(0, maxS);
   return out;
 }
 function saveProfile(){
@@ -1416,6 +1448,43 @@ function assistLevelFrac(lvl){
 function assistUpgradeCost(lvl){
   return Math.round(ASSIST_UPGRADE_BASE * Math.pow(ASSIST_UPGRADE_GROWTH, lvl - 1));
 }
+
+// ---- Universal passive helpers ----
+// Owned level (1..10) or 0 if the passive is not owned yet.
+function passiveLevel(key){
+  const pl = profile.passiveLevels || {};
+  const v = Math.floor(pl[key]);
+  if(!v || v < 1) return 0;
+  return Math.min(PASSIVE_MAX_LEVEL, v);
+}
+function passiveEquipped(key){
+  return passiveLevel(key) > 0 && Array.isArray(profile.equippedPassives) && profile.equippedPassives.indexOf(key) >= 0;
+}
+// The scaled value of an EQUIPPED passive at its current level; 0 when not equipped
+// (so every core-loop call site contributes nothing unless the player equipped it).
+function passiveValue(key){
+  if(!passiveEquipped(key)) return 0;
+  return passiveValueAt(key, passiveLevel(key));
+}
+// The value a passive WOULD have at an explicit level (for shop/stats "current -> next").
+function passiveValueAt(key, level){
+  const p = PASSIVES[key]; if(!p) return 0;
+  const L = Math.max(1, Math.min(PASSIVE_MAX_LEVEL, level || 1));
+  return p.a + (p.b - p.a) * (L - 1) / (PASSIVE_MAX_LEVEL - 1);
+}
+// Gold to BUY (level 0 -> 1) or UPGRADE (lvl -> lvl+1); null when already max level.
+function passiveUpgradeCost(key){
+  const L = passiveLevel(key);
+  if(L >= PASSIVE_MAX_LEVEL) return null;
+  return Math.round(PASSIVE_BUY_BASE * Math.pow(PASSIVE_UP_GROWTH, L));
+}
+// Active passive slots by account level: thresholds 1 / 9 / 17 / 25 / 33 -> 1..5 (cap 5).
+function maxPassiveSlots(){ return Math.min(5, Math.floor((profile.level - 1) / 8) + 1); }
+// Short formatted effect string for a passive at a given level (shop/stats display).
+function passiveBlurb(key, level){
+  const p = PASSIVES[key]; if(!p) return '';
+  return p.fmt(passiveValueAt(key, level));
+}
 // Live, level-scaled basic stats for an assistant, for the SHOP / LOADOUT readouts.
 // Builds a throwaway entity via createAssistant (which applies the CURRENT
 // profile.assistantLevels[key] via applyAssistantLevel), so the numbers shown reflect
@@ -1454,7 +1523,7 @@ function assistantEvoBlurb(key, level){
 // class-unique slot (slowmo / wall); the optional V slot is Tank-only. ----
 const CHARACTERS = {
   soldier: {
-    name:'Dr.Syed', desc:'RAINFOREST WARRIOR · BLADE (RMB) · 2% LIFESTEAL',
+    name:'Dr.Syed', desc:'RAINFOREST WARRIOR · BLADE (RMB) · ENERGY POOL',
     color:'#3498db', hp:10, speed:156, damageMult:1.25, startShield:0,
     skills:{ x:'sprint', c:'flameburst', v:'barrage', f:'heal', b:'invuln' },
     skillLabels:{ x:'SPRINT', c:'NAPALM', v:'BARRAGE', f:'HEAL', b:'INVINC' }
@@ -1731,6 +1800,9 @@ function applyLevelScaling(p){
   p.fireRate *= (1 - fireBonus);
   p.laserScale = (1 - fireBonus);
   p.maxHp += Math.min(LVL_HP_CAP, Math.floor(L / LVL_HP_PER));
+  // VITALITY passive: +% max HP at run start when equipped (0 otherwise).
+  const vt = passiveValue('vitality');
+  if(vt > 0) p.maxHp = Math.round(p.maxHp * (1 + vt));
   p.hp = p.maxHp;
   const rmbMul = RMB_BASE_FRAC * (1 + Math.min(RMB_DUR_CAP, L * RMB_DUR_PER));
   [['maxFuel','fuel'],['maxEnergy','energy'],['maxPower','power']].forEach(([mx, cur]) => {
@@ -2035,6 +2107,9 @@ function playerSpeedMult(){
   if(player.speedTime  > 0) m *= 1.5;
   // sprintMult is set per-cast from the SPRINT skill's current tier (1 + spd).
   if(player.sprintTime > 0) m *= (player.sprintMult || 1.3);
+  // SWIFTNESS passive: permanent +% move speed when equipped (0 otherwise).
+  const sw = passiveValue('swiftness');
+  if(sw > 0) m *= (1 + sw);
   return m;
 }
 
@@ -2259,29 +2334,22 @@ function triggerSkill(name, dx, dy, mag){
   return false;
 }
 
-// Syed's innate passive — LIFESTEAL: he recovers 2% of the damage HE deals to
-// enemies, capped at maxHp. No-op for the other classes and for a dead player
-// (never revives). Call this at every site where SYED's own attack subtracts
-// enemy HP (pistol/powerup bullets, blade, NAPALM, BARRAGE/rocket blasts). Ally
-// damage (drone/bomber bullets) is intentionally excluded — only Syed's own hits
-// heal him — which is why explode()/bullet-collision gate on `fromPlayer`/`fromAlly`.
-const SOLDIER_LIFESTEAL = 0.02;
-function soldierLifesteal(dmg){
-  if(player.char !== 'soldier' || dmg <= 0 || player.hp <= 0) return;
-  player.hp = Math.min(player.maxHp, player.hp + dmg * SOLDIER_LIFESTEAL);
-}
-
 // Single chokepoint for ALL damage dealt to enemies. Returns true if the hit was
 // fully absorbed — the enemy is already dead/killed, OR its boss `invulnT` shield
 // is up (set by bossInvuln) — so the caller may skip follow-up effects. Applies
-// the hit-flash, Syed's lifesteal (only when fromPlayer), and the kill. Routing
-// every hit through here is what makes boss brief-invincibility work everywhere.
+// the hit-flash, the universal LIFESTEAL passive (only when fromPlayer, so ally
+// damage never heals — the `fromPlayer`/`fromAlly` threading still gates it), and
+// the kill. Routing every hit through here makes boss brief-invincibility + the
+// lifesteal passive work at every damage source.
 function damageEnemy(en, dmg, fromPlayer){
   if(!en || en.dead || en._killed) return true;
   if(en.invulnT > 0){ en.hitFlash = 0.05; return true; }   // invuln boss absorbs it
   en.hp -= dmg;
   en.hitFlash = 0.07;
-  if(fromPlayer) soldierLifesteal(dmg);
+  if(fromPlayer && dmg > 0 && player.hp > 0){
+    const ls = passiveValue('lifesteal');
+    if(ls > 0) player.hp = Math.min(player.maxHp, player.hp + dmg * ls);
+  }
   if(en.hp <= 0) killEnemy(en);
   return false;
 }
@@ -2624,10 +2692,11 @@ function updatePlaying(dt){
   if(player.maxFuel   > 0) player.fuel   = Math.min(player.maxFuel,   player.fuel   + 0.1 * dt);
   if(player.maxPower  > 0) player.power  = Math.min(player.maxPower,  player.power  + 0.6 * dt);
 
-  // Xu Yihui's innate passive — HP REGEN: the mech slowly self-repairs at 0.5% of
-  // maxHp per second (capped at maxHp; never while dead). Scout only.
-  if(player.char === 'scout' && player.hp > 0)
-    player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.005 * dt);
+  // Universal HP REGEN passive (only when equipped; 0 otherwise). Capped at maxHp;
+  // never revives a dead player.
+  const hpRegen = passiveValue('hpregen');
+  if(hpRegen > 0 && player.hp > 0)
+    player.hp = Math.min(player.maxHp, player.hp + hpRegen * dt);
 
   // ---- Tank's second normal attack: flamethrower (right mouse) ----
   // Fires only while there's enough fuel to fully cover this frame's dt cost AND the
@@ -2861,8 +2930,9 @@ function updatePlaying(dt){
     lastClearedLevel = levelIdx;
     const finalWin = levelIdx >= LEVELS.length - 1;
     // Bank the run's accrued kill XP/gold + the level-clear award; resolves level-ups + persists.
-    grantXp(XP_LEVEL_CLEAR + (finalWin ? XP_VICTORY : 0));
-    grantGold(GOLD_LEVEL_CLEAR);
+    // SCHOLAR/GREED passives scale the clear award too (the per-kill accrual was already scaled).
+    grantXp(Math.round((XP_LEVEL_CLEAR + (finalWin ? XP_VICTORY : 0)) * (1 + passiveValue('scholar'))));
+    grantGold(Math.round(GOLD_LEVEL_CLEAR * (1 + passiveValue('greed'))));
     if(finalWin){
       state = STATE.VICTORY; stateTime = 0; sfx.victory();
       if(score > highScore){ highScore = score; localStorage.setItem('shooter_high', String(highScore)); }
@@ -3614,17 +3684,21 @@ function killEnemy(en){
   if(en._killed) return;
   en._killed = true;
   en.dead = true;
-  // Benjamin Wu's innate passive — FUEL STEAL: each kill refills 0.2 of his
-  // flamethrower fuel (the RMB resource), capped at maxFuel. Tank only (maxFuel
-  // is 0 for the others, so the Math.min keeps it a no-op for them anyway).
-  if(player.char === 'tank' && player.maxFuel > 0)
-    player.fuel = Math.min(player.maxFuel, player.fuel + 0.2);
+  // Universal RESOURCE-on-kill passive: refill whichever RMB pool the class actually
+  // uses (Tank fuel / Soldier energy / Scout power). Only when equipped (0 otherwise).
+  const rk = passiveValue('resource');
+  if(rk > 0){
+    if(player.maxFuel   > 0) player.fuel   = Math.min(player.maxFuel,   player.fuel   + rk);
+    else if(player.maxEnergy > 0) player.energy = Math.min(player.maxEnergy, player.energy + rk);
+    else if(player.maxPower  > 0) player.power  = Math.min(player.maxPower,  player.power  + rk);
+  }
   const scoreMult = player.scoreTime > 0 ? 2 : 1;
   score += en.score * scoreMult;
   // Meta-progression: accrue XP + gold per kill. NOT saved per-kill (that would be
   // thousands of localStorage writes/run) — banked at the level-transition points.
-  profile.xp   += Math.max(1, Math.ceil(en.score / XP_KILL_DIV));
-  profile.gold += Math.max(0, Math.floor(en.score / GOLD_PER_KILL_DIV));
+  // SCHOLAR (+XP) and GREED (+gold) passives scale these when equipped.
+  profile.xp   += Math.max(1, Math.ceil(en.score / XP_KILL_DIV * (1 + passiveValue('scholar'))));
+  profile.gold += Math.max(0, Math.floor(en.score / GOLD_PER_KILL_DIV * (1 + passiveValue('greed'))));
   emit(en.x, en.y, en.isBoss ? 40 : 14,
        en.isBoss ? '#9b59b6' : '#c0392b', 50, 200, en.isBoss ? 0.9 : 0.6);
   if(en.kind === 'tank'){
@@ -3664,7 +3738,9 @@ function killEnemy(en){
   // ("basic and sparse"), then grows; elites always drop generously. The static pool
   // weights still sum to 1.0 (validator C5) — variety is gated by a runtime filter.
   const dropPhaseBase = en.elite ? 0.55 : (levelIdx <= 14 ? 0.16 : levelIdx <= 23 ? 0.22 : 0.26);
-  const dropGate = Math.min(DROP_GATE_MAX, dropPhaseBase + Math.min(DROP_LVL_CAP, (profile.level - 1) * DROP_LVL_PER));
+  // SCAVENGER passive adds a flat bonus to the drop GATE only (pool weights untouched
+  // -> validator C5 stays green); still clamped by DROP_GATE_MAX.
+  const dropGate = Math.min(DROP_GATE_MAX, dropPhaseBase + Math.min(DROP_LVL_CAP, (profile.level - 1) * DROP_LVL_PER) + passiveValue('scavenger'));
   if(!en.isBoss && Math.random() < dropGate){
     // Drop pool. Weights MUST sum to 1.0 for the pickWeighted loop below to give
     // every entry its intended share — appending past the cumulative-1.0 mark means
@@ -4721,7 +4797,7 @@ function drawStats(){
     secName = 'BLADE SLASH';
     secDmg  = fmt(40 * dm) + ' DPS';
     capLabel = 'ENERGY';  capVal = fmt(p.energy) + ' / ' + fmt(p.maxEnergy) + ' s';
-    regenVal = '0.2 /s';  rmbExtra = '2% LIFESTEAL';
+    regenVal = '0.2 /s';  rmbExtra = '~103° blade arc';
   } else if(p.char === 'scout'){
     secName = '3× LASER BEAM';
     secDmg  = fmt(3 * dm) + ' /beam';
@@ -4734,11 +4810,12 @@ function drawStats(){
     regenVal = '0.1 /s';  rmbExtra = '~60° cone · ×1.9 near→×0.4 far';
   }
 
-  // HP regen is a SCOUT-ONLY passive (0.5%/maxHp/s); the others have none.
-  const hpRegen = p.char === 'scout'
-    ? '0.5%/s (' + fmt(p.maxHp * 0.005) + '/s)'
-    : '—';
-  const lifesteal = p.char === 'soldier' ? '2%' : '—';
+  // HP regen + lifesteal are now UNIVERSAL equippable passives (live profile values;
+  // '—' when not equipped).
+  const hpRegenV = passiveValue('hpregen');
+  const hpRegen = hpRegenV > 0 ? fmt(Math.round(hpRegenV * 100) / 100) + '/s' : '—';
+  const lifestealV = passiveValue('lifesteal');
+  const lifesteal = lifestealV > 0 ? Math.round(lifestealV * 100) + '%' : '—';
   const baseSpd = p.speed;
   const effSpd  = p.speed * playerSpeedMult();
   const spdVal  = (Math.abs(effSpd - baseSpd) > 0.5)
@@ -4774,7 +4851,7 @@ function drawStats(){
   // --- Panel ---
   ctx.fillStyle = 'rgba(6,8,16,0.86)';
   ctx.fillRect(0, 0, W, H);
-  const px = 22, py = 20, pw = W - 44, ph = 184;
+  const px = 22, py = 20, pw = W - 44, ph = 210;
   ctx.fillStyle = 'rgba(14,18,30,0.96)';
   ctx.fillRect(px, py, pw, ph);
   ctx.strokeStyle = ch.color || '#4fc3f7';
@@ -4820,11 +4897,25 @@ function drawStats(){
   renderCol(left,  px + 8,  px + pw / 2 - 8);
   renderCol(right, px + pw / 2 + 6, px + pw - 8);
 
+  // EQUIPPED PASSIVES (full-width): the live values of every equipped passive, or a
+  // "none" note. (Lifesteal/HP-regen also appear in the columns above; this is the
+  // full account-wide readout.) Unequipped passives simply don't appear.
+  ctx.strokeStyle = '#33384a'; ctx.beginPath();
+  ctx.moveTo(px + 6, py + ph - 38.5); ctx.lineTo(px + pw - 6, py + ph - 38.5); ctx.stroke();
+  ctx.textAlign = 'left'; ctx.font = 'bold 8px monospace'; ctx.fillStyle = ch.color || '#4fc3f7';
+  ctx.fillText('EQUIPPED PASSIVES (' + (profile.equippedPassives || []).length + '/' + maxPassiveSlots() + ')', px + 8, py + ph - 26);
+  const eqp = (profile.equippedPassives || []).filter(k => PASSIVES[k]);
+  ctx.font = 'bold 7px monospace'; ctx.fillStyle = '#dfe7f0';
+  const passLine = eqp.length
+    ? eqp.map(k => PASSIVES[k].label + ' ' + PASSIVES[k].fmt(passiveValue(k))).join('   ·   ')
+    : '— none equipped (buy + equip in the SHOP) —';
+  ctx.fillText(passLine, px + 8, py + ph - 15);
+
   // Footer hint
   ctx.textAlign = 'center';
   ctx.font = 'bold 7px monospace';
   ctx.fillStyle = '#5f6b7a';
-  ctx.fillText('TAB / ESC / CLICK TO CLOSE', W / 2, py + ph - 6);
+  ctx.fillText('TAB / ESC / CLICK TO CLOSE', W / 2, py + ph - 5);
   ctx.textAlign = 'left';
 }
 
@@ -5578,12 +5669,18 @@ function drawProfileBar(){
 const ASSISTANT_COST = { drone:0, henchman:200, nunchaku:280, bomber:320, poison:300 };
 // Drone is owned by default but listed so it (like the rest) can be UPGRADED here.
 const SHOP_ASSIST_ORDER = ['drone','henchman','nunchaku','bomber','poison'];
-let shopTab = 'skills';      // 'skills' | 'allies'
-let shopMsgUntil = 0;        // stateTime until which the "NOT ENOUGH GOLD" flash shows
+let shopTab = 'skills';      // 'skills' | 'allies' | 'passives'
+let shopMsgUntil = 0;        // stateTime until which the flash shows
+let shopMsgText = 'NOT ENOUGH GOLD';  // the flash message (gold / slots)
 let shopHoverSkill = null;   // skill id under the cursor (skills tab) -> bottom detail panel
+let shopHoverPassive = null; // passive id under the cursor (passives tab) -> bottom detail panel
 let paramChar = 'soldier';   // which class the PARAMETERS screen is currently showing
 
-function shopTabRect(i){ return { x: W/2 - 86 + i * 88, y: 26, w: 84, h: 14 }; }
+const SHOP_TABS = [['skills','SKILLS'], ['allies','ASSISTANTS'], ['passives','PASSIVES']];
+function shopTabRect(i){
+  const w = 78, gap = 6, n = SHOP_TABS.length, total = n * w + (n - 1) * gap, xs = Math.floor((W - total) / 2);
+  return { x: xs + i * (w + gap), y: 26, w, h: 14 };
+}
 function shopCardRect(i){
   const cw = 86, ch = 46, gap = 6, cols = 5;
   const totalW = cols * cw + (cols - 1) * gap;
@@ -5600,8 +5697,83 @@ function shopAssistCardRect(i){
   const col = i % cols, row = Math.floor(i / cols);
   return { x: xs + col * (cw + gap), y: 50 + row * (ch + 6), w: cw, h: ch };
 }
-// The card rect for shop item `i` depends on the active tab (skills small, allies tall).
-function shopItemRect(i){ return shopTab === 'allies' ? shopAssistCardRect(i) : shopCardRect(i); }
+// Passives tab: 4 cols x 2 rows of medium cards, each with a bottom EQUIP toggle strip.
+function shopPassiveCardRect(i){
+  const cw = 108, ch = 78, gap = 6, cols = 4;
+  const totalW = cols * cw + (cols - 1) * gap;
+  const xs = Math.floor((W - totalW) / 2);
+  const col = i % cols, row = Math.floor(i / cols);
+  return { x: xs + col * (cw + gap), y: 50 + row * (ch + 6), w: cw, h: ch };
+}
+// The EQUIP/EQUIPPED toggle button = the bottom strip of a passive card (checked first
+// in handleShop, so a click there toggles equip instead of buying/upgrading).
+function shopPassiveEquipRect(i){ const r = shopPassiveCardRect(i); return { x: r.x + 8, y: r.y + r.h - 15, w: r.w - 16, h: 12 }; }
+// The card rect for shop item `i` depends on the active tab.
+function shopItemRect(i){
+  return shopTab === 'allies' ? shopAssistCardRect(i)
+       : shopTab === 'passives' ? shopPassiveCardRect(i)
+       : shopCardRect(i);
+}
+
+// PASSIVES tab body: 4x2 grid of cards (name / level + bar / current->next effect /
+// buy-or-upgrade price / EQUIP toggle), plus the "ACTIVE n/max" slot indicator.
+function drawPassiveShop(){
+  shopHoverPassive = null;
+  const slots = maxPassiveSlots();
+  const active = (profile.equippedPassives || []).length;
+  for(let i = 0; i < PASSIVE_ORDER.length; i++){
+    const id = PASSIVE_ORDER[i], p = PASSIVES[id];
+    const r = shopPassiveCardRect(i), eqR = shopPassiveEquipRect(i);
+    const lvl = passiveLevel(id);              // 0 = unowned
+    const owned = lvl > 0, maxed = lvl >= PASSIVE_MAX_LEVEL, equipped = passiveEquipped(id);
+    const cost = owned ? (maxed ? 0 : passiveUpgradeCost(id)) : PASSIVE_BUY_BASE;
+    const afford = profile.gold >= cost;
+    const hov = clickedRect(r.x, r.y, r.w, r.h);
+    if(hov) shopHoverPassive = id;
+    const col = p.color;
+    ctx.fillStyle = equipped ? '#16241c' : (hov && !maxed && afford ? '#23303f' : '#141822');
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = equipped ? '#2ecc71' : col;
+    ctx.lineWidth = hov ? 2 : 1;
+    ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = col; ctx.font = 'bold 9px monospace';
+    ctx.fillText(p.label, r.x + r.w/2, r.y + 12);
+    ctx.font = 'bold 7px monospace';
+    if(owned){
+      ctx.fillStyle = '#f1c40f';
+      ctx.fillText('LV ' + lvl + ' / ' + PASSIVE_MAX_LEVEL, r.x + r.w/2, r.y + 23);
+      const bx = r.x + 12, bw2 = r.w - 24, byy = r.y + 27, bhh = 3;
+      ctx.fillStyle = '#2a2a30'; ctx.fillRect(bx, byy, bw2, bhh);
+      ctx.fillStyle = col; ctx.fillRect(bx, byy, Math.round(bw2 * lvl / PASSIVE_MAX_LEVEL), bhh);
+    } else {
+      ctx.fillStyle = '#7f8c8d'; ctx.fillText('— NOT OWNED —', r.x + r.w/2, r.y + 23);
+    }
+    // current -> next effect line
+    ctx.font = 'bold 7px monospace'; ctx.fillStyle = '#cfd8e3';
+    let effLine;
+    if(!owned)      effLine = 'L1: ' + passiveBlurb(id, 1);
+    else if(maxed)  effLine = 'MAX: ' + passiveBlurb(id, lvl);
+    else            effLine = passiveBlurb(id, lvl) + ' -> ' + passiveBlurb(id, lvl + 1);
+    ctx.fillText(effLine, r.x + r.w/2, r.y + 40);
+    // price line
+    ctx.font = 'bold 8px monospace';
+    if(maxed){ ctx.fillStyle = '#2ecc71'; ctx.fillText('MAX LV', r.x + r.w/2, r.y + 52); }
+    else { ctx.fillStyle = afford ? '#f5d76e' : '#7d6608'; ctx.fillText((owned ? 'UP  G ' : 'BUY G ') + cost, r.x + r.w/2, r.y + 52); }
+    // EQUIP / EQUIPPED toggle (greyed when unowned)
+    const eqHov = clickedRect(eqR.x, eqR.y, eqR.w, eqR.h);
+    ctx.fillStyle = equipped ? '#1e6840' : (owned ? (eqHov ? '#2a3340' : '#1a1f29') : '#161616');
+    ctx.fillRect(eqR.x, eqR.y, eqR.w, eqR.h);
+    ctx.strokeStyle = equipped ? '#2ecc71' : (owned ? '#566573' : '#333');
+    ctx.lineWidth = 1; ctx.strokeRect(eqR.x + 0.5, eqR.y + 0.5, eqR.w - 1, eqR.h - 1);
+    ctx.fillStyle = equipped ? '#2ecc71' : (owned ? '#fff' : '#555');
+    ctx.font = 'bold 7px monospace';
+    ctx.fillText(equipped ? 'EQUIPPED' : 'EQUIP', eqR.x + eqR.w/2, eqR.y + 9);
+  }
+  ctx.textAlign = 'center'; ctx.font = 'bold 9px monospace';
+  ctx.fillStyle = active >= slots ? '#f5d76e' : '#9fb4c9';
+  ctx.fillText('ACTIVE PASSIVES: ' + active + ' / ' + slots, W/2, 224);
+}
 
 function drawShop(){
   ctx.textAlign = 'center';
@@ -5609,10 +5781,10 @@ function drawShop(){
   ctx.fillStyle = '#f1c40f';
   ctx.fillText('ARMORY', W/2, 20);
 
-  // Tabs
-  for(let i = 0; i < 2; i++){
+  // Tabs (SKILLS / ASSISTANTS / PASSIVES)
+  for(let i = 0; i < SHOP_TABS.length; i++){
     const r = shopTabRect(i);
-    const tab = i === 0 ? 'skills' : 'allies';
+    const [tab, label] = SHOP_TABS[i];
     const on = shopTab === tab, hov = clickedRect(r.x, r.y, r.w, r.h);
     ctx.fillStyle = on ? '#1e6840' : (hov ? '#2a3340' : '#1a1f29');
     ctx.fillRect(r.x, r.y, r.w, r.h);
@@ -5621,8 +5793,11 @@ function drawShop(){
     ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 8px monospace';
-    ctx.fillText(i === 0 ? 'SKILLS' : 'ASSISTANTS', r.x + r.w/2, r.y + 10);
+    ctx.fillText(label, r.x + r.w/2, r.y + 10);
   }
+
+  if(shopTab === 'passives'){ drawPassiveShop(); }
+  else {
 
   const items = shopTab === 'skills' ? SKILL_ORDER : SHOP_ASSIST_ORDER;
   shopHoverSkill = null;
@@ -5736,17 +5911,21 @@ function drawShop(){
     }
   }
 
-  // Insufficient-gold flash
+  }  // end non-passives tab
+
+  // Insufficient-gold / no-slot flash
   if(stateTime < shopMsgUntil){
     ctx.fillStyle = '#e74c3c';
     ctx.font = 'bold 9px monospace';
-    ctx.fillText('NOT ENOUGH GOLD', W/2, H - 26);
+    ctx.fillText(shopMsgText, W/2, H - 26);
   } else {
     ctx.fillStyle = '#5d6d7e';
     ctx.font = 'bold 7px monospace';
     ctx.fillText(shopTab === 'skills'
       ? 'BUY WITH GOLD  ·  EQUIP IN THE LOADOUT SCREEN'
-      : 'BUY / UPGRADE WITH GOLD  ·  HIGHER LEVEL = STRONGER ALLY', W/2, H - 26);
+      : shopTab === 'allies'
+      ? 'BUY / UPGRADE WITH GOLD  ·  HIGHER LEVEL = STRONGER ALLY'
+      : 'UPGRADE WITH GOLD  ·  EQUIP UP TO ' + maxPassiveSlots() + ' AT ONCE', W/2, H - 26);
   }
 
   // Back button
@@ -5766,9 +5945,38 @@ function handleShop(){
   if(!mouse.clicked) return;
   const bb = backButtonRect();
   if(clickedRect(bb.x, bb.y, bb.w, bb.h)){ state = STATE.MENU; stateTime = 0; return; }
-  for(let i = 0; i < 2; i++){
+  for(let i = 0; i < SHOP_TABS.length; i++){
     const r = shopTabRect(i);
-    if(clickedRect(r.x, r.y, r.w, r.h)){ shopTab = i === 0 ? 'skills' : 'allies'; return; }
+    if(clickedRect(r.x, r.y, r.w, r.h)){ shopTab = SHOP_TABS[i][0]; return; }
+  }
+  // PASSIVES tab: equip toggle (checked first) + buy/upgrade.
+  if(shopTab === 'passives'){
+    for(let i = 0; i < PASSIVE_ORDER.length; i++){
+      const id = PASSIVE_ORDER[i];
+      const eqR = shopPassiveEquipRect(i);
+      if(clickedRect(eqR.x, eqR.y, eqR.w, eqR.h)){
+        if(!Array.isArray(profile.equippedPassives)) profile.equippedPassives = [];
+        const idx = profile.equippedPassives.indexOf(id);
+        if(idx >= 0){ profile.equippedPassives.splice(idx, 1); }      // unequip
+        else if(passiveLevel(id) < 1){ return; }                      // can't equip unowned
+        else if(profile.equippedPassives.length >= maxPassiveSlots()){ // at capacity
+          shopMsgText = 'NO FREE SLOTS'; shopMsgUntil = stateTime + 1.2; return;
+        } else { profile.equippedPassives.push(id); }
+        saveProfile(); if(sfx.pickup) sfx.pickup();
+        return;
+      }
+      const r = shopPassiveCardRect(i);
+      if(!clickedRect(r.x, r.y, r.w, r.h)) continue;
+      const lvl = passiveLevel(id);
+      if(lvl >= PASSIVE_MAX_LEVEL) return;                            // maxed
+      const cost = passiveUpgradeCost(id) || 0;                       // buy (L0) or upgrade
+      if(profile.gold < cost){ shopMsgText = 'NOT ENOUGH GOLD'; shopMsgUntil = stateTime + 1.2; return; }
+      profile.gold -= cost;
+      profile.passiveLevels[id] = lvl + 1;                            // 0->1 buys, else +1
+      saveProfile(); if(sfx.pickup) sfx.pickup();
+      return;
+    }
+    return;
   }
   const items = shopTab === 'skills' ? SKILL_ORDER : SHOP_ASSIST_ORDER;
   for(let i = 0; i < items.length; i++){
@@ -5779,7 +5987,7 @@ function handleShop(){
       // BUY (tier 1) if unowned, else UPGRADE one tier (cost rises non-linearly).
       if(!profile.ownedSkills.includes(id)){
         const cost = SKILLS[id].cost;
-        if(profile.gold < cost){ shopMsgUntil = stateTime + 1.2; return; }
+        if(profile.gold < cost){ shopMsgText = 'NOT ENOUGH GOLD'; shopMsgUntil = stateTime + 1.2; return; }
         profile.gold -= cost;
         profile.ownedSkills.push(id);
         profile.skillLevels[id] = 1;
@@ -5790,7 +5998,7 @@ function handleShop(){
       const tier = skillTier(id);
       if(tier >= SKILL_MAX_TIER) return;            // already max tier
       const cost = skillUpgradeCost(id) || 0;
-      if(profile.gold < cost){ shopMsgUntil = stateTime + 1.2; return; }
+      if(profile.gold < cost){ shopMsgText = 'NOT ENOUGH GOLD'; shopMsgUntil = stateTime + 1.2; return; }
       profile.gold -= cost;
       profile.skillLevels[id] = tier + 1;
       saveProfile();
@@ -5800,7 +6008,7 @@ function handleShop(){
     // Assistants: BUY (unlock at level 1) if unowned, else UPGRADE one level.
     if(!profile.ownedAssistants.includes(id)){
       const cost = ASSISTANT_COST[id] || 0;
-      if(profile.gold < cost){ shopMsgUntil = stateTime + 1.2; return; }
+      if(profile.gold < cost){ shopMsgText = 'NOT ENOUGH GOLD'; shopMsgUntil = stateTime + 1.2; return; }
       profile.gold -= cost;
       profile.ownedAssistants.push(id);
       profile.assistantLevels[id] = 1;
@@ -5811,7 +6019,7 @@ function handleShop(){
     const lvl = assistantLevel(id);
     if(lvl >= ASSIST_MAX_LEVEL) return;          // already maxed
     const cost = assistUpgradeCost(lvl);
-    if(profile.gold < cost){ shopMsgUntil = stateTime + 1.2; return; }
+    if(profile.gold < cost){ shopMsgText = 'NOT ENOUGH GOLD'; shopMsgUntil = stateTime + 1.2; return; }
     profile.gold -= cost;
     profile.assistantLevels[id] = lvl + 1;
     saveProfile();
@@ -5885,21 +6093,24 @@ function drawParameters(){
                  : key === 'scout'   ? '147 px · 3 beams'
                  :                      '140 px · ~60° cone';
 
-  let secName, secBase, secUnit, capLabel, capCur, capNxt, capUnit, regenVal, secExtra;
+  let secName, secBase, secUnit, capLabel, capCur, capNxt, capUnit, regenVal;
   if(key === 'soldier'){
     secName = 'BLADE SLASH'; secBase = 40; secUnit = ' DPS';
     capLabel = 'ENERGY'; capCur = cur.maxEnergy; capNxt = nxt.maxEnergy; capUnit = ' s';
-    regenVal = '0.2 /s'; secExtra = ['LIFESTEAL', '2%'];
+    regenVal = '0.2 /s';
   } else if(key === 'scout'){
     secName = '3× LASER BEAM'; secBase = 3; secUnit = ' /beam';
     capLabel = 'POWER'; capCur = cur.maxPower; capNxt = nxt.maxPower; capUnit = ' shots';
-    regenVal = '0.6 /s'; secExtra = ['LIFESTEAL', '—'];
+    regenVal = '0.6 /s';
   } else {
     secName = 'FLAMETHROWER'; secBase = 7; secUnit = ' DPS';
     capLabel = 'FUEL'; capCur = cur.maxFuel; capNxt = nxt.maxFuel; capUnit = ' s';
-    regenVal = '0.1 /s'; secExtra = ['LIFESTEAL', '—'];
+    regenVal = '0.1 /s';
   }
-  const hpRegen = key === 'scout' ? '0.5%/s' : '—';
+  // HP-regen + lifesteal are now UNIVERSAL equippable passives (account-wide; live
+  // profile values, '—' when not equipped) — no longer class-specific.
+  const hpRegen = passiveEquipped('hpregen') ? PASSIVES.hpregen.fmt(passiveValue('hpregen')) : '—';
+  const secExtra = ['LIFESTEAL', passiveEquipped('lifesteal') ? Math.round(passiveValue('lifesteal') * 100) + '%' : '—'];
   const shieldStr = (key === 'tank' ? 4 : 0) + ' / ' + (key === 'tank' ? 5 : 3);
 
   // Column rows: {h:'HEADER'} or [label, value, deltaTokenOrNull].
@@ -5992,14 +6203,20 @@ function drawParameters(){
   renderCol(left,  16,      W/2 - 12);
   renderCol(right, W/2 + 8, W - 14);
 
-  // Distance-unit legend: the game measures everything in px (logical game pixels of
-  // the fixed 480x270 world). MOVE SPEED is px/s; RANGE is how far each attack reaches.
+  // Distance-unit legend (condensed to one line to make room for the passive readout).
   ctx.textAlign = 'center';
   ctx.font = 'bold 7px monospace';
   ctx.fillStyle = '#7f8c99';
-  ctx.fillText('DISTANCE UNIT = px  (game pixels; the 480x270 world)', W/2, 234);
-  ctx.fillStyle = '#7fb0d1';
-  ctx.fillText('MOVE SPEED in px/s  ·  RANGE = how far the attack reaches', W/2, 244);
+  ctx.fillText('px = game pixels (480x270 world)  ·  MOVE SPEED px/s  ·  RANGE = reach', W/2, 224);
+
+  // EQUIPPED PASSIVES (account-wide): all 8 with their live value, or '—' when not
+  // equipped. Two rows of four. (HP-regen + lifesteal also appear in the columns.)
+  ctx.fillStyle = '#7fd1a0'; ctx.font = 'bold 8px monospace';
+  ctx.fillText('EQUIPPED PASSIVES  ' + (profile.equippedPassives || []).length + ' / ' + maxPassiveSlots(), W/2, 238);
+  ctx.font = 'bold 7px monospace'; ctx.fillStyle = '#9fb4c9';
+  const cell = k => PASSIVES[k].label + ' ' + (passiveEquipped(k) ? PASSIVES[k].fmt(passiveValue(k)) : '—');
+  ctx.fillText(PASSIVE_ORDER.slice(0, 4).map(cell).join('   ·   '), W/2, 249);
+  ctx.fillText(PASSIVE_ORDER.slice(4).map(cell).join('   ·   '), W/2, 259);
 
   // Back button
   const bb = backButtonRect();
@@ -6082,14 +6299,12 @@ function drawCharacterSelect(){
     ctx.fillStyle = '#5dade2';
     ctx.fillText('SKILLS: LOADOUT', r.x + 12, sy); sy += 8;
 
-    // Innate passive — each class has one. Sits below the 5 skill rows; 7px so the
-    // longer strings fit the card width even on the tank (its 5 stat rows push lowest).
+    // Passives are now UNIVERSAL + account-wide (bought/equipped in the SHOP), not
+    // class-locked — so the card points the player there instead of naming one.
     sy += 2;
     ctx.font = 'bold 7px monospace';
     ctx.fillStyle = '#2ecc71';
-    if(key === 'soldier')    ctx.fillText('PASSIVE: 2% LIFESTEAL', r.x + 12, sy);
-    else if(key === 'scout') ctx.fillText('PASSIVE: 0.5%/s HP REGEN', r.x + 12, sy);
-    else if(key === 'tank')  ctx.fillText('PASSIVE: +0.2 FUEL/KILL', r.x + 12, sy);
+    ctx.fillText('PASSIVES: SHOP / EQUIP', r.x + 12, sy);
 
     ctx.textAlign = 'center';
   }

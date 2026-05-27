@@ -300,6 +300,30 @@ def main():
             c9_detail.append(f"only {tier_arrays} t:[] arrays for {n_ids} shop skills")
     check("C9 resummon + skill tiers + skillLevels wired", c9_ok, "; ".join(c9_detail))
 
+    # C10 -- universal PASSIVE system. The PASSIVES catalog must define the 8 expected
+    # passives, and the persistent profile must initialize passiveLevels + equippedPassives
+    # in DEFAULT_PROFILE (so returning players don't crash). Light regex checks.
+    c10_ok = True
+    c10_detail = []
+    pass_m = re.search(r"const\s+PASSIVES\s*=\s*\{(.*?)\n\};", code, re.S)
+    want_passives = ["lifesteal", "hpregen", "resource", "greed", "scholar", "scavenger", "swiftness", "vitality"]
+    if not pass_m:
+        c10_ok = False
+        c10_detail.append("PASSIVES catalog not found")
+    else:
+        keys = set(re.findall(r"(\w+)\s*:\s*\{", pass_m.group(1)))
+        missing = [k for k in want_passives if k not in keys]
+        if missing:
+            c10_ok = False
+            c10_detail.append("PASSIVES missing: " + ", ".join(missing))
+    if not dp_m or "passiveLevels" not in dp_m.group(1):
+        c10_ok = False
+        c10_detail.append("passiveLevels missing from DEFAULT_PROFILE")
+    if not dp_m or "equippedPassives" not in dp_m.group(1):
+        c10_ok = False
+        c10_detail.append("equippedPassives missing from DEFAULT_PROFILE")
+    check("C10 universal passives wired (8 + profile fields)", c10_ok, "; ".join(c10_detail))
+
     return finish()
 
 
