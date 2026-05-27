@@ -5594,7 +5594,7 @@ function shopCardRect(i){
 // Assistants tab uses TALLER cards (the 5 allies fit on one row) so each can show its
 // level-scaled stat block (HP / DMG / RNG / ROF) above the buy/upgrade price.
 function shopAssistCardRect(i){
-  const cw = 90, ch = 96, gap = 6, cols = 5;
+  const cw = 90, ch = 112, gap = 6, cols = 5;
   const totalW = cols * cw + (cols - 1) * gap;
   const xs = Math.floor((W - totalW) / 2);
   const col = i % cols, row = Math.floor(i / cols);
@@ -5688,10 +5688,11 @@ function drawShop(){
         sy += 9;
       }
       // Threshold-ability readout: what this ally's CURRENT level unlocks + what's NEXT.
+      // Positioned with a clear gap above the bottom price line (no overlap).
       const evo = assistantEvoBlurb(id, lvl || 1);
       ctx.textAlign = 'center'; ctx.font = 'bold 6px monospace';
-      ctx.fillStyle = '#2ecc71'; ctx.fillText('NOW: ' + evo.now, r.x + r.w/2, sy + 2);
-      ctx.fillStyle = '#7f8c8d'; ctx.fillText(evo.next ? 'NEXT: ' + evo.next : 'MAXED', r.x + r.w/2, sy + 10);
+      ctx.fillStyle = '#2ecc71'; ctx.fillText('NOW: ' + evo.now, r.x + r.w/2, sy + 6);
+      ctx.fillStyle = '#7f8c8d'; ctx.fillText(evo.next ? 'NEXT: ' + evo.next : 'MAXED', r.x + r.w/2, sy + 15);
       ctx.textAlign = 'center';
     }
     // Bottom line: status / price (anchored to the bottom of whichever card height).
