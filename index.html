@@ -48,11 +48,10 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 canvas.width = W * PX; canvas.height = H * PX;
 ctx.scale(PX, PX);
-// HD vector aesthetic: smoothing ON + sub-pixel coordinates so curves/gradients and
-// motion are buttery smooth (the retro pixel-snap was retired). Note: fillRect sprites
-// pick up mild anti-alias softening at fractional coords — that's the intended look.
-ctx.imageSmoothingEnabled = true;
-ctx.imageSmoothingQuality = 'high';
+// RETRO pixel-art look: smoothing OFF + integer-snapped draw coords keep everything
+// crisp and blocky (classic 1990s top-down shooter). Re-enforced after every ctx.save/
+// restore is unnecessary — imageSmoothingEnabled persists on the context.
+ctx.imageSmoothingEnabled = false;
 const TAU = Math.PI * 2;
 
 function resize(){
@@ -97,8 +96,8 @@ const SPR = {
     "..33....33..",
     "..3......3.."
   ]),
-  // (The player bodies are no longer sprites — the 5 playable characters render as clean
-  // vector iconography via drawCharVector(); only enemies/pickups/allies use S/drawSprite.)
+  // (The 5 playable characters render from the color-mapped pixel arrays on
+  // CHARACTERS[*].sprite via drawPixelSprite(); enemies/pickups/allies use S/drawSprite.)
   grunt_a: S({'.':null,'1':'#7d3838','2':'#c0392b','3':'#2d1414','e':'#fff'}, [
     "..1111..",
     ".112211.",
@@ -955,9 +954,8 @@ function drawSprite(sp, x, y){
   }
 }
 function drawSpriteCentered(sp, x, y){
-  // Sub-pixel (no floor) so entity motion is smooth — fractional coords soften the
-  // fillRect cells slightly, which is the intended HD look.
-  drawSprite(sp, x - sp.w/2, y - sp.h/2);
+  // Integer-snapped (Math.floor) so the pixel cells stay crisp — no sub-pixel blur.
+  drawSprite(sp, Math.floor(x - sp.w/2), Math.floor(y - sp.h/2));
 }
 function drawSpriteTinted(sp, x, y, tint){
   const rows = sp.rows, pal = sp.pal;
@@ -970,76 +968,48 @@ function drawSpriteTinted(sp, x, y, tint){
   }
 }
 
-// ---- Clean VECTOR character iconography (replaces the old pixel sprites) ----
-// Each of the 5 classes is built from smooth geometric primitives (arc, polygons,
-// rounded rects) centered on (0,0) and designed FACING EAST (+x = forward), then
-// translated + rotated to the aim. imageSmoothingEnabled is true globally, and canvas
-// vector fills are anti-aliased, so these render perfectly smooth at any rotation/scale.
-// A small rounded-rect path helper (arcTo is universally supported + headless-safe).
-function vRoundRect(ctx, x, y, w, h, r){
-  r = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y,     x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x,     y + h, r);
-  ctx.arcTo(x,     y + h, x,     y,     r);
-  ctx.arcTo(x,     y,     x + w, y,     r);
-  ctx.closePath();
-}
-// Draw a class's vector blueprint centered at (x,y), scaled, rotated to `angle`
-// (0 = east). `flash` overlays a white silhouette for the hit-flash.
-function drawCharVector(ctx, charKey, x, y, scale, angle, flash){
+// ---- RETRO color-mapped pixel-art renderer for the 5 playable characters ----
+// A single shared palette (char -> CSS color; '.' = transparent) + a renderer that
+// draws an array-of-strings sprite as blocky fillRect cells, ROTATED to face an angle.
+// The sprites are designed top-down FACING EAST (front/weapon at the right edge, +x),
+// so passing player.angle (0 = east) points the front at the cursor. With
+// imageSmoothingEnabled=false + floored coords the cells stay crisp (cardinal angles
+// are pixel-perfect; off-axis rotation gets minimal edge stepping). `tint` (optional)
+// overrides every non-transparent cell with one colour (the white hit-flash).
+const PALETTE = {
+  '.': null,            // transparent
+  'k': '#15151a',       // near-black
+  'd': '#2c2c2c',       // dark suit / shoulders grey
+  'g': '#3a5a2a',       // camo dark green
+  'G': '#5a7a3a',       // camo mid green
+  'o': '#4b5320',       // olive drab
+  'b': '#6b4a2a',       // brown (spear shaft / duster dark)
+  'B': '#8a5a2a',       // tan brown (duster)
+  'f': '#caa472',       // flesh
+  's': '#9aa7b0',       // gunmetal grey
+  'S': '#c5d0d8',       // bright chrome / silver
+  'c': '#00ffff',       // neon cyan (visor)
+  't': '#39ff14',       // toxic green (toxin tank)
+  'r': '#e67e22',       // orange (vents)
+  'w': '#e8eef2',       // white highlight (spearhead)
+  '9': '#e74c3c'        // red (optic)
+};
+const PLAYER_PX = 1.5;  // logical px per sprite cell (12x12 grid ~= 18px on screen)
+function drawPixelSprite(ctx, map, x, y, size, angle, tint){
+  if(!map) return;
+  const rows = map.length, cols = map[0].length;
   ctx.save();
-  ctx.translate(x, y);
+  ctx.translate(Math.floor(x), Math.floor(y));
   ctx.rotate(angle || 0);
-  ctx.scale(scale, scale);
-  if(charKey === 'soldier'){
-    // Olive-green circle body + brown spear forward + silver tip.
-    ctx.fillStyle = '#4b5320'; ctx.beginPath(); ctx.arc(0, 0, 7, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#6b4a2a'; vRoundRect(ctx, 3, -1.4, 13, 2.8, 1.3); ctx.fill();
-    ctx.fillStyle = '#cfd8dc'; vRoundRect(ctx, 14, -2, 4.5, 4, 1); ctx.fill();
-  } else if(charKey === 'scout'){
-    // Sleek dark chevron pointing forward + a bright cyan visor chevron.
-    ctx.fillStyle = '#2c3138'; ctx.beginPath();
-    ctx.moveTo(9, 0); ctx.lineTo(-6, -7); ctx.lineTo(-3, 0); ctx.lineTo(-6, 7); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#00ffff'; ctx.beginPath();
-    ctx.moveTo(7, 0); ctx.lineTo(1, -3); ctx.lineTo(3, 0); ctx.lineTo(1, 3); ctx.closePath(); ctx.fill();
-  } else if(charKey === 'tank'){
-    // Wide gunmetal rounded body + 2 orange back vents + dark flamethrower barrel front.
-    ctx.fillStyle = '#6b7280'; vRoundRect(ctx, -11, -7.5, 22, 15, 4); ctx.fill();
-    ctx.fillStyle = '#e67e22';
-    ctx.beginPath(); ctx.arc(-8, -4, 2.4, 0, TAU); ctx.fill();
-    ctx.beginPath(); ctx.arc(-8,  4, 2.4, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#3a3f44'; vRoundRect(ctx, 7, 1.4, 11, 4.6, 2); ctx.fill();
-    ctx.fillStyle = '#15151a'; ctx.beginPath(); ctx.arc(18, 3.7, 2.1, 0, TAU); ctx.fill();
-  } else if(charKey === 'bounty_hunter'){
-    // Leather-brown duster "shield" + dark head circle + twin silver shotgun barrels.
-    ctx.fillStyle = '#8a5a2a'; ctx.beginPath();
-    ctx.moveTo(9, 0);
-    ctx.quadraticCurveTo(5, -8, -5, -7);
-    ctx.quadraticCurveTo(-9, -4, -9, 0);
-    ctx.quadraticCurveTo(-9, 4, -5, 7);
-    ctx.quadraticCurveTo(5, 8, 9, 0);
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#c5d0d8';
-    vRoundRect(ctx, 4, -3, 12, 1.8, 0.9); ctx.fill();
-    vRoundRect(ctx, 4, 1.2, 12, 1.8, 0.9); ctx.fill();
-    ctx.fillStyle = '#2c2c2c'; ctx.beginPath(); ctx.arc(0, 0, 3.6, 0, TAU); ctx.fill();
-  } else if(charKey === 'cyborg'){
-    // Split circle: left half skin, right half chrome (gradient) + toxic-green tank.
-    const R = 7;
-    ctx.fillStyle = '#d2b48c';
-    ctx.beginPath(); ctx.arc(0, 0, R, Math.PI * 0.5, Math.PI * 1.5); ctx.closePath(); ctx.fill();
-    const cg = ctx.createLinearGradient(0, 0, R, 0); cg.addColorStop(0, '#aeb6bd'); cg.addColorStop(1, '#eef3f7');
-    ctx.fillStyle = cg;
-    ctx.beginPath(); ctx.arc(0, 0, R, -Math.PI * 0.5, Math.PI * 0.5); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = '#2c333b'; ctx.lineWidth = 0.6;
-    ctx.beginPath(); ctx.moveTo(0, -R); ctx.lineTo(0, R); ctx.stroke();
-    ctx.fillStyle = '#39ff14'; ctx.beginPath(); ctx.arc(-5, -5, 2.4, 0, TAU); ctx.fill();
-  } else {
-    ctx.fillStyle = '#888'; ctx.beginPath(); ctx.arc(0, 0, 7, 0, TAU); ctx.fill();
+  const ox = -cols * size / 2, oy = -rows * size / 2;   // center the grid on (x,y)
+  const cell = Math.ceil(size) + 1;                     // +1 overlap to avoid seams
+  for(let r = 0; r < rows; r++){
+    const row = map[r];
+    for(let c = 0; c < cols; c++){
+      const col = tint || PALETTE[row[c]];
+      if(col){ ctx.fillStyle = col; ctx.fillRect(Math.floor(ox + c*size), Math.floor(oy + r*size), cell, cell); }
+    }
   }
-  if(flash){ ctx.globalAlpha = 0.7; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, 9, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; }
   ctx.restore();
 }
 
@@ -1600,31 +1570,107 @@ const CHARACTERS = {
     name:'Dr.Syed', desc:'RAINFOREST WARRIOR · SPEAR (RMB) · ENERGY POOL',
     color:'#3498db', hp:10, speed:156, damageMult:1.25, startShield:0,
     skills:{ x:'sprint', c:'flameburst', v:'barrage', f:'heal', b:'invuln' },
-    skillLabels:{ x:'SPRINT', c:'NAPALM', v:'BARRAGE', f:'HEAL', b:'INVINC' }
+    skillLabels:{ x:'SPRINT', c:'NAPALM', v:'BARRAGE', f:'HEAL', b:'INVINC' },
+    // Pixel sprite, FACING EAST: camo body + boonie head, flesh face, brown wooden spear
+    // (white tip) protruding forward.
+    sprite:[
+      "............",
+      ".....GG.....",
+      "...gGGGGg...",
+      "..gGGGGGGg..",
+      "..GGGGffGG..",
+      ".oGGGffGbbbw",
+      ".oGGGffGbbbw",
+      "..GGGGffGG..",
+      "..gGGGGGGg..",
+      "...gGGGGg...",
+      ".....GG.....",
+      "............"
+    ]
   },
   scout: {
     name:'Xu Yihui', desc:'CYBER MECH · 3× LASER BEAM (RMB) · BLINK+DASH',
     color:'#f1c40f', hp:9, speed:148, damageMult:1.25, startShield:0,
     skills:{ x:'sprint', c:'blink', v:'dash', f:'heal', b:'blast' },
-    skillLabels:{ x:'SPRINT', c:'BLINK', v:'DASH', f:'HEAL', b:'BLAST' }
+    skillLabels:{ x:'SPRINT', c:'BLINK', v:'DASH', f:'HEAL', b:'BLAST' },
+    // Sleek black/dark-grey suit with a bright neon-cyan V-visor pointing forward.
+    sprite:[
+      "............",
+      "....dkkd....",
+      "..dkkkkkd...",
+      "..dkkkkkcd..",
+      ".dkkkkkkcc..",
+      ".dkkkkkkccc.",
+      ".dkkkkkkccc.",
+      ".dkkkkkkcc..",
+      "..dkkkkkcd..",
+      "..dkkkkkd...",
+      "....dkkd....",
+      "............"
+    ]
   },
   tank: {
     name:'Benjamin Wu', desc:'HEAVY · +20% DAMAGE · FLAMETHROWER (RMB)',
     color:'#27ae60', hp:12, speed:95, damageMult:1.2, startShield:4,
     skills:{ x:'sprint', c:'wall', v:'vsummon', f:'heal', b:'blast' },
-    skillLabels:{ x:'SPRINT', c:'WALL', v:'BLADE+', f:'HEAL', b:'BLAST' }
+    skillLabels:{ x:'SPRINT', c:'WALL', v:'BLADE+', f:'HEAL', b:'BLAST' },
+    // Bulky mech: gunmetal core + olive shell, flesh face front, orange vents on the back.
+    sprite:[
+      "...oooooo...",
+      "..oossssoo..",
+      ".oossssssoo.",
+      ".osssssssfo.",
+      "rrosssssssfo",
+      "rrossssssssf",
+      "rrossssssssf",
+      "rrosssssssfo",
+      ".osssssssfo.",
+      ".oossssssoo.",
+      "..oossssoo..",
+      "...oooooo..."
+    ]
   },
   bounty_hunter: {
     name:'Leo', desc:'BOUNTY HUNTER · SHOTGUN · MACHETE (RMB) · FURY',
     color:'#d35400', hp:11, speed:120, damageMult:1.3, startShield:0,
     skills:{ x:'sprint', c:'grit', v:'fanfire', f:'heal', b:'blast' },
-    skillLabels:{ x:'SPRINT', c:'GRIT', v:'FANFIRE', f:'HEAL', b:'BLAST' }
+    skillLabels:{ x:'SPRINT', c:'GRIT', v:'FANFIRE', f:'HEAL', b:'BLAST' },
+    // Gritty survivor: brown duster body, dark-grey shoulders, silver shotgun forward.
+    sprite:[
+      "............",
+      "...dBBBBd...",
+      "..dBBBBBBd..",
+      ".dBBBBBBBBd.",
+      ".BBBBBBffBs.",
+      ".BBBBBffsSSS",
+      ".BBBBBffsSSS",
+      ".BBBBBBffBs.",
+      ".dBBBBBBBBd.",
+      "..dBBBBBBd..",
+      "...dBBBBd...",
+      "............"
+    ]
   },
   cyborg: {
     name:'Ong', desc:'CYBORG · MAGNUM · BIO-GUN (RMB) · TOXIN',
     color:'#8e44ad', hp:10, speed:140, damageMult:1.15, startShield:2,
     skills:{ x:'sprint', c:'overclock', v:'biobomb', f:'heal', b:'blast' },
-    skillLabels:{ x:'SPRINT', c:'OVRCLK', v:'BIOBOMB', f:'HEAL', b:'BLAST' }
+    skillLabels:{ x:'SPRINT', c:'OVRCLK', v:'BIOBOMB', f:'HEAL', b:'BLAST' },
+    // Bio-machine: top-half flesh, bottom-half chrome, red optic + toxic-green back tank.
+    sprite:[
+      "............",
+      "...dffffd...",
+      "..dffffffd..",
+      ".dfffffff9..",
+      "tdfffffff99.",
+      "tdfffffff9..",
+      ".sSSSSSSSSs.",
+      ".sSSSSSSSSs.",
+      "..sSSSSSSs..",
+      "...sSSSSs...",
+      "............",
+      "............"
+    ]
   }
 };
 // NOTE: the per-class `skills`/`skillLabels` maps above are now LEGACY/vestigial —
@@ -1869,8 +1915,8 @@ function clickedRect(x,y,w,h){ return mouse.x>=x && mouse.x<=x+w && mouse.y>=y &
 // ============================================================
 // ENTITY FACTORIES
 // ============================================================
-// (Player bodies render via drawCharVector(charKey, x, y, scale, angle) — clean vector
-// shapes rotated to the aim; the old upright sprite lookup was removed.)
+// (Player bodies render via drawPixelSprite(CHARACTERS[char].sprite, …) — retro pixel
+// arrays rotated to the aim.)
 
 // Resolve the active-skill loadout from the profile. F is always HEAL. Each of
 // X/C/B/V is filled only if its slot is unlocked by level AND assigned AND owned.
@@ -5119,8 +5165,8 @@ function draw(){
 
   if(useGameTheme){
     ctx.save();
-    // Sub-pixel camera follow only — no screen shake offset (the camera stays stable).
-    ctx.translate(-camX, -camY);
+    // Integer-snapped camera follow (no shake) — keeps the world pixel-crisp.
+    ctx.translate(-Math.floor(camX), -Math.floor(camY));
     drawBackground(themeForLevel(levelIdx), levelIdx, worldW, worldH);
     drawGame();
     ctx.restore();
@@ -5331,14 +5377,15 @@ function drawStats(){
 // Lingering visual-only decals: soft radial scorch / toxic-spill discs that fade their
 // alpha over ~10s. Drawn under everything; never touched by physics/collision.
 function drawDecals(){
+  // Blocky scorch/toxic marks — a flat fading square (no radial gradient).
   for(const d of decals){
     const a = clamp(d.life / d.maxLife, 0, 1);
-    const base = d.kind === 'toxic' ? 0.28 : 0.5;
-    const g = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.r);
-    g.addColorStop(0, d.color + (base * a) + ')');
-    g.addColorStop(1, d.color + '0)');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, TAU); ctx.fill();
+    const base = d.kind === 'toxic' ? 0.22 : 0.4;
+    const s = Math.max(2, Math.round(d.r * 1.3));
+    ctx.globalAlpha = base * a;
+    ctx.fillStyle = d.color + '1)';   // d.color is 'rgba(r,g,b,' — close it opaque, alpha via globalAlpha
+    ctx.fillRect(Math.floor(d.x - s/2), Math.floor(d.y - s/2), s, s);
+    ctx.globalAlpha = 1;
   }
 }
 
@@ -5389,85 +5436,42 @@ function drawGame(){
     const a = clamp(p.life / p.maxLife, 0, 1);
     ctx.globalAlpha = a;
     if(p.beam){
-      // Scout's straight laser beam: a hitscan line that fades as it ages. Drawn
-      // additively as a wide soft glow + a gradient core (hot white at the muzzle →
-      // the beam colour → transparent at the tip) so it reads as a true beam of light.
+      // Scout's laser beam: a crisp solid line (colored body + white core), no glow.
       const ex = p.x + Math.cos(p.angle) * p.len;
       const ey = p.y + Math.sin(p.angle) * p.len;
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.lineCap = 'round';
-      // Wide translucent glow.
-      ctx.strokeStyle = p.color;
-      ctx.lineWidth = 4;
-      ctx.globalAlpha = a * 0.35;
-      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(ex, ey); ctx.stroke();
-      // Bright gradient core.
-      const lg = ctx.createLinearGradient(p.x, p.y, ex, ey);
-      lg.addColorStop(0, '#ffffff');
-      lg.addColorStop(0.5, p.color);
-      lg.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.strokeStyle = lg;
-      ctx.lineWidth = 1.5;
-      ctx.globalAlpha = a;
-      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(ex, ey); ctx.stroke();
-      ctx.lineCap = 'butt';
-      ctx.globalCompositeOperation = 'source-over';
+      const x0 = Math.floor(p.x), y0 = Math.floor(p.y), x1 = Math.floor(ex), y1 = Math.floor(ey);
+      ctx.strokeStyle = p.color; ctx.lineWidth = 2; ctx.globalAlpha = a;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
     } else if(p.ring){
-      // Expanding shockwave outline (e.g. the B-blast circle AoE): the radius
-      // grows from r0 -> r1 as the particle ages, tracing the damage area.
+      // Expanding shockwave outline (B-blast AoE) — a simple circle stroke.
       const r = p.r0 + (p.r1 - p.r0) * (1 - a);
-      ctx.strokeStyle = p.color;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.strokeStyle = p.color; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(Math.floor(p.x), Math.floor(p.y), r, 0, Math.PI * 2); ctx.stroke();
     } else if(p.smoke){
-      // Expanding FILLED disc fading to transparent (shotgun-impact white/gray smoke):
-      // radius grows r0 -> r1 as it ages; alpha is the particle's own fade, dimmed.
+      // Expanding BLOCKY smoke puff (a growing grey square fading out).
       const r = p.r0 + (p.r1 - p.r0) * (1 - a);
-      ctx.globalAlpha = a * 0.32;
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-      ctx.fill();
+      const s = Math.max(1, Math.round(r));
+      ctx.globalAlpha = a * 0.32; ctx.fillStyle = p.color;
+      ctx.fillRect(Math.floor(p.x - s/2), Math.floor(p.y - s/2), s, s);
     } else if(p.spark){
-      // Rectangular spark shard (machete-impact shrapnel) — sub-pixel 2D rect.
+      // Spark shard — a crisp little rectangle.
       ctx.fillStyle = p.color;
-      ctx.fillRect(p.x, p.y, p.w || 2, p.h || 1);
+      ctx.fillRect(Math.floor(p.x), Math.floor(p.y), p.w || 2, p.h || 1);
     } else if(p.flash){
-      // Sharp geometric flash (shotgun muzzle / machete impact): a 4-point star
-      // oriented by p.angle, scaled by p.r, fading with the particle's life. Bloomed.
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.translate(p.x, p.y);
-      ctx.rotate(p.angle || 0);
+      // Muzzle/impact flash — a crisp solid square burst (no star/glow).
+      const r = Math.max(2, Math.round(p.r || 6));
       ctx.fillStyle = p.color;
-      const r = p.r || 6, s = r * 0.4;
-      ctx.beginPath();
-      ctx.moveTo(r, 0); ctx.lineTo(s, s); ctx.lineTo(0, r); ctx.lineTo(-s, s);
-      ctx.lineTo(-r, 0); ctx.lineTo(-s, -s); ctx.lineTo(0, -r); ctx.lineTo(s, -s);
-      ctx.closePath(); ctx.fill();
-      ctx.restore();
-    } else if(p.glow){
-      // Glowing ember/energy mote: an additive soft halo + a hot near-white core, so
-      // overlapping motes bloom into bright focal points (explosions, flame, muzzles).
-      ctx.globalCompositeOperation = 'lighter';
-      const r = p.size;
-      ctx.globalAlpha = a * 0.5;
-      ctx.fillStyle = p.color;
-      ctx.beginPath(); ctx.arc(p.x, p.y, r * 2.4, 0, TAU); ctx.fill();
-      ctx.globalAlpha = a;
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath(); ctx.arc(p.x, p.y, r * 0.85, 0, TAU); ctx.fill();
-      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillRect(Math.floor(p.x - r/2), Math.floor(p.y - r/2), r, r);
     } else {
-      // Plain mote — a smooth round dot (was a blocky square).
+      // Plain mote (incl. former glow embers) — a crisp blocky square.
+      const s = p.size || 1;
       ctx.fillStyle = p.color;
-      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, TAU); ctx.fill();
+      ctx.fillRect(Math.floor(p.x), Math.floor(p.y), s, s);
     }
   }
   ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = 'source-over';
 }
 
 function drawPlayer(p){
@@ -5477,96 +5481,64 @@ function drawPlayer(p){
   // (Damage still uses the KATANA_RANGE/KATANA_HALF fan in fireKatana — kept in sync.)
   if(p.char === 'soldier' && mouse.rdown && p.energy > 0){
     ctx.save();
-    // Faint thrust zone (the fan the spear sweeps + stabs across).
+    // Faint thrust zone (flat low-alpha fan — telegraph only).
     ctx.fillStyle = 'rgba(207,216,220,0.08)';
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
+    ctx.beginPath(); ctx.moveTo(p.x, p.y);
     ctx.arc(p.x, p.y, KATANA_RANGE, p.angle - KATANA_HALF, p.angle + KATANA_HALF);
-    ctx.closePath();
-    ctx.fill();
-    // Thrust phase: tip darts in/out fast; the aim sweeps across the fan more slowly.
+    ctx.closePath(); ctx.fill();
     const reachAt = t => KATANA_RANGE * (0.45 + 0.55 * Math.abs(Math.sin(t * 22)));
     const angAt   = t => p.angle + Math.sin(t * 9) * KATANA_HALF;
-    const tipAt   = t => { const an = angAt(t), rr = reachAt(t); return { x: p.x + Math.cos(an)*rr, y: p.y + Math.sin(an)*rr }; };
-    // Smooth white/silver motion-trail through the recent tip positions (quadratic
-    // through midpoints), drawn additively so it reads as a fast blur of light.
-    ctx.globalCompositeOperation = 'lighter';
-    const pts = [];
-    for(let k = 5; k >= 0; k--) pts.push(tipAt(stateTime - k * 0.025));
-    ctx.strokeStyle = '#e8eef2'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.globalAlpha = 0.6;
-    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
-    for(let i = 1; i < pts.length - 1; i++){
-      const mx = (pts[i].x + pts[i+1].x)/2, my = (pts[i].y + pts[i+1].y)/2;
-      ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+    // Crisp white afterimage lines (a few trailing thrust poses) — no glow/curves.
+    ctx.strokeStyle = '#e8eef2'; ctx.lineWidth = 1; ctx.globalAlpha = 0.4;
+    for(let k = 3; k >= 1; k--){
+      const an = angAt(stateTime - k * 0.03), rr = reachAt(stateTime - k * 0.03);
+      ctx.beginPath();
+      ctx.moveTo(Math.floor(p.x + Math.cos(an)*6), Math.floor(p.y + Math.sin(an)*6));
+      ctx.lineTo(Math.floor(p.x + Math.cos(an)*rr), Math.floor(p.y + Math.sin(an)*rr));
+      ctx.stroke();
     }
-    ctx.stroke();
-    ctx.lineCap = 'butt'; ctx.globalCompositeOperation = 'source-over';
-    // Live wooden spear: brown shaft (core + highlight) + a gray head, at the current pose.
+    ctx.globalAlpha = 1;
+    // Live wooden spear: brown shaft + crisp grey spearhead triangle.
     const ang = angAt(stateTime), reach = reachAt(stateTime);
     const ca = Math.cos(ang), sa = Math.sin(ang);
     const bx = p.x + ca * 3, by = p.y + sa * 3;
     const tx = p.x + ca * reach, ty = p.y + sa * reach;
-    const hx = p.x + ca * (reach - 6), hy = p.y + sa * (reach - 6);
-    ctx.globalAlpha = 1;
-    ctx.lineCap = 'round';
+    const hx = p.x + ca * (reach - 5), hy = p.y + sa * (reach - 5);
     ctx.strokeStyle = '#6b4a2a'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(hx, hy); ctx.stroke();
-    ctx.strokeStyle = '#8a5a2a'; ctx.lineWidth = 1.4;
-    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(hx, hy); ctx.stroke();
-    ctx.lineCap = 'butt';
     const px = -sa, py = ca;
     ctx.fillStyle = '#bdc3c7';
-    ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx + px*2.4, hy + py*2.4); ctx.lineTo(hx - px*2.4, hy - py*2.4); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = '#eceff1'; ctx.lineWidth = 1; ctx.stroke();
-    // Soft glow at the spear tip.
-    ctx.globalCompositeOperation = 'lighter';
-    const tg = ctx.createRadialGradient(tx, ty, 0, tx, ty, 6);
-    tg.addColorStop(0, 'rgba(255,255,255,0.9)'); tg.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = tg;
-    ctx.beginPath(); ctx.arc(tx, ty, 6, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx + px*2.2, hy + py*2.2); ctx.lineTo(hx - px*2.2, hy - py*2.2); ctx.closePath(); ctx.fill();
     ctx.restore();
     ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
   }
   // Leo's MACHETE (RMB): an explosive diagonal slash — a bold orange-red FILLED wedge
   // sweeping the fan with a bright yellow outline, trailed by fading afterimage wedges.
   // Locked to MACHETE_RANGE/MACHETE_HALF (matches the damage check in fireMachete).
   if(p.char === 'bounty_hunter' && mouse.rdown && p.fury > 0){
     ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    // A smooth crescent (scimitar) slice: outer arc sweep + a curved inner edge via
-    // quadraticCurveTo pulled toward the player, filled with a hot-core→edge gradient.
-    const drawCrescent = (ang, alpha) => {
-      const w = 0.55, r1 = MACHETE_RANGE, r0 = MACHETE_RANGE * 0.5;
-      const a0 = ang - w, a1 = ang + w;
-      const sx = p.x + Math.cos(a0) * r1, sy = p.y + Math.sin(a0) * r1;
-      const cx = p.x + Math.cos(ang) * r0, cy = p.y + Math.sin(ang) * r0;  // inner control
-      const mx = p.x + Math.cos(ang) * r1, my = p.y + Math.sin(ang) * r1;  // outer mid
+    // Solid orange-red slash wedge + crisp yellow outline (no gradient/glow).
+    const drawWedge = (ang, alpha) => {
+      const w = 0.5;
       ctx.globalAlpha = alpha;
-      const g = ctx.createLinearGradient(cx, cy, mx, my);
-      g.addColorStop(0, '#fff7d6'); g.addColorStop(0.5, '#ff8c42'); g.addColorStop(1, 'rgba(231,76,60,0.15)');
-      ctx.fillStyle = g;
+      ctx.fillStyle = '#e74c3c';
       ctx.beginPath();
-      ctx.moveTo(sx, sy);
-      ctx.arc(p.x, p.y, r1, a0, a1);          // outer sweep
-      ctx.quadraticCurveTo(cx, cy, sx, sy);   // smooth curved inner edge back
-      ctx.closePath();
-      ctx.fill();
+      ctx.moveTo(p.x, p.y);
+      ctx.arc(p.x, p.y, MACHETE_RANGE, ang - w, ang + w);
+      ctx.closePath(); ctx.fill();
       ctx.strokeStyle = '#ffe04d'; ctx.lineWidth = 1.5; ctx.stroke();
     };
-    // Blade sweeps across the fan (cos -> a diagonal-feeling back-and-forth).
     const swing = t => p.angle + Math.cos(t * 26) * MACHETE_HALF;
-    // Sequential afterimages (older = fainter) then the live blade on top.
-    for(let k = 3; k >= 1; k--) drawCrescent(swing(stateTime - k * 0.04), 0.1 * (4 - k));
-    drawCrescent(swing(stateTime), 0.95);
+    for(let k = 3; k >= 1; k--) drawWedge(swing(stateTime - k * 0.04), 0.12 * (4 - k));
+    drawWedge(swing(stateTime), 0.9);
     ctx.restore();
     ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
   }
-  // Body: the clean VECTOR icon, ROTATED to face the cursor (front = the weapon, which
-  // lives in the shape itself — no separate gun rectangle). White hit-flash via `flash`.
+  // Body: the retro pixel-art sprite, ROTATED to face the cursor (front = the weapon,
+  // built into the sprite — no separate gun rectangle). White hit-flash via the tint.
   // The hitbox (player.radius) is unchanged.
-  drawCharVector(ctx, p.char, p.x, p.y, 1, p.angle, p.hitFlash > 0);
+  const map = (CHARACTERS[p.char] || CHARACTERS.soldier).sprite;
+  drawPixelSprite(ctx, map, p.x, p.y, PLAYER_PX, p.angle, p.hitFlash > 0 ? '#fff' : null);
   // Shield ring
   if(p.shieldHp > 0){
     ctx.strokeStyle = '#1abc9c';
@@ -5652,9 +5624,9 @@ function drawEnemy(e){
   if(drawScale !== 1){ ctx.save(); ctx.translate(e.x, e.y); ctx.scale(drawScale, drawScale); ctx.translate(-e.x, -e.y); }
   if(e.invulnT > 0 && Math.floor(stateTime * 20) % 2){
     // Brief-invincibility shield: flash the boss blue (it's absorbing all damage).
-    drawSpriteTinted(sp, e.x - sp.w/2, e.y - sp.h/2, '#5dade2');
+    drawSpriteTinted(sp, Math.floor(e.x - sp.w/2), Math.floor(e.y - sp.h/2), '#5dade2');
   } else if(e.hitFlash > 0){
-    drawSpriteTinted(sp, e.x - sp.w/2, e.y - sp.h/2, '#fff');
+    drawSpriteTinted(sp, Math.floor(e.x - sp.w/2), Math.floor(e.y - sp.h/2), '#fff');
   } else {
     drawSpriteCentered(sp, e.x, e.y);
   }
@@ -5690,7 +5662,7 @@ function drawSwordAlly(s){
   if(s.invuln > 0 && Math.floor(s.invuln * 20) % 2) return;
   const sp = s.frame === 0 ? SPR.sword_ally_a : SPR.sword_ally_b;
   if(s.hitFlash > 0){
-    drawSpriteTinted(sp, s.x - sp.w/2, s.y - sp.h/2, '#fff');
+    drawSpriteTinted(sp, Math.floor(s.x - sp.w/2), Math.floor(s.y - sp.h/2), '#fff');
   } else {
     drawSpriteCentered(sp, s.x, s.y);
   }
@@ -5721,7 +5693,7 @@ function drawHenchman(s){
   if(s.invuln > 0 && Math.floor(s.invuln * 20) % 2) return;
   const sp = s.frame === 0 ? SPR.henchman_a : SPR.henchman_b;
   if(s.hitFlash > 0){
-    drawSpriteTinted(sp, s.x - sp.w/2, s.y - sp.h/2, '#fff');
+    drawSpriteTinted(sp, Math.floor(s.x - sp.w/2), Math.floor(s.y - sp.h/2), '#fff');
   } else {
     drawSpriteCentered(sp, s.x, s.y);
   }
@@ -5736,7 +5708,7 @@ function drawCompanion(c){
   if(c.invuln > 0 && Math.floor(c.invuln * 18) % 2) return;
   const sp = c.frame === 0 ? SPR.companion_a : SPR.companion_b;
   if(c.hitFlash > 0){
-    drawSpriteTinted(sp, c.x - sp.w/2, c.y - sp.h/2, '#fff');
+    drawSpriteTinted(sp, Math.floor(c.x - sp.w/2), Math.floor(c.y - sp.h/2), '#fff');
   } else {
     drawSpriteCentered(sp, c.x, c.y);
   }
@@ -5752,7 +5724,7 @@ function drawAllySprite(s, sprA, sprB, pipColor, halfW){
   if(s.invuln > 0 && Math.floor(s.invuln * 20) % 2) return;
   const sp = s.frame === 0 ? sprA : sprB;
   if(s.hitFlash > 0){
-    drawSpriteTinted(sp, s.x - sp.w/2, s.y - sp.h/2, '#fff');
+    drawSpriteTinted(sp, Math.floor(s.x - sp.w/2), Math.floor(s.y - sp.h/2), '#fff');
   } else {
     drawSpriteCentered(sp, s.x, s.y);
   }
@@ -5805,71 +5777,29 @@ function drawPoisonAlly(s){
 }
 
 function drawBulletEntity(b){
-  // --- Leo's shotgun PELLETS: sharp, SOLID grey/white tracers (kinetic, source-over,
-  // no glow/bloom) — a thin air-distortion line + a small solid head. ---
+  // RETRO blocky bullets: no gradients/glow/arcs. Leo's shotgun PELLETS render as a
+  // crisp grey-white tracer (a head square + a faint trailing square).
   if(b.kind === 'pellet'){
     const sp = Math.hypot(b.vx, b.vy) || 1;
-    const tlx = b.x - (b.vx / sp) * 7, tly = b.y - (b.vy / sp) * 7;
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = '#b8c0c7'; ctx.lineWidth = 1.2; ctx.globalAlpha = 0.6;
-    ctx.beginPath(); ctx.moveTo(tlx, tly); ctx.lineTo(b.x, b.y); ctx.stroke();
+    const tlx = b.x - (b.vx / sp) * 5, tly = b.y - (b.vy / sp) * 5;
+    ctx.globalAlpha = 0.5; ctx.fillStyle = '#cfd8dc';
+    ctx.fillRect(Math.floor(tlx) - 1, Math.floor(tly) - 1, 2, 2);
     ctx.globalAlpha = 1; ctx.fillStyle = '#fdfdff';
-    ctx.beginPath(); ctx.arc(b.x, b.y, 1.3, 0, TAU); ctx.fill();
-    ctx.lineCap = 'butt';
+    ctx.fillRect(Math.floor(b.x) - 1, Math.floor(b.y) - 1, 2, 2);
     return;
   }
-  // --- KINETIC / PHYSICAL bullets (Tank slug, Ong magnum, Soldier pistol): a tangible
-  // metallic slug, NEVER 'lighter'. An elongated capsule oriented along the velocity,
-  // a cross-axis linear gradient for a metal sheen, a bright nose, and (tracer:true) a
-  // thin sharp white air-distortion line — no glowing plasma wake. ---
-  if(b.kinetic){
-    // Higher weapon tiers render a heftier slug (reads b.tier): ~+9% size per tier.
-    const r = (b.radius || 2) * (1 + ((b.tier || 1) - 1) * 0.09);
-    if(b.tracer){
-      const sp = Math.hypot(b.vx, b.vy) || 1;
-      const tlx = b.x - (b.vx / sp) * 11, tly = b.y - (b.vy / sp) * 11;
-      ctx.strokeStyle = '#e8eef2'; ctx.lineWidth = 1; ctx.globalAlpha = 0.45; ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(tlx, tly); ctx.lineTo(b.x, b.y); ctx.stroke();
-      ctx.globalAlpha = 1; ctx.lineCap = 'butt';
-    }
-    ctx.save();
-    ctx.translate(b.x, b.y);
-    ctx.rotate(b.angle);
-    // Metal sheen across the short axis: white highlight -> body tint -> dark underside.
-    const g = ctx.createLinearGradient(0, -r, 0, r);
-    g.addColorStop(0, '#ffffff');
-    g.addColorStop(0.45, b.glow || '#cfd8dc');
-    g.addColorStop(1, '#4a4f57');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.ellipse(0, 0, r * 2.0, r * 0.95, 0, 0, TAU); ctx.fill();
-    // Bright nose.
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath(); ctx.ellipse(r * 1.2, 0, r * 0.5, r * 0.5, 0, 0, TAU); ctx.fill();
-    ctx.restore();
-    return;
-  }
-  // --- ENERGY / PLASMA bullets (Scout SMG dots, Ong bio-glob, enemy shots): a vector
-  // orb — a hot white core fading into the glow colour, drawn ADDITIVELY so overlaps
-  // bloom. (Soldier pistol joins this branch at Tier 3+ when a tier system exists.) ---
-  const col = b.glow || '#ffe08a';
-  // Higher weapon tiers glow bigger/brighter (reads b.tier): ~+9% radius per tier.
-  const R = (b.radius || 2) * 2.6 * (1 + ((b.tier || 1) - 1) * 0.09);
+  // Everything else: the blocky color-mapped bullet SPRITE, rotated to its heading.
   ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, R);
-  g.addColorStop(0, '#ffffff');
-  g.addColorStop(0.35, col);
-  g.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = g;
-  ctx.beginPath(); ctx.arc(b.x, b.y, R, 0, TAU); ctx.fill();
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath(); ctx.arc(b.x, b.y, Math.max(1, (b.radius || 2) * 0.6), 0, TAU); ctx.fill();
+  ctx.translate(Math.floor(b.x), Math.floor(b.y));
+  ctx.rotate(b.angle);
+  const sp = b.sprite;
+  if(sp) drawSprite(sp, -Math.floor(sp.w / 2), -Math.floor(sp.h / 2));
+  else { ctx.fillStyle = b.glow || '#ffe08a'; ctx.fillRect(-2, -2, 4, 4); }
   ctx.restore();
-  ctx.globalCompositeOperation = 'source-over';
   if(b.pierce){
-    ctx.globalAlpha = 0.4;
-    ctx.fillStyle = '#27ae60';
-    ctx.beginPath(); ctx.arc(b.x, b.y, 2, 0, TAU); ctx.fill();
+    // Crisp green pierce-trail square.
+    ctx.globalAlpha = 0.4; ctx.fillStyle = '#27ae60';
+    ctx.fillRect(Math.floor(b.x) - 1, Math.floor(b.y) - 1, 3, 3);
     ctx.globalAlpha = 1;
   }
 }
@@ -6870,9 +6800,8 @@ function drawCharacterSelect(){
     ctx.font = 'bold 11px monospace';
     ctx.fillText(ch.name, r.x + r.w / 2, r.y + 17);
 
-    // Vector icon preview: enlarged + rotated to face UP (toward the top of the card)
-    // so it reads as a standing portrait.
-    drawCharVector(ctx, key, r.x + r.w / 2, r.y + 46, 2.2, -Math.PI / 2, false);
+    // Pixel-sprite preview: enlarged + rotated to face UP (toward the top of the card).
+    drawPixelSprite(ctx, ch.sprite, r.x + r.w / 2, r.y + 46, 3, -Math.PI / 2, null);
 
     // Stats — laid out sequentially so optional rows (DMG/SHIELD/pool) never overlap.
     ctx.font = 'bold 7px monospace';
