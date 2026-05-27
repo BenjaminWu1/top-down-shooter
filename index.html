@@ -97,8 +97,8 @@ const SPR = {
     "..33....33..",
     "..3......3.."
   ]),
-  // (The old upright 14x14 player sprites were removed — the 5 playable characters now
-  // render via the rotating color-mapped CHARACTERS[*].sprite arrays + drawPixelSprite.)
+  // (The player bodies are no longer sprites — the 5 playable characters render as clean
+  // vector iconography via drawCharVector(); only enemies/pickups/allies use S/drawSprite.)
   grunt_a: S({'.':null,'1':'#7d3838','2':'#c0392b','3':'#2d1414','e':'#fff'}, [
     "..1111..",
     ".112211.",
@@ -970,46 +970,76 @@ function drawSpriteTinted(sp, x, y, tint){
   }
 }
 
-// ---- Color-mapped pixel sprite renderer for the playable characters ----
-// A single shared palette (char -> CSS color; '.' = transparent) + a renderer that
-// draws an array-of-strings sprite ROTATED to face an angle. The 5 character sprites
-// are designed top-down FACING EAST (front/weapon at the right edge, +x), so passing
-// player.angle (0 = east) points the front at the cursor. `tint` (optional) overrides
-// every non-transparent cell with one colour (used for the white hit-flash).
-const PALETTE = {
-  '.': null,            // transparent
-  'k': '#15151a',       // near-black
-  'd': '#2c2c2c',       // dark suit / shoulders grey
-  'g': '#3a5a2a',       // camo dark green
-  'G': '#5a7a3a',       // camo mid green
-  'o': '#4b5320',       // olive drab
-  'b': '#6b4a2a',       // brown (spear shaft / duster dark)
-  'B': '#8a5a2a',       // tan brown (duster)
-  'f': '#caa472',       // flesh
-  's': '#9aa7b0',       // gunmetal grey
-  'S': '#c5d0d8',       // bright chrome / silver
-  'c': '#00ffff',       // neon cyan (visor)
-  't': '#39ff14',       // toxic green (toxin tank)
-  'r': '#e67e22',       // orange (vents)
-  'w': '#e8eef2',       // white highlight (spearhead)
-  '9': '#e74c3c'        // red (optic)
-};
-const PLAYER_PX = 1.4;  // logical px per sprite cell (12x12 grid ~= 17px on screen)
-function drawPixelSprite(ctx, map, x, y, size, angle, tint){
-  if(!map) return;
-  const rows = map.length, cols = map[0].length;
+// ---- Clean VECTOR character iconography (replaces the old pixel sprites) ----
+// Each of the 5 classes is built from smooth geometric primitives (arc, polygons,
+// rounded rects) centered on (0,0) and designed FACING EAST (+x = forward), then
+// translated + rotated to the aim. imageSmoothingEnabled is true globally, and canvas
+// vector fills are anti-aliased, so these render perfectly smooth at any rotation/scale.
+// A small rounded-rect path helper (arcTo is universally supported + headless-safe).
+function vRoundRect(ctx, x, y, w, h, r){
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y,     x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x,     y + h, r);
+  ctx.arcTo(x,     y + h, x,     y,     r);
+  ctx.arcTo(x,     y,     x + w, y,     r);
+  ctx.closePath();
+}
+// Draw a class's vector blueprint centered at (x,y), scaled, rotated to `angle`
+// (0 = east). `flash` overlays a white silhouette for the hit-flash.
+function drawCharVector(ctx, charKey, x, y, scale, angle, flash){
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(angle || 0);
-  const ox = -cols * size / 2, oy = -rows * size / 2;   // center the grid on (x,y)
-  for(let r = 0; r < rows; r++){
-    const row = map[r];
-    for(let c = 0; c < cols; c++){
-      const col = tint || PALETTE[row[c]];
-      // +0.5 cell overlap hides AA seams between rotated rects.
-      if(col){ ctx.fillStyle = col; ctx.fillRect(ox + c*size, oy + r*size, size + 0.5, size + 0.5); }
-    }
+  ctx.scale(scale, scale);
+  if(charKey === 'soldier'){
+    // Olive-green circle body + brown spear forward + silver tip.
+    ctx.fillStyle = '#4b5320'; ctx.beginPath(); ctx.arc(0, 0, 7, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#6b4a2a'; vRoundRect(ctx, 3, -1.4, 13, 2.8, 1.3); ctx.fill();
+    ctx.fillStyle = '#cfd8dc'; vRoundRect(ctx, 14, -2, 4.5, 4, 1); ctx.fill();
+  } else if(charKey === 'scout'){
+    // Sleek dark chevron pointing forward + a bright cyan visor chevron.
+    ctx.fillStyle = '#2c3138'; ctx.beginPath();
+    ctx.moveTo(9, 0); ctx.lineTo(-6, -7); ctx.lineTo(-3, 0); ctx.lineTo(-6, 7); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#00ffff'; ctx.beginPath();
+    ctx.moveTo(7, 0); ctx.lineTo(1, -3); ctx.lineTo(3, 0); ctx.lineTo(1, 3); ctx.closePath(); ctx.fill();
+  } else if(charKey === 'tank'){
+    // Wide gunmetal rounded body + 2 orange back vents + dark flamethrower barrel front.
+    ctx.fillStyle = '#6b7280'; vRoundRect(ctx, -11, -7.5, 22, 15, 4); ctx.fill();
+    ctx.fillStyle = '#e67e22';
+    ctx.beginPath(); ctx.arc(-8, -4, 2.4, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(-8,  4, 2.4, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#3a3f44'; vRoundRect(ctx, 7, 1.4, 11, 4.6, 2); ctx.fill();
+    ctx.fillStyle = '#15151a'; ctx.beginPath(); ctx.arc(18, 3.7, 2.1, 0, TAU); ctx.fill();
+  } else if(charKey === 'bounty_hunter'){
+    // Leather-brown duster "shield" + dark head circle + twin silver shotgun barrels.
+    ctx.fillStyle = '#8a5a2a'; ctx.beginPath();
+    ctx.moveTo(9, 0);
+    ctx.quadraticCurveTo(5, -8, -5, -7);
+    ctx.quadraticCurveTo(-9, -4, -9, 0);
+    ctx.quadraticCurveTo(-9, 4, -5, 7);
+    ctx.quadraticCurveTo(5, 8, 9, 0);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#c5d0d8';
+    vRoundRect(ctx, 4, -3, 12, 1.8, 0.9); ctx.fill();
+    vRoundRect(ctx, 4, 1.2, 12, 1.8, 0.9); ctx.fill();
+    ctx.fillStyle = '#2c2c2c'; ctx.beginPath(); ctx.arc(0, 0, 3.6, 0, TAU); ctx.fill();
+  } else if(charKey === 'cyborg'){
+    // Split circle: left half skin, right half chrome (gradient) + toxic-green tank.
+    const R = 7;
+    ctx.fillStyle = '#d2b48c';
+    ctx.beginPath(); ctx.arc(0, 0, R, Math.PI * 0.5, Math.PI * 1.5); ctx.closePath(); ctx.fill();
+    const cg = ctx.createLinearGradient(0, 0, R, 0); cg.addColorStop(0, '#aeb6bd'); cg.addColorStop(1, '#eef3f7');
+    ctx.fillStyle = cg;
+    ctx.beginPath(); ctx.arc(0, 0, R, -Math.PI * 0.5, Math.PI * 0.5); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#2c333b'; ctx.lineWidth = 0.6;
+    ctx.beginPath(); ctx.moveTo(0, -R); ctx.lineTo(0, R); ctx.stroke();
+    ctx.fillStyle = '#39ff14'; ctx.beginPath(); ctx.arc(-5, -5, 2.4, 0, TAU); ctx.fill();
+  } else {
+    ctx.fillStyle = '#888'; ctx.beginPath(); ctx.arc(0, 0, 7, 0, TAU); ctx.fill();
   }
+  if(flash){ ctx.globalAlpha = 0.7; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, 9, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; }
   ctx.restore();
 }
 
@@ -1570,110 +1600,31 @@ const CHARACTERS = {
     name:'Dr.Syed', desc:'RAINFOREST WARRIOR · SPEAR (RMB) · ENERGY POOL',
     color:'#3498db', hp:10, speed:156, damageMult:1.25, startShield:0,
     skills:{ x:'sprint', c:'flameburst', v:'barrage', f:'heal', b:'invuln' },
-    skillLabels:{ x:'SPRINT', c:'NAPALM', v:'BARRAGE', f:'HEAL', b:'INVINC' },
-    // Top-down, FACING EAST (front/spear at the right edge). Jungle camo body + boonie
-    // head, flesh face, brown wooden spear tipped white protruding forward.
-    sprite:[
-      "............",
-      ".....GG.....",
-      "...gGGGGg...",
-      "..gGGGGGGg..",
-      "..GGGGffGG..",
-      ".oGGGffGbbbw",
-      ".oGGGffGbbbw",
-      "..GGGGffGG..",
-      "..gGGGGGGg..",
-      "...gGGGGg...",
-      ".....GG.....",
-      "............"
-    ]
+    skillLabels:{ x:'SPRINT', c:'NAPALM', v:'BARRAGE', f:'HEAL', b:'INVINC' }
   },
   scout: {
     name:'Xu Yihui', desc:'CYBER MECH · 3× LASER BEAM (RMB) · BLINK+DASH',
     color:'#f1c40f', hp:9, speed:148, damageMult:1.25, startShield:0,
     skills:{ x:'sprint', c:'blink', v:'dash', f:'heal', b:'blast' },
-    skillLabels:{ x:'SPRINT', c:'BLINK', v:'DASH', f:'HEAL', b:'BLAST' },
-    // Sleek black/dark-grey suit with a bright neon-cyan V-visor pointing forward (east).
-    sprite:[
-      "............",
-      "....dkkd....",
-      "..dkkkkkd...",
-      "..dkkkkkcd..",
-      ".dkkkkkkcc..",
-      ".dkkkkkkccc.",
-      ".dkkkkkkccc.",
-      ".dkkkkkkcc..",
-      "..dkkkkkcd..",
-      "..dkkkkkd...",
-      "....dkkd....",
-      "............"
-    ]
+    skillLabels:{ x:'SPRINT', c:'BLINK', v:'DASH', f:'HEAL', b:'BLAST' }
   },
   tank: {
     name:'Benjamin Wu', desc:'HEAVY · +20% DAMAGE · FLAMETHROWER (RMB)',
     color:'#27ae60', hp:12, speed:95, damageMult:1.2, startShield:4,
     skills:{ x:'sprint', c:'wall', v:'vsummon', f:'heal', b:'blast' },
-    skillLabels:{ x:'SPRINT', c:'WALL', v:'BLADE+', f:'HEAL', b:'BLAST' },
-    // Bulky mech: gunmetal core + olive-drab shell, flesh face forward, orange exhaust
-    // vents on the BACK (left edge). Fills the grid (widest silhouette).
-    sprite:[
-      "...oooooo...",
-      "..oossssoo..",
-      ".oossssssoo.",
-      ".osssssssfo.",
-      "rrosssssssfo",
-      "rrossssssssf",
-      "rrossssssssf",
-      "rrosssssssfo",
-      ".osssssssfo.",
-      ".oossssssoo.",
-      "..oossssoo..",
-      "...oooooo..."
-    ]
+    skillLabels:{ x:'SPRINT', c:'WALL', v:'BLADE+', f:'HEAL', b:'BLAST' }
   },
   bounty_hunter: {
     name:'Leo', desc:'BOUNTY HUNTER · SHOTGUN · MACHETE (RMB) · FURY',
     color:'#d35400', hp:11, speed:120, damageMult:1.3, startShield:0,
     skills:{ x:'sprint', c:'grit', v:'fanfire', f:'heal', b:'blast' },
-    skillLabels:{ x:'SPRINT', c:'GRIT', v:'FANFIRE', f:'HEAL', b:'BLAST' },
-    // Gritty survivor: brown trench-coat/duster body, dark-grey shoulders, a silver/grey
-    // shotgun barrel extending forward (east).
-    sprite:[
-      "............",
-      "...dBBBBd...",
-      "..dBBBBBBd..",
-      ".dBBBBBBBBd.",
-      ".BBBBBBffBs.",
-      ".BBBBBffsSSS",
-      ".BBBBBffsSSS",
-      ".BBBBBBffBs.",
-      ".dBBBBBBBBd.",
-      "..dBBBBBBd..",
-      "...dBBBBd...",
-      "............"
-    ]
+    skillLabels:{ x:'SPRINT', c:'GRIT', v:'FANFIRE', f:'HEAL', b:'BLAST' }
   },
   cyborg: {
     name:'Ong', desc:'CYBORG · MAGNUM · BIO-GUN (RMB) · TOXIN',
     color:'#8e44ad', hp:10, speed:140, damageMult:1.15, startShield:2,
     skills:{ x:'sprint', c:'overclock', v:'biobomb', f:'heal', b:'blast' },
-    skillLabels:{ x:'SPRINT', c:'OVRCLK', v:'BIOBOMB', f:'HEAL', b:'BLAST' },
-    // Bio-machine: one body half organic (flesh/dark cloth), the other pure chrome; a
-    // red optic forward and a toxic-green toxin tank on the BACK (left edge).
-    sprite:[
-      "............",
-      "...dffffd...",
-      "..dffffffd..",
-      ".dfffffff9..",
-      "tdfffffff99.",
-      "tdfffffff9..",
-      ".sSSSSSSSSs.",
-      ".sSSSSSSSSs.",
-      "..sSSSSSSs..",
-      "...sSSSSs...",
-      "............",
-      "............"
-    ]
+    skillLabels:{ x:'SPRINT', c:'OVRCLK', v:'BIOBOMB', f:'HEAL', b:'BLAST' }
   }
 };
 // NOTE: the per-class `skills`/`skillLabels` maps above are now LEGACY/vestigial —
@@ -1918,8 +1869,8 @@ function clickedRect(x,y,w,h){ return mouse.x>=x && mouse.x<=x+w && mouse.y>=y &
 // ============================================================
 // ENTITY FACTORIES
 // ============================================================
-// (Player bodies now render via drawPixelSprite(CHARACTERS[char].sprite, …) rotated to
-// the aim — the old upright per-frame playerSprites() lookup was removed.)
+// (Player bodies render via drawCharVector(charKey, x, y, scale, angle) — clean vector
+// shapes rotated to the aim; the old upright sprite lookup was removed.)
 
 // Resolve the active-skill loadout from the profile. F is always HEAL. Each of
 // X/C/B/V is filled only if its slot is unlocked by level AND assigned AND owned.
@@ -5612,11 +5563,10 @@ function drawPlayer(p){
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
   }
-  // Body: the color-mapped pixel sprite, ROTATED to face the cursor (front = the
-  // weapon, which now lives in the sprite itself — no separate gun rectangle). White
-  // hit-flash via the tint param. The hitbox (player.radius) is unchanged.
-  const map = (CHARACTERS[p.char] || CHARACTERS.soldier).sprite;
-  drawPixelSprite(ctx, map, p.x, p.y, PLAYER_PX, p.angle, p.hitFlash > 0 ? '#fff' : null);
+  // Body: the clean VECTOR icon, ROTATED to face the cursor (front = the weapon, which
+  // lives in the shape itself — no separate gun rectangle). White hit-flash via `flash`.
+  // The hitbox (player.radius) is unchanged.
+  drawCharVector(ctx, p.char, p.x, p.y, 1, p.angle, p.hitFlash > 0);
   // Shield ring
   if(p.shieldHp > 0){
     ctx.strokeStyle = '#1abc9c';
@@ -6920,9 +6870,9 @@ function drawCharacterSelect(){
     ctx.font = 'bold 11px monospace';
     ctx.fillText(ch.name, r.x + r.w / 2, r.y + 17);
 
-    // Sprite preview: the new pixel sprite, enlarged + rotated to face UP (toward the
-    // top of the card) so it reads as a standing portrait.
-    drawPixelSprite(ctx, ch.sprite, r.x + r.w / 2, r.y + 46, 3, -Math.PI / 2, null);
+    // Vector icon preview: enlarged + rotated to face UP (toward the top of the card)
+    // so it reads as a standing portrait.
+    drawCharVector(ctx, key, r.x + r.w / 2, r.y + 46, 2.2, -Math.PI / 2, false);
 
     // Stats — laid out sequentially so optional rows (DMG/SHIELD/pool) never overlap.
     ctx.font = 'bold 7px monospace';
