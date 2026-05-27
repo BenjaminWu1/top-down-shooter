@@ -1473,6 +1473,15 @@ const LVL_HP_PER = 6,        LVL_HP_CAP = 8;      // +1 maxHp every 6 levels, ma
 const RMB_BASE_FRAC = 0.4;                        // level-1 RMB pool = 40% of base ("very short")
 const RMB_DUR_PER = 0.06,    RMB_DUR_CAP = 2.0;   // RMB-secondary duration grows ~3x by high level
 const DROP_LVL_PER = 0.004, DROP_LVL_CAP = 0.15, DROP_GATE_MAX = 0.75; // gate-only drop scaling
+// ---- 5-TIER WEAPON EVOLUTION. The active tier is derived from the account level
+// (1 tier per 8 levels, capped at 5): weaponTier(L) = min(5, floor((L-1)/8)+1) -> tier
+// 1 / 2 / 3 / 4 / 5 unlock at account level 1 / 9 / 17 / 25 / 33. Each tier multiplies
+// the basic-attack (LMB + held-RMB) base DAMAGE and projectile SPEED; it stacks
+// multiplicatively with the DAMAGE pickup (x2) and is independent of RAPID (which only
+// affects cadence). Cached on the player at run start (applyLevelScaling). ----
+const WEAPON_TIER_MULT = [1.0, 1.2, 1.5, 1.9, 2.5];   // index = tier-1
+function weaponTierFor(level){ return Math.min(5, Math.floor(((level || 1) - 1) / 8) + 1); }
+function weaponTierMult(){ return WEAPON_TIER_MULT[(player && player.weaponTier || 1) - 1] || 1; }
 // ---- Assistant leveling (each owned ally has its own level 1..10, upgraded with
 // gold in the SHOP; the gold cost rises every level). Level 1 is deliberately weak
 // (capabilities are SIGNIFICANTLY reduced) and level 10 restores full power. ----
@@ -1992,6 +2001,9 @@ function resolvePlayerLoadout(){
 // "second basic attack" duration (its fuel/energy/power pool — short at L1, grows).
 function applyLevelScaling(p){
   const L = Math.max(0, (profile.level || 1) - 1);
+  // 5-tier weapon evolution, derived from the account level + cached for the run.
+  p.weaponTier = weaponTierFor(profile.level || 1);
+  p.weaponMult = WEAPON_TIER_MULT[p.weaponTier - 1] || 1;
   p.damageMult *= 1 + Math.min(LVL_DMG_CAP, L * LVL_DMG_PER);
   const fireBonus = Math.min(LVL_FIRE_CAP, L * LVL_FIRE_PER);
   p.fireRate *= (1 - fireBonus);
@@ -2287,6 +2299,11 @@ function createBullet(x,y,angle,owner,opts={}){
     // (radial-gradient bloom under 'lighter'). tracer = a thin sharp air-distortion trail.
     kinetic: opts.kinetic ?? false,
     tracer: opts.tracer ?? false,
+    // 5-tier weapon evolution tags: the firing weapon's tier + the class that fired it.
+    // (drawBulletEntity's kinetic/energy split is derived from these at fire time; the
+    // renderer also reads `tier` to scale the projectile's heft/brightness.)
+    tier: opts.tier ?? 1,
+    sourceClass: opts.sourceClass ?? null,
     hitSet: opts.pierce ? new Set() : null,
     // `fromAlly` marks an owner:'player' bullet that was actually fired by an ally
     // (drone/bomber), so Syed's lifesteal passive doesn't credit him for it.
@@ -3354,7 +3371,7 @@ function fireFlamethrower(dt){
   const danger = player.maxFuel > 0 && player.fuel < player.maxFuel * 0.5;
   // DPS stacks MULTIPLICATIVELY: base 7 x damageMult x DAMAGE-pickup(2) x heat(1.5).
   // (The 1.5 never overrides the others; a future tier mult slots in the same way.)
-  const dps = 7 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1) * (danger ? 1.5 : 1);
+  const dps = 7 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1) * (danger ? 1.5 : 1) * (player.weaponMult || 1);
   // Damage every enemy inside the cone, scaled by dt AND by distance: the flame is
   // HOTTEST at the nozzle and cools toward the edge of its reach — point-blank enemies
   // take ~1.9x, enemies at max range take ~0.4x (a steep close-up bonus that rewards
@@ -3406,7 +3423,7 @@ const KATANA_RANGE = 32;     // long katana reach
 const KATANA_HALF  = 0.9;    // ~51.6° half-arc => ~103° total slash — still obtuse,
                              // and 3/4 of the prior 1.2-rad arc (scope cut to 3/4)
 function fireKatana(dt){
-  const dps = 40 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
+  const dps = 40 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1) * (player.weaponMult || 1);
   let hitAny = false, hx = 0, hy = 0;
   for(const en of entities){
     if(en.type !== 'enemy' || en.dead) continue;
@@ -3456,7 +3473,7 @@ function fireKatana(dt){
 // lock-step with the arc drawn in drawPlayer). MACHETE_DPS is the balance lever.
 const MACHETE_RANGE = 38, MACHETE_HALF = 0.9, MACHETE_DPS = 46;
 function fireMachete(dt){
-  const dps = MACHETE_DPS * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
+  const dps = MACHETE_DPS * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1) * (player.weaponMult || 1);
   let hitAny = false, hx = 0, hy = 0;
   for(const en of entities){
     if(en.type !== 'enemy' || en.dead) continue;
@@ -3508,9 +3525,10 @@ function fireMachete(dt){
 // has to bump them. Drains `toxin` (1 per shot, gated by bioCd in updatePlaying).
 function fireBiogun(){
   const a = player.angle;
+  const tMul = player.weaponMult || 1;   // 5-tier evolution: scales glob dmg/speed + cloud dps
   const mx = player.x + Math.cos(a) * 9, my = player.y + Math.sin(a) * 9;
-  const b = createBullet(mx, my, a, 'player', { dmg: 1 * (player.damageMult || 1), speed: 260, radius: 3, life: 0.8, sprite: SPR.bullet_bio, glow: '#2ecc71' });
-  b.spawnsCloud = true; b.cloudRadius = 24; b.cloudLife = 2; b.cloudDps = 6; b.cloudSlow = 0;
+  const b = createBullet(mx, my, a, 'player', { dmg: 1 * (player.damageMult || 1) * tMul, speed: 260 * tMul, radius: 3, life: 0.8, sprite: SPR.bullet_bio, glow: '#2ecc71', tier: player.weaponTier || 1, sourceClass: 'cyborg' });
+  b.spawnsCloud = true; b.cloudRadius = 24; b.cloudLife = 2; b.cloudDps = 6 * tMul; b.cloudSlow = 0;
   entities.push(b);
   emit(mx, my, 4, '#27ae60', 30, 90, 0.2, true);
   sfx.shoot();
@@ -3567,7 +3585,7 @@ const LASER_BEAM_LEN = 147;      // = old bolt speed(420) * life(0.35): scope un
 const LASER_BEAM_HALF = 4;       // beam half-thickness used for the hit test
 const LASER_BEAM_SPREAD = 0.18;  // fan offset per side (unchanged from old burst)
 function fireLaserBeams(){
-  const dmg = 3 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
+  const dmg = 3 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1) * (player.weaponMult || 1);
   const lx = player.x + Math.cos(player.angle) * 9;
   const ly = player.y + Math.sin(player.angle) * 9;
   for(const off of [-LASER_BEAM_SPREAD, 0, LASER_BEAM_SPREAD]){
@@ -3603,7 +3621,11 @@ function fireWeapon(mx, my){
   //   multiTime  → fire a parallel DOUBLE shot (same projectile, ±perp offset)
   // The projectile sprite / speed / sound stay the class default in every case.
   const rapidFactor = player.rapidTime > 0 ? 0.5 : 1;
-  const dmgMult = (player.damageTime > 0 ? 2 : 1) * (player.damageMult || 1);
+  // 5-tier weapon evolution: scales base damage + projectile speed. Stacks
+  // MULTIPLICATIVELY with the DAMAGE pickup (x2) and account damageMult; independent of
+  // RAPID (cadence). tMul is also applied to projectile speed just below.
+  const tMul = player.weaponMult || 1;
+  const dmgMult = (player.damageTime > 0 ? 2 : 1) * (player.damageMult || 1) * tMul;
 
   // Per-class basic-attack projectile spec + cadence + muzzle flash + fire sound.
   let opts, cd, flashN, flashCol, flashSpd, flashLife, fireSfx = sfx.shoot;
@@ -3628,13 +3650,18 @@ function fireWeapon(mx, my){
     opts = { dmg: 3.4 * dmgMult, radius: 3, speed: 300, life: 1.2, kinetic: true, tracer: true, glow: '#eaf2ff' };
     cd = 0.34; flashN = 4; flashCol = '#fff'; flashSpd = 120; flashLife = 0.2;
   } else {
-    // Soldier default pistol. KINETIC at base (Tiers 1-2) — a brass bullet. (When a
-    // weapon-tier system exists, flip kinetic->false at Tier 3+ so it evolves into a
-    // plasma bolt with the energy glow; no tier system today, so it stays kinetic.)
-    opts = { dmg: 1 * dmgMult, kinetic: true, glow: '#ffd24a' };
-    cd = player.fireRate; flashN = 3; flashCol = '#f1c40f'; flashSpd = 100; flashLife = 0.18;
+    // Soldier pistol EVOLVES with weapon tier: a brass KINETIC bullet at Tiers 1-2, then
+    // a glowing PLASMA bolt at Tier 3+ (the energy-glow renderer takes over).
+    const plasma = (player.weaponTier || 1) >= 3;
+    opts = { dmg: 1 * dmgMult, kinetic: !plasma, glow: plasma ? '#b388ff' : '#ffd24a', speed: 240 };
+    cd = player.fireRate; flashN = 3; flashCol = plasma ? '#b388ff' : '#f1c40f'; flashSpd = 100; flashLife = 0.18;
   }
   if(player.pierceTime > 0) opts.pierce = true;
+  // Tier scales projectile SPEED too (stacks with the damage scaling above), and tags
+  // every bullet with the firing tier + class for the renderer's kinetic/energy split.
+  opts.speed = (opts.speed ?? 240) * tMul;
+  opts.tier = player.weaponTier || 1;
+  opts.sourceClass = player.char;
 
   // Weapon FORM = a list of angle offsets (default single shot; shotgun = a fan). The
   // `spread` is the projectile shape, NOT an enhancer, so it stacks with MULTI below.
@@ -5301,7 +5328,10 @@ function drawStats(){
   const p = player;
   if(!p) return;
   const ch = CHARACTERS[p.char] || CHARACTERS.soldier;
-  const dm = p.damageMult || 1;
+  // Effective damage multiplier INCLUDING the weapon-tier evolution, so the numbers
+  // below match what fireWeapon / the RMB fns actually deal (base x damageMult x tier).
+  const tierMul = p.weaponMult || 1;
+  const dm = (p.damageMult || 1) * tierMul;
   const fmt = n => isFinite(n) ? String(Math.round(n * 100) / 100) : '∞';
 
   // --- Primary basic attack (LMB): per-class form, damage, cadence (mirrors fireWeapon) ---
@@ -5375,7 +5405,8 @@ function drawStats(){
     [capLabel + ' REGEN', regenVal],
     ['CADENCE / NOTE', rmbExtra],
     { h:'GENERAL' },
-    ['DAMAGE MULT', '×' + fmt(Math.round(dm * 100) / 100)],
+    ['WEAPON TIER', 'Tier ' + (p.weaponTier || 1) + ' / 5  (×' + fmt(tierMul) + ')'],
+    ['DAMAGE MULT', '×' + fmt(Math.round(dm * 100) / 100) + ' (incl. tier)'],
     ['LIFESTEAL', lifesteal],
     ['ACCOUNT LV', String(profile.level || 1)]
   ];
@@ -5973,7 +6004,8 @@ function drawBulletEntity(b){
   // a cross-axis linear gradient for a metal sheen, a bright nose, and (tracer:true) a
   // thin sharp white air-distortion line — no glowing plasma wake. ---
   if(b.kinetic){
-    const r = b.radius || 2;
+    // Higher weapon tiers render a heftier slug (reads b.tier): ~+9% size per tier.
+    const r = (b.radius || 2) * (1 + ((b.tier || 1) - 1) * 0.09);
     if(b.tracer){
       const sp = Math.hypot(b.vx, b.vy) || 1;
       const tlx = b.x - (b.vx / sp) * 11, tly = b.y - (b.vy / sp) * 11;
@@ -6001,7 +6033,8 @@ function drawBulletEntity(b){
   // orb — a hot white core fading into the glow colour, drawn ADDITIVELY so overlaps
   // bloom. (Soldier pistol joins this branch at Tier 3+ when a tier system exists.) ---
   const col = b.glow || '#ffe08a';
-  const R = (b.radius || 2) * 2.6;
+  // Higher weapon tiers glow bigger/brighter (reads b.tier): ~+9% radius per tier.
+  const R = (b.radius || 2) * 2.6 * (1 + ((b.tier || 1) - 1) * 0.09);
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, R);
@@ -6786,8 +6819,10 @@ function scaledStatsFor(charKey, level){
   const maxHp = ch.hp + Math.min(LVL_HP_CAP, Math.floor(L / LVL_HP_PER));
   const rmbMul = RMB_BASE_FRAC * (1 + Math.min(RMB_DUR_CAP, L * RMB_DUR_PER));
   const pool = base => base > 0 ? Math.max(1, Math.round(base * rmbMul)) : 0;
+  const weaponTier = weaponTierFor(level || 1);
+  const weaponMult = WEAPON_TIER_MULT[weaponTier - 1] || 1;
   return {
-    ch, dmgMult, fireRate, laserScale, maxHp,
+    ch, dmgMult, fireRate, laserScale, maxHp, weaponTier, weaponMult,
     maxFuel:   pool(charKey === 'tank'    ? 12 : 0),
     maxEnergy: pool(charKey === 'soldier' ?  6 : 0),
     maxPower:  pool(charKey === 'scout'   ? 20 : 0),
@@ -6867,19 +6902,20 @@ function drawParameters(){
     ['MOVE SPEED', fmt(ch.speed) + ' px/s', dl(0)],
     { h:'PRIMARY ATTACK (LMB)' },
     ['WEAPON', lmbName, null],
-    ['DAMAGE', fmt(lmbBase * cur.dmgMult) + ' /hit', dl(lmbBase * (nxt.dmgMult - cur.dmgMult))],
+    ['DAMAGE', fmt(lmbBase * cur.dmgMult * cur.weaponMult) + ' /hit', dl(lmbBase * (nxt.dmgMult*nxt.weaponMult - cur.dmgMult*cur.weaponMult))],
     ['FIRE RATE', fmt(Math.round(lmbRate * 10) / 10) + ' /s', dl(lmbRateNxt - lmbRate)],
     ['RANGE', fmt(lmbRange) + ' px', dl(0)]
   ];
   const right = [
     { h:'SECONDARY ATTACK (RMB)' },
     ['WEAPON', secName, null],
-    ['DAMAGE', fmt(secBase * cur.dmgMult) + secUnit, dl(secBase * (nxt.dmgMult - cur.dmgMult))],
+    ['DAMAGE', fmt(secBase * cur.dmgMult * cur.weaponMult) + secUnit, dl(secBase * (nxt.dmgMult*nxt.weaponMult - cur.dmgMult*cur.weaponMult))],
     ['RANGE', secRange, null],
     [capLabel + ' CAP.', fmt(capCur) + capUnit, dl(capNxt - capCur)],
     [capLabel + ' REGEN', regenVal, dl(0)],
     { h:'GENERAL' },
-    ['DAMAGE MULT', '×' + fmt(cur.dmgMult), dl(nxt.dmgMult - cur.dmgMult)],
+    ['WEAPON EVOLUTION', 'Tier ' + cur.weaponTier + ' / 5  (×' + fmt(cur.weaponMult) + ')', dl(nxt.weaponMult - cur.weaponMult)],
+    ['DAMAGE MULT', '×' + fmt(cur.dmgMult * cur.weaponMult) + ' (incl. tier)', dl(nxt.dmgMult*nxt.weaponMult - cur.dmgMult*cur.weaponMult)],
     [secExtra[0], secExtra[1], dl(0)]
   ];
 

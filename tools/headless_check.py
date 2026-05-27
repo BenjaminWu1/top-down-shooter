@@ -839,6 +839,42 @@ DRIVER_BALANCE = r"""
     check('Decals: visual-only (capped, never entities, explode spawns one)', ok, d.join(' '));
   })();
 
+  // 32) 5-tier weapon evolution: tier = min(5, floor((L-1)/8)+1) with the right
+  //     boundaries + multipliers; fired bullets carry tier + sourceClass; higher tier =
+  //     more LMB damage (stacks); the Soldier pistol flips kinetic->energy at Tier 3.
+  (function(){
+    var savedC = selectedChar, savedP = profile, ok = true, d = [];
+    // boundary table: account level -> expected tier
+    [[1,1],[8,1],[9,2],[16,2],[17,3],[24,3],[25,4],[32,4],[33,5],[50,5]].forEach(function(pair){
+      if(weaponTierFor(pair[0]) !== pair[1]){ ok = false; d.push('tier(' + pair[0] + ')=' + weaponTierFor(pair[0])); }
+    });
+    var MUL = [1.0,1.2,1.5,1.9,2.5];
+    for(var t = 1; t <= 5; t++){ if(WEAPON_TIER_MULT[t-1] !== MUL[t-1]){ ok = false; d.push('mult' + t); } }
+    profile = DEFAULT_PROFILE(); selectedChar = 'tank'; startGame(); state = STATE.PLAYING;
+    // Fire one LMB shot; optionally force the weapon-tier mult to isolate it from the
+    // separate account-level damageMult growth.
+    function lmbBullet(cls, lvl, forceMult){
+      profile.level = lvl; player = createPlayer(cls); entities = [player];
+      if(forceMult != null){ player.weaponMult = forceMult; }
+      player.x = 100; player.y = 100; player.angle = 0; player.fireCooldown = 0;
+      fireWeapon(player.x + 9, player.y);
+      return entities.filter(function(e){ return e.type === 'bullet'; })[0];
+    }
+    // applyLevelScaling tags the bullet with the level-derived tier + class.
+    var b1 = lmbBullet('tank', 1), b5 = lmbBullet('tank', 33);
+    if(!(b1 && b1.tier === 1 && b1.sourceClass === 'tank')){ ok = false; d.push('tagT1'); }
+    if(!(b5 && b5.tier === 5)){ ok = false; d.push('tagT5'); }
+    // Isolate the tier multiplier at a FIXED level (same damageMult): x2.5 vs x1.0 = 2.5.
+    var lo = lmbBullet('tank', 1, 1.0), hi = lmbBullet('tank', 1, 2.5);
+    if(!(lo && hi && Math.abs(hi.dmg / lo.dmg - 2.5) < 0.02)){ ok = false; d.push('tierStack=' + (lo && hi && (hi.dmg/lo.dmg).toFixed(2))); }
+    // Soldier pistol: kinetic at T1, energy (plasma) at T3+.
+    var sp1 = lmbBullet('soldier', 1), sp3 = lmbBullet('soldier', 17);
+    if(!(sp1 && sp1.kinetic === true)){ ok = false; d.push('soldierT1!kinetic'); }
+    if(!(sp3 && sp3.kinetic === false)){ ok = false; d.push('soldierT3!energy'); }
+    selectedChar = savedC; profile = savedP;
+    check('Weapon tiers: formula/mults + bullet tags + damage stacks + soldier plasma@T3', ok, d.join(' '));
+  })();
+
   return JSON.stringify(R);
 })();
 """
