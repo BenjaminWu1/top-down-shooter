@@ -1428,6 +1428,7 @@ let shakeAmt = 0;          // legacy scalar (kept for back-compat); setShake fil
 let shakeMag = 0;          // current shake amplitude
 let shakeDur = 0.15;       // duration the current shake decays over
 let shakeDirX = 0, shakeDirY = 0;  // unit recoil direction; (0,0) = random radial
+let playerShakeCd = 0;     // cooldown so continuous player damage (poison/rapid fire) can't stutter the screen
 let hitStopTime = 0;       // brief global freeze (skip updatePlaying, keep drawing) on heavy impacts
 let stateTime = 0;
 let bossSpawnPulse = 0;
@@ -2904,6 +2905,7 @@ function updatePlaying(dt){
   // ---- Decay global & powerup timers ----
   if(slowMoTime > 0) slowMoTime -= dt;
   if(shakeTime > 0) shakeTime -= dt;
+  if(playerShakeCd > 0) playerShakeCd -= dt;
   if(player.speedTime > 0)  player.speedTime  -= dt;
   if(player.sprintTime > 0) player.sprintTime -= dt;
   if(player.damageTime > 0) player.damageTime -= dt;
@@ -3634,11 +3636,14 @@ function fireWeapon(mx, my){
   if(player.char === 'bounty_hunter' && particles.length < 300){
     particles.push({ flash:true, x: mx, y: my, vx:0, vy:0, angle: player.angle, r: 7, color: '#ffd27f', life: 0.07, maxLife: 0.07 });
   }
-  // Heavy-weapon RECOIL: shotgun / tank slug / magnum kick the screen along the inverse
-  // shot vector (directional shake) + a tiny hit-stop for the shotgun/slug punch.
-  if(player.char === 'bounty_hunter' || player.char === 'tank' || player.char === 'cyborg'){
-    setShake(0.12, player.char === 'bounty_hunter' ? 3.5 : 3, -Math.cos(player.angle), -Math.sin(player.angle));
-    if(player.char !== 'cyborg') hitStop(30);
+  // Heavy-weapon RECOIL — WHITELISTED to Leo's SHOTGUN only, and kept very brief, so the
+  // screen kicks for the one genuinely heavy basic attack along the inverse shot vector.
+  // The Soldier pistol, Scout SMG/lasers, Ong magnum/bio-gun, and the Tank slug do NOT
+  // shake on fire (they're fast/basic — shaking them causes screen-shake fatigue). No
+  // hit-stop on basic fire either. (If a weapon-tier system is added later, gate a
+  // Tank-slug recoil to Tier 4/5 here — there is no tier system today.)
+  if(player.char === 'bounty_hunter'){
+    setShake(0.1, 2.5, -Math.cos(player.angle), -Math.sin(player.angle));
   }
   fireSfx();
 }
@@ -4159,7 +4164,9 @@ function damagePlayer(amount){
   player.hp -= amount;
   player.invuln = 0.9;
   player.hitFlash = 0.15;
-  setShake(0.2, 4);
+  // Player-damage shake is rate-limited (0.5s cooldown) so continuous damage — standing
+  // in a poison cloud, rapid fire, a gas pool — can't stutter the screen every frame.
+  if(playerShakeCd <= 0){ setShake(0.2, 4); playerShakeCd = 0.5; }
   emit(player.x, player.y, 8, '#e74c3c', 40, 130, 0.5);
   sfx.playerHurt();
 }
@@ -4188,9 +4195,10 @@ function killEnemy(en){
   profile.gold += Math.max(0, Math.floor(en.score / GOLD_PER_KILL_DIV * (1 + passiveValue('greed'))));
   emit(en.x, en.y, en.isBoss ? 40 : 14,
        en.isBoss ? '#9b59b6' : '#c0392b', 50, 200, en.isBoss ? 0.9 : 0.6);
-  if(en.kind === 'tank'){
-    setShake(0.25, 4);
-  } else if(en.isBoss){
+  // Enemy-impact shake is WHITELISTED to massive events only — a BOSS dying (here) or an
+  // explosion detonating (explode()). Ordinary kills (incl. the heavy 'tank' enemy) no
+  // longer shake; normal hits read via the white hit-flash + death particles instead.
+  if(en.isBoss){
     setShake(0.7, 6);
     // Boss death drops a guaranteed special equipment
     const drops = {
@@ -5198,8 +5206,11 @@ function drawDecor(kind, idx, bw, bh){
   }
 }
 
-// Screen shake disabled per user request — the shakeTime / shakeAmt assignments
-// scattered through combat code still run (harmless) but no offset is applied here.
+// Screen shake + sub-pixel camera offset are applied ONLY inside the world transform
+// (the inner save/translate/restore below); drawHUD() + overlays + menus render after
+// the restore, so the HUD / health bars / menus never shake. Shake is whitelisted to
+// high-impact events (Leo shotgun fire, explosions, boss death/spawn, big skills,
+// rate-limited player damage) — basic attacks and ordinary hits do NOT shake.
 function draw(){
   ctx.save();
 
