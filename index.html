@@ -1160,7 +1160,9 @@ function tone(freq, dur, type='square', freqEnd=null, gain=0.1){
   osc.start(now);
   osc.stop(now + dur);
 }
-function noiseHit(dur=0.08, gain=0.15, freq=1200){
+// White-noise burst through a biquad filter. `filterType` defaults to 'bandpass'
+// (every existing call is unchanged); pass 'lowpass'/'highpass' for muffled/hissy hits.
+function noiseHit(dur=0.08, gain=0.15, freq=1200, filterType='bandpass'){
   if(!audioCtx) return;
   const now = audioCtx.currentTime;
   const bufSize = Math.max(1, Math.floor(audioCtx.sampleRate * dur));
@@ -1173,9 +1175,55 @@ function noiseHit(dur=0.08, gain=0.15, freq=1200){
   g.gain.setValueAtTime(gain, now);
   g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
   const filt = audioCtx.createBiquadFilter();
-  filt.type = 'bandpass'; filt.frequency.value = freq;
+  filt.type = filterType; filt.frequency.value = freq;
   src.connect(filt).connect(g).connect(audioCtx.destination);
   src.start(now);
+}
+
+// ---- Flamethrower CONTINUOUS loop (the only sustained node in the game) ----
+// A held, looping white-noise source through a low-pass filter. Started on the first
+// flame frame, pitched/opened up in the "Dangerous Temperature" state, and stopped on
+// release / empty / pause / death / menu (see the Tank RMB block + the update() guard).
+// All three fns no-op when audio isn't initialised (headless: audioCtx null/stub).
+let flameLoop = null;   // { src, filter, gain } while sustaining, else null
+function flameAudioStart(){
+  if(!audioCtx || flameLoop) return;
+  try {
+    const n = Math.max(1, Math.floor(audioCtx.sampleRate * 1.0));
+    const buf = audioCtx.createBuffer(1, n, audioCtx.sampleRate);
+    const d = buf.getChannelData(0);
+    for(let i=0;i<n;i++) d[i] = Math.random()*2-1;
+    const src = audioCtx.createBufferSource(); src.buffer = buf; src.loop = true;
+    const filt = audioCtx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 700;
+    const g = audioCtx.createGain();
+    const now = audioCtx.currentTime;
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(0.12, now + 0.06);
+    src.connect(filt).connect(g).connect(audioCtx.destination);
+    src.start(now);
+    flameLoop = { src, filter: filt, gain: g };
+  } catch(e){ flameLoop = null; }
+}
+function flameAudioSetDanger(danger){
+  if(!flameLoop || !audioCtx) return;
+  try {
+    const now = audioCtx.currentTime;
+    flameLoop.filter.frequency.linearRampToValueAtTime(danger ? 2400 : 700, now + 0.08);  // pitch up sharply
+    flameLoop.gain.gain.linearRampToValueAtTime(danger ? 0.16 : 0.12, now + 0.08);
+  } catch(e){}
+}
+function flameAudioStop(){
+  if(!flameLoop){ return; }
+  if(audioCtx){
+    try {
+      const now = audioCtx.currentTime;
+      flameLoop.gain.gain.cancelScheduledValues(now);
+      flameLoop.gain.gain.setValueAtTime(flameLoop.gain.gain.value || 0.0001, now);
+      flameLoop.gain.gain.linearRampToValueAtTime(0.0001, now + 0.08);
+      flameLoop.src.stop(now + 0.12);
+    } catch(e){}
+  }
+  flameLoop = null;
 }
 const sfx = {
   shoot: () => tone(880, 0.05, 'square', 220, 0.06),
@@ -1192,6 +1240,19 @@ const sfx = {
     noiseHit(0.14, 0.025, 420);
     if(Math.random() < 0.7) noiseHit(0.02 + Math.random()*0.04, 0.06, 2000 + Math.random()*2200);
   },
+  // Syed SPEAR (RMB) — a sharp "whoosh": a fast triangle/saw frequency sweep, fired
+  // on the swing cadence. spearClang is the crisp metallic ring on enemy impact.
+  spearWhoosh: () => { tone(1100, 0.10, 'sawtooth', 240, 0.045); tone(720, 0.10, 'triangle', 180, 0.03); },
+  spearClang: () => { tone(3200, 0.07, 'square', 1500, 0.06); noiseHit(0.05, 0.05, 4200, 'bandpass'); },
+  // Leo SHOTGUN (LMB) — low sine kick + white-noise blast + a delayed faint shell-ping.
+  shotgun: () => { tone(120, 0.18, 'sine', 45, 0.18); noiseHit(0.12, 0.16, 800, 'lowpass'); setTimeout(()=>tone(2600, 0.05, 'square', 2000, 0.02), 120); },
+  // Leo MACHETE (RMB) — heavy low blade-sweep + a high snap; macheteHit is a muffled,
+  // low-pass impact thud on enemy contact.
+  macheteSwing: () => { noiseHit(0.12, 0.10, 500, 'lowpass'); tone(2100, 0.05, 'square', 3000, 0.03); },
+  macheteHit: () => { noiseHit(0.10, 0.14, 300, 'lowpass'); tone(180, 0.08, 'sine', 60, 0.06); },
+  // Benjamin Wu — fired exactly when the flamethrower forces the empty lockout: a crisp
+  // mechanical beep + a white-noise pressure-relief hiss.
+  flameLockout: () => { tone(1500, 0.08, 'square', 1500, 0.07); noiseHit(0.30, 0.12, 1200, 'highpass'); },
   rocket: () => { noiseHit(0.1, 0.08, 400); tone(220, 0.2, 'sawtooth', 80, 0.08); },
   explode: () => { noiseHit(0.25, 0.18, 350); tone(110, 0.35, 'sawtooth', 40, 0.12); },
   hit: () => noiseHit(0.07, 0.1),
@@ -1616,7 +1677,7 @@ function assistantEvoBlurb(key, level){
 // class-unique slot (slowmo / wall); the optional V slot is Tank-only. ----
 const CHARACTERS = {
   soldier: {
-    name:'Dr.Syed', desc:'RAINFOREST WARRIOR · BLADE (RMB) · ENERGY POOL',
+    name:'Dr.Syed', desc:'RAINFOREST WARRIOR · SPEAR (RMB) · ENERGY POOL',
     color:'#3498db', hp:10, speed:156, damageMult:1.25, startShield:0,
     skills:{ x:'sprint', c:'flameburst', v:'barrage', f:'heal', b:'invuln' },
     skillLabels:{ x:'SPRINT', c:'NAPALM', v:'BARRAGE', f:'HEAL', b:'INVINC' }
@@ -2201,6 +2262,8 @@ function createBullet(x,y,angle,owner,opts={}){
     explosive: opts.explosive ?? false,
     explodeRadius: opts.explodeRadius ?? 24,
     sprite: opts.sprite ?? (owner==='player' ? SPR.bullet_p : SPR.bullet_e),
+    // Optional render/behaviour tag (e.g. 'pellet' for Leo's shotgun line-tracers).
+    kind: opts.kind ?? null,
     hitSet: opts.pierce ? new Set() : null,
     // `fromAlly` marks an owner:'player' bullet that was actually fired by an ally
     // (drone/bomber), so Syed's lifesteal passive doesn't credit him for it.
@@ -2782,6 +2845,9 @@ function update(dt){
   else if(state === STATE.LEVEL_COMPLETE) handleLevelComplete();
   else if(state === STATE.GAME_OVER || state === STATE.VICTORY) handleEndScreen();
   else if(state === STATE.PLAYING){ if(!paused && !showStats) updatePlaying(dt); }
+  // Safety net for the sustained flamethrower loop: kill it whenever we're not in
+  // active play (pause, Tab-stats, death/menu, level transitions) so it can't drone.
+  if(state !== STATE.PLAYING || paused || showStats) flameAudioStop();
   mouse.clicked = false;
 }
 
@@ -2880,10 +2946,17 @@ function updatePlaying(dt){
   // 1s post-empty lockout isn't running. The instant fuel is drained to empty, a 1s
   // `rmbLockT` lockout starts during which the flamethrower can't fire (fuel recovery
   // is NOT influenced — it keeps regenerating per its own rules).
-  if(player.char === 'tank' && mouse.rdown && player.rmbLockT <= 0 && player.fuel >= dt){
-    player.fuel -= dt;
-    fireFlamethrower(dt);
-    if(player.fuel < dt) player.rmbLockT = 1;  // ran out this frame -> 1s no-fire lockout
+  if(player.char === 'tank'){
+    const firing = mouse.rdown && player.rmbLockT <= 0 && player.fuel >= dt;
+    if(firing){
+      player.fuel -= dt;
+      fireFlamethrower(dt);
+      // 100% heat: the instant fuel empties, fire the mechanical beep + pressure-relief
+      // hiss, kill the flame loop, and arm the 1s no-fire lockout.
+      if(player.fuel < dt){ player.rmbLockT = 1; sfx.flameLockout(); flameAudioStop(); }
+    } else if(player.maxFuel > 0){
+      flameAudioStop();   // not firing (released / locked) -> stop the sustained roar
+    }
   }
   // ---- Syed's secondary: continuous katana slash (right mouse) ----
   // Same fuel-style gate on `energy` (refilled by 'beverage' + slow self-regen) plus
@@ -3034,7 +3107,17 @@ function updatePlaying(dt){
         const dr = b.radius + en.radius;
         if(dist2(b, en) < dr*dr){
           damageEnemy(en, b.dmg, !b.fromAlly);
-          emit(b.x, b.y, 4, '#fff', 30, 90, 0.25);
+          if(b.kind === 'pellet'){
+            // Shotgun pellet impact: bright sparks + a couple of expanding gray smoke puffs.
+            emit(b.x, b.y, 5, '#ffd700', 40, 140, 0.3);
+            for(let s = 0; s < 2; s++){
+              if(particles.length >= 300) break;
+              particles.push({ smoke:true, x: b.x, y: b.y, vx:(Math.random()-0.5)*20, vy:(Math.random()-0.5)*20,
+                r0: 1, r1: 5 + Math.random()*3, color: '#9aa0a6', life: 0.4, maxLife: 0.4 });
+            }
+          } else {
+            emit(b.x, b.y, 4, '#fff', 30, 90, 0.25);
+          }
           if(b.explosive){
             explode(b.x, b.y, b.explodeRadius, b.dmg, !b.fromAlly);
             b.dead = true;
@@ -3193,9 +3276,13 @@ function fireFlamethrower(dt){
   const baseY = player.y + Math.sin(player.angle) * 7;
   const range = 140;       // SHORTER reach — a close-quarters flamethrower now
   const halfAngle = 0.52;  // ~60° cone (tighter than before)
-  // The DAMAGE powerup (red explosion icon) now boosts flamethrower DPS too,
-  // matching how it boosts bullet damage in fireWeapon.
-  const dps = 7 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
+  // HEAT / OVERCHARGE: once the fuel pool falls below 50% of max ("Dangerous
+  // Temperature", ~3 s of continuous use), the flame runs hotter — deep crimson +
+  // a 1.5x damage boost — until it hits 0 and forces the lockout (see the dispatch).
+  const danger = player.maxFuel > 0 && player.fuel < player.maxFuel * 0.5;
+  // DPS stacks MULTIPLICATIVELY: base 7 x damageMult x DAMAGE-pickup(2) x heat(1.5).
+  // (The 1.5 never overrides the others; a future tier mult slots in the same way.)
+  const dps = 7 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1) * (danger ? 1.5 : 1);
   // Damage every enemy inside the cone, scaled by dt AND by distance: the flame is
   // HOTTEST at the nozzle and cools toward the edge of its reach — point-blank enemies
   // take ~1.9x, enemies at max range take ~0.4x (a steep close-up bonus that rewards
@@ -3221,20 +3308,21 @@ function fireFlamethrower(dt){
     const py = baseY + Math.sin(player.angle + jitter) * 4;
     const vx = Math.cos(player.angle + jitter) * (reach * 2);
     const vy = Math.sin(player.angle + jitter) * (reach * 2);
-    const col = ['#fff', '#f1c40f', '#e67e22', '#e74c3c'][i % 4];
+    // Normal = orange-red; Dangerous Temperature = deep, vibrant crimson.
+    const pal = danger ? ['#fff', '#e74c3c', '#c0392b', '#7a1f12'] : ['#fff', '#f1c40f', '#e67e22', '#e74c3c'];
     particles.push({
       x: px, y: py, vx, vy,
       life: 0.3 + Math.random() * 0.15,
-      maxLife: 0.45, color: col,
+      maxLife: 0.45, color: pal[i % 4],
       size: 1 + Math.floor(Math.random() * 2)
     });
   }
   if(particles.length > 300) particles.length = 300;
-  // Burning-flame roar on a fast cadence — this fn runs every frame while RMB is
-  // held, so throttle to ~10 bursts/sec; each sfx.flame burst is ~0.2s so they
-  // overlap into a continuous roar. `||0` guard => no createPlayer field needed.
-  player.flameSfxT = (player.flameSfxT || 0) - dt;
-  if(player.flameSfxT <= 0){ sfx.flame(); player.flameSfxT = 0.1; }
+  // Continuous filtered white-noise roar (a single sustained node, not bursts). Started
+  // here on the first flame frame; pitched up while in the danger state. Stopped by the
+  // Tank RMB dispatch (release/empty) + the update() safety net (pause/death/menu).
+  flameAudioStart();
+  flameAudioSetDanger(danger);
 }
 
 // Syed's right-mouse secondary: a VERY-high-DPS continuous KATANA slash swept
@@ -3247,6 +3335,7 @@ const KATANA_HALF  = 0.9;    // ~51.6° half-arc => ~103° total slash — still
                              // and 3/4 of the prior 1.2-rad arc (scope cut to 3/4)
 function fireKatana(dt){
   const dps = 40 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
+  let hitAny = false, hx = 0, hy = 0;
   for(const en of entities){
     if(en.type !== 'enemy' || en.dead) continue;
     const dx = en.x - player.x, dy = en.y - player.y;
@@ -3257,25 +3346,37 @@ function fireKatana(dt){
     while(diff < -Math.PI) diff += 2 * Math.PI;
     if(Math.abs(diff) > KATANA_HALF) continue;
     damageEnemy(en, dps * dt, true);
+    if(!hitAny){ hitAny = true; hx = en.x; hy = en.y; }
   }
-  // Slash visual: bright steel streaks sweeping the obtuse front arc.
+  // Thrust afterimage streaks: fast white/silver lines along the front arc.
   for(let i = 0; i < 3; i++){
+    if(particles.length >= 300) break;
     const a = player.angle + (Math.random() - 0.5) * KATANA_HALF * 2;
     const rr = KATANA_RANGE * (0.5 + Math.random() * 0.5);
     particles.push({
       x: player.x + Math.cos(a) * rr, y: player.y + Math.sin(a) * rr,
-      vx: Math.cos(a + 1.4) * 40, vy: Math.sin(a + 1.4) * 40,   // tangential streak
-      life: 0.1 + Math.random() * 0.06, maxLife: 0.16,
-      color: i % 2 ? '#ffffff' : '#cfd8dc', size: 1 + Math.floor(Math.random() * 2)
+      vx: Math.cos(player.angle) * 60, vy: Math.sin(player.angle) * 60,   // streak forward (thrust)
+      life: 0.08 + Math.random() * 0.05, maxLife: 0.14,
+      color: i % 2 ? '#ffffff' : '#e8eef2', size: 1 + Math.floor(Math.random() * 2)
     });
   }
-  if(particles.length > 300) particles.length = 300;
-  // Rapid knife "whisk" on a fast cadence — this fn runs every frame while RMB is
-  // held, so throttle the sound to ~10 swishes/sec (a quickly-swung knife) instead
-  // of 60/sec. The `||0` guard means no createPlayer field is needed and the first
-  // frame fires immediately.
+  // Whoosh on a fast cadence (runs every frame while held -> throttle to ~10/s).
   player.slashSfxT = (player.slashSfxT || 0) - dt;
-  if(player.slashSfxT <= 0){ sfx.slash(); player.slashSfxT = 0.1; }
+  if(player.slashSfxT <= 0){ sfx.spearWhoosh(); player.slashSfxT = 0.1; }
+  // Metallic CLANG only on enemy contact, throttled so a continuous hit isn't 60/s.
+  if(hitAny){
+    player.spearHitT = (player.spearHitT || 0) - dt;
+    if(player.spearHitT <= 0){
+      sfx.spearClang();
+      player.spearHitT = 0.15;
+      for(let i = 0; i < 4; i++){
+        if(particles.length >= 300) break;
+        const a = Math.random() * Math.PI * 2, s = 60 + Math.random() * 90;
+        particles.push({ spark:true, x: hx, y: hy, vx: Math.cos(a)*s, vy: Math.sin(a)*s,
+          w: 2, h: 1, life: 0.18, maxLife: 0.18, color: i % 2 ? '#ffffff' : '#cfd8dc' });
+      }
+    }
+  }
 }
 
 // Leo's RMB: a heavy machete — same swept-arc melee as Syed's blade but a bit longer
@@ -3284,6 +3385,7 @@ function fireKatana(dt){
 const MACHETE_RANGE = 38, MACHETE_HALF = 0.9, MACHETE_DPS = 46;
 function fireMachete(dt){
   const dps = MACHETE_DPS * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
+  let hitAny = false, hx = 0, hy = 0;
   for(const en of entities){
     if(en.type !== 'enemy' || en.dead) continue;
     const dx = en.x - player.x, dy = en.y - player.y;
@@ -3294,8 +3396,9 @@ function fireMachete(dt){
     while(diff < -Math.PI) diff += 2 * Math.PI;
     if(Math.abs(diff) > MACHETE_HALF) continue;
     damageEnemy(en, dps * dt, true);
+    if(!hitAny){ hitAny = true; hx = en.x; hy = en.y; }
   }
-  // Slash visual: crimson streaks sweeping the front arc.
+  // Slash visual: orange-red streaks sweeping the front arc.
   for(let i = 0; i < 3; i++){
     if(particles.length >= 300) break;
     const a = player.angle + (Math.random() - 0.5) * MACHETE_HALF * 2;
@@ -3304,11 +3407,27 @@ function fireMachete(dt){
       x: player.x + Math.cos(a) * rr, y: player.y + Math.sin(a) * rr,
       vx: Math.cos(a + 1.4) * 45, vy: Math.sin(a + 1.4) * 45,
       life: 0.1 + Math.random() * 0.06, maxLife: 0.16,
-      color: i % 2 ? '#e74c3c' : '#922b21', size: 1 + Math.floor(Math.random() * 2)
+      color: i % 2 ? '#ff6b35' : '#e74c3c', size: 1 + Math.floor(Math.random() * 2)
     });
   }
+  // Heavy swing on a fast cadence (throttled ~10/s).
   player.slashSfxT = (player.slashSfxT || 0) - dt;
-  if(player.slashSfxT <= 0){ sfx.slash(); player.slashSfxT = 0.1; }
+  if(player.slashSfxT <= 0){ sfx.macheteSwing(); player.slashSfxT = 0.1; }
+  // On enemy contact (throttled): muffled thud + a sharp white flash + rectangular sparks.
+  if(hitAny){
+    player.macheteHitT = (player.macheteHitT || 0) - dt;
+    if(player.macheteHitT <= 0){
+      sfx.macheteHit();
+      player.macheteHitT = 0.15;
+      if(particles.length < 300) particles.push({ flash:true, x: hx, y: hy, vx:0, vy:0, angle: Math.random()*Math.PI, r: 7, color: '#ffffff', life: 0.1, maxLife: 0.1 });
+      for(let i = 0; i < 6; i++){
+        if(particles.length >= 300) break;
+        const a = Math.random() * Math.PI * 2, s = 80 + Math.random() * 120;
+        particles.push({ spark:true, x: hx, y: hy, vx: Math.cos(a)*s, vy: Math.sin(a)*s,
+          w: 3, h: 1, life: 0.35, maxLife: 0.35, color: i % 2 ? '#ffd24a' : '#ff8c42' });
+      }
+    }
+  }
 }
 
 // Ong's RMB: bio-gun — lobs a toxic glob (a real projectile, low direct damage) that,
@@ -3414,8 +3533,8 @@ function fireWeapon(mx, my){
   const rapidFactor = player.rapidTime > 0 ? 0.5 : 1;
   const dmgMult = (player.damageTime > 0 ? 2 : 1) * (player.damageMult || 1);
 
-  // Per-class basic-attack projectile spec + cadence + muzzle flash.
-  let opts, cd, flashN, flashCol, flashSpd, flashLife;
+  // Per-class basic-attack projectile spec + cadence + muzzle flash + fire sound.
+  let opts, cd, flashN, flashCol, flashSpd, flashLife, fireSfx = sfx.shoot;
   if(player.char === 'scout'){
     // Assassin SMG: fast, light, low-damage blue laser dots. High sustained DPS up
     // close; each shot is weak — rewards landing many hits.
@@ -3428,8 +3547,8 @@ function fireWeapon(mx, my){
   } else if(player.char === 'bounty_hunter'){
     // Shotgun: a 3-pellet spread, short range (low `life`), slow cadence. Heavy burst
     // up close where all pellets land; falls off at range. `spread` is the weapon FORM.
-    opts = { dmg: 1.1 * dmgMult, speed: 340, radius: 2, life: 0.45, spread: [-0.18, 0, 0.18] };
-    cd = 0.5; flashN = 5; flashCol = '#e67e22'; flashSpd = 120; flashLife = 0.2;
+    opts = { dmg: 1.1 * dmgMult, speed: 340, radius: 2, life: 0.45, spread: [-0.18, 0, 0.18], kind: 'pellet' };
+    cd = 0.5; flashN = 5; flashCol = '#e67e22'; flashSpd = 120; flashLife = 0.2; fireSfx = sfx.shotgun;
   } else if(player.char === 'cyborg'){
     // Large-caliber magnum: slow cadence, single heavy high-damage slug, moderate range.
     opts = { dmg: 3.4 * dmgMult, speed: 300, radius: 3, life: 1.2 };
@@ -3456,7 +3575,11 @@ function fireWeapon(mx, my){
   }
   player.fireCooldown = cd * rapidFactor;
   emit(mx, my, flashN, flashCol, 30, flashSpd, flashLife);
-  sfx.shoot();
+  // Shotgun: a bright muzzle-flash polygon at the barrel tip (a `flash` star particle).
+  if(player.char === 'bounty_hunter' && particles.length < 300){
+    particles.push({ flash:true, x: mx, y: my, vx:0, vy:0, angle: player.angle, r: 7, color: '#ffd27f', life: 0.07, maxLife: 0.07 });
+  }
+  fireSfx();
 }
 
 function applyPickup(kind){
@@ -5094,10 +5217,10 @@ function drawStats(){
   // --- Secondary basic attack (RMB): per-class form, damage, pool capacity, regen ---
   let secName, secDmg, capLabel, capVal, regenVal, rmbExtra;
   if(p.char === 'soldier'){
-    secName = 'BLADE SLASH';
+    secName = 'SPEAR';
     secDmg  = fmt(40 * dm) + ' DPS';
     capLabel = 'ENERGY';  capVal = fmt(p.energy) + ' / ' + fmt(p.maxEnergy) + ' s';
-    regenVal = '0.2 /s';  rmbExtra = '~103° blade arc';
+    regenVal = '0.2 /s';  rmbExtra = '~103° thrust arc';
   } else if(p.char === 'scout'){
     secName = '3× LASER BEAM';
     secDmg  = fmt(3 * dm) + ' /beam';
@@ -5301,6 +5424,32 @@ function drawGame(){
       ctx.beginPath();
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.stroke();
+    } else if(p.smoke){
+      // Expanding FILLED disc fading to transparent (shotgun-impact white/gray smoke):
+      // radius grows r0 -> r1 as it ages; alpha is the particle's own fade, dimmed.
+      const r = p.r0 + (p.r1 - p.r0) * (1 - a);
+      ctx.globalAlpha = a * 0.32;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fill();
+    } else if(p.spark){
+      // Rectangular spark shard (machete-impact shrapnel) — a small 2D rect.
+      ctx.fillStyle = p.color;
+      ctx.fillRect(Math.floor(p.x), Math.floor(p.y), p.w || 2, p.h || 1);
+    } else if(p.flash){
+      // Sharp geometric flash (shotgun muzzle / machete impact): a 4-point star
+      // oriented by p.angle, scaled by p.r, fading with the particle's life.
+      ctx.save();
+      ctx.translate(Math.floor(p.x), Math.floor(p.y));
+      ctx.rotate(p.angle || 0);
+      ctx.fillStyle = p.color;
+      const r = p.r || 6, s = r * 0.4;
+      ctx.beginPath();
+      ctx.moveTo(r, 0); ctx.lineTo(s, s); ctx.lineTo(0, r); ctx.lineTo(-s, s);
+      ctx.lineTo(-r, 0); ctx.lineTo(-s, -s); ctx.lineTo(0, -r); ctx.lineTo(s, -s);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
     } else {
       ctx.fillStyle = p.color;
       ctx.fillRect(Math.floor(p.x), Math.floor(p.y), p.size, p.size);
@@ -5311,57 +5460,83 @@ function drawGame(){
 
 function drawPlayer(p){
   if(p.invuln > 0 && Math.floor(p.invuln * 18) % 2) return;
-  // Syed's katana: render the wide OBTUSE slash arc while RMB held + energy left,
-  // so the attack's obtuse angle is visible in-game (drawn under the sprite).
+  // Syed's SPEAR (RMB): a wooden-handled rainforest spear making swift consecutive
+  // straight thrusts within the 0.9-rad fan, trailed by white/silver afterimages.
+  // (Damage still uses the KATANA_RANGE/KATANA_HALF fan in fireKatana — kept in sync.)
   if(p.char === 'soldier' && mouse.rdown && p.energy > 0){
     ctx.save();
-    // Faint slash zone (the obtuse arc the blade sweeps over).
-    ctx.fillStyle = 'rgba(207,216,220,0.10)';
+    // Faint thrust zone (the fan the spear sweeps + stabs across).
+    ctx.fillStyle = 'rgba(207,216,220,0.08)';
     ctx.beginPath();
     ctx.moveTo(p.x, p.y);
     ctx.arc(p.x, p.y, KATANA_RANGE, p.angle - KATANA_HALF, p.angle + KATANA_HALF);
     ctx.closePath();
     ctx.fill();
-    // Sweeping blade: a bright crescent edge + a radial blade line whose angle
-    // oscillates across the obtuse arc, so the attack reads as an actual slicing
-    // swing rather than a static cone. Locked to KATANA_RANGE/KATANA_HALF.
-    const bladeA = p.angle + Math.sin(stateTime * 75) * KATANA_HALF;
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, KATANA_RANGE, bladeA - 0.5, bladeA + 0.5);
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(220,235,245,0.85)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(p.x + Math.cos(bladeA) * 4, p.y + Math.sin(bladeA) * 4);
-    ctx.lineTo(p.x + Math.cos(bladeA) * KATANA_RANGE, p.y + Math.sin(bladeA) * KATANA_RANGE);
-    ctx.stroke();
+    // Helper: draw one spear pose (shaft + gray head) at a given angle/reach/alpha.
+    const drawSpear = (ang, reach, alpha, wood) => {
+      const ca = Math.cos(ang), sa = Math.sin(ang);
+      const bx = p.x + ca * 3, by = p.y + sa * 3;           // butt, just off the body
+      const tx = p.x + ca * reach, ty = p.y + sa * reach;   // spear tip
+      const hx = p.x + ca * (reach - 6), hy = p.y + sa * (reach - 6); // head base
+      ctx.globalAlpha = alpha;
+      if(wood){
+        // Wooden shaft: brown core under a lighter brown highlight.
+        ctx.strokeStyle = '#6b4a2a'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(hx, hy); ctx.stroke();
+        ctx.strokeStyle = '#8a5a2a'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(hx, hy); ctx.stroke();
+        // Gray spearhead triangle.
+        const px = -sa, py = ca;  // perpendicular
+        ctx.fillStyle = '#bdc3c7';
+        ctx.beginPath();
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(hx + px * 2.4, hy + py * 2.4);
+        ctx.lineTo(hx - px * 2.4, hy - py * 2.4);
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = '#eceff1'; ctx.lineWidth = 1; ctx.stroke();
+      } else {
+        // Afterimage: a fast white/silver streak line.
+        ctx.strokeStyle = '#e8eef2'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(p.x + ca * 6, p.y + sa * 6); ctx.lineTo(tx, ty); ctx.stroke();
+      }
+    };
+    // Thrust phase: tip darts in/out fast; the aim sweeps across the fan more slowly.
+    const reachAt = t => KATANA_RANGE * (0.45 + 0.55 * Math.abs(Math.sin(t * 22)));
+    const angAt   = t => p.angle + Math.sin(t * 9) * KATANA_HALF;
+    // Trailing afterimages (older = fainter), then the live spear on top.
+    for(let k = 3; k >= 1; k--){
+      const t = stateTime - k * 0.045;
+      drawSpear(angAt(t), reachAt(t), 0.18 * (4 - k), false);
+    }
+    drawSpear(angAt(stateTime), reachAt(stateTime), 1, true);
     ctx.restore();
+    ctx.globalAlpha = 1;
   }
-  // Leo's machete: the same swept-arc visual as Syed's blade, crimson-tinted, while
-  // RMB held + fury left. Locked to MACHETE_RANGE/MACHETE_HALF (matches the damage check).
+  // Leo's MACHETE (RMB): an explosive diagonal slash — a bold orange-red FILLED wedge
+  // sweeping the fan with a bright yellow outline, trailed by fading afterimage wedges.
+  // Locked to MACHETE_RANGE/MACHETE_HALF (matches the damage check in fireMachete).
   if(p.char === 'bounty_hunter' && mouse.rdown && p.fury > 0){
     ctx.save();
-    ctx.fillStyle = 'rgba(192,57,43,0.12)';
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-    ctx.arc(p.x, p.y, MACHETE_RANGE, p.angle - MACHETE_HALF, p.angle + MACHETE_HALF);
-    ctx.closePath();
-    ctx.fill();
-    const bladeA = p.angle + Math.sin(stateTime * 70) * MACHETE_HALF;
-    ctx.strokeStyle = 'rgba(231,76,60,0.95)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, MACHETE_RANGE, bladeA - 0.5, bladeA + 0.5);
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,160,150,0.85)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(p.x + Math.cos(bladeA) * 4, p.y + Math.sin(bladeA) * 4);
-    ctx.lineTo(p.x + Math.cos(bladeA) * MACHETE_RANGE, p.y + Math.sin(bladeA) * MACHETE_RANGE);
-    ctx.stroke();
+    // One blade wedge (a half-fan slice) centered on `ang`, at the given alpha.
+    const drawWedge = (ang, alpha) => {
+      const w = 0.42;  // wedge half-width
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = 'rgba(230,80,40,0.38)';
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.arc(p.x, p.y, MACHETE_RANGE, ang - w, ang + w);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#ffe04d'; ctx.lineWidth = 1.5;
+      ctx.stroke();
+    };
+    // Blade sweeps across the fan (cos -> a diagonal-feeling back-and-forth).
+    const swing = t => p.angle + Math.cos(t * 26) * MACHETE_HALF;
+    // Sequential afterimages (older = fainter) then the live blade on top.
+    for(let k = 3; k >= 1; k--) drawWedge(swing(stateTime - k * 0.04), 0.12 * (4 - k));
+    drawWedge(swing(stateTime), 1);
     ctx.restore();
+    ctx.globalAlpha = 1;
   }
   const pair = playerSprites(p.char);
   const sp = p.frame === 0 ? pair.a : pair.b;
@@ -5380,7 +5555,7 @@ function drawPlayer(p){
   else if(p.multiTime > 0){ gunCol = '#117864'; tipCol = '#48c9b0'; } // MULTI: teal barrel
   else if(p.rapidTime > 0){ gunCol = '#a04000'; tipCol = '#e67e22'; } // RAPID: orange barrel
   // Tank firing the flamethrower: dark nozzle + red-orange tip
-  if(p.char === 'tank' && mouse.rdown && p.fuel > 0){ gunCol = '#1a1a1a'; tipCol = '#e74c3c'; }
+  if(p.char === 'tank' && mouse.rdown && p.fuel > 0){ gunCol = '#1a1a1a'; tipCol = (p.maxFuel > 0 && p.fuel < p.maxFuel * 0.5) ? '#c0392b' : '#e74c3c'; }
   // Soldier knife slash / Scout laser: light the barrel while RMB held
   if(p.char === 'soldier' && mouse.rdown && p.energy > 0){ gunCol = '#7f8c8d'; tipCol = '#ecf0f1'; }  // steel knife
   if(p.char === 'scout' && mouse.rdown){ gunCol = '#1b4f72'; tipCol = '#4fc3f7'; }  // blue laser barrel
@@ -5630,6 +5805,18 @@ function drawPoisonAlly(s){
 }
 
 function drawBulletEntity(b){
+  // Leo's shotgun pellets render as fast line-tracers with a short grayish-white
+  // trail + a bright head, instead of the bullet sprite.
+  if(b.kind === 'pellet'){
+    const sp = Math.hypot(b.vx, b.vy) || 1;
+    const tlx = b.x - (b.vx / sp) * 6, tly = b.y - (b.vy / sp) * 6;
+    ctx.strokeStyle = '#cfd8dc'; ctx.lineWidth = 1; ctx.globalAlpha = 0.85;
+    ctx.beginPath(); ctx.moveTo(Math.floor(tlx), Math.floor(tly)); ctx.lineTo(Math.floor(b.x), Math.floor(b.y)); ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#fdfdff';
+    ctx.fillRect(Math.floor(b.x) - 1, Math.floor(b.y) - 1, 2, 2);
+    return;
+  }
   ctx.save();
   ctx.translate(Math.floor(b.x), Math.floor(b.y));
   ctx.rotate(b.angle);
@@ -6454,7 +6641,7 @@ function drawParameters(){
 
   let secName, secBase, secUnit, capLabel, capCur, capNxt, capUnit, regenVal;
   if(key === 'soldier'){
-    secName = 'BLADE SLASH'; secBase = 40; secUnit = ' DPS';
+    secName = 'SPEAR'; secBase = 40; secUnit = ' DPS';
     capLabel = 'ENERGY'; capCur = cur.maxEnergy; capNxt = nxt.maxEnergy; capUnit = ' s';
     regenVal = '0.2 /s';
   } else if(key === 'scout'){
@@ -6662,7 +6849,7 @@ function drawCharacterSelect(){
     ctx.fillText('WEAPONS', r.x + 6, sy); sy += 9;
     ctx.fillStyle = '#fff';
     const lmbN = { soldier:'PISTOL', scout:'SMG', tank:'SLUG', bounty_hunter:'SHOTGUN', cyborg:'MAGNUM' }[key] || 'GUN';
-    const rmbN = { soldier:'BLADE', scout:'3xLASER', tank:'FLAME', bounty_hunter:'MACHETE', cyborg:'BIO-GUN' }[key] || 'RMB';
+    const rmbN = { soldier:'SPEAR', scout:'3xLASER', tank:'FLAME', bounty_hunter:'MACHETE', cyborg:'BIO-GUN' }[key] || 'RMB';
     ctx.fillText('LMB ' + lmbN, r.x + 6, sy); sy += 8;
     ctx.fillText('RMB ' + rmbN, r.x + 6, sy); sy += 8;
     ctx.fillStyle = '#5dade2';

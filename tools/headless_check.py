@@ -800,6 +800,29 @@ DRIVER_BALANCE = r"""
     check('New classes: bio-gun cloud / shotgun pellets / machete / Leo+Ong skills fire', ok, d.join(' '));
   })();
 
+  // 30) Flamethrower heat/overcharge: a tick with fuel < 50% of max ("Dangerous
+  //     Temperature") deals 1.5x the damage of a full-fuel tick at the SAME enemy
+  //     position — the boost stacks multiplicatively, it doesn't override damageMult.
+  (function(){
+    var savedC = selectedChar, savedP = profile, ok = true, d = [];
+    profile = DEFAULT_PROFILE(); profile.level = 10;
+    selectedChar = 'tank'; startGame(); state = STATE.PLAYING;
+    function tickDmg(fuelFrac){
+      player = createPlayer('tank'); player.x = 100; player.y = 100; player.angle = 0;
+      player.fuel = player.maxFuel * fuelFrac;
+      var en = createEnemy('grunt', player.x + 20, player.y); en.hp = en.maxHp = 100000;
+      entities = [player, en];
+      fireFlamethrower(1/60);
+      return en.maxHp - en.hp;
+    }
+    var normal = tickDmg(1.0);     // full fuel -> no heat boost
+    var danger = tickDmg(0.25);    // below 50% -> 1.5x
+    if(!(normal > 0)){ ok = false; d.push('noDmg'); }
+    else if(!(Math.abs(danger / normal - 1.5) < 0.05)){ ok = false; d.push('ratio=' + (danger/normal).toFixed(3)); }
+    selectedChar = savedC; profile = savedP;
+    check('Flamethrower heat: <50% fuel deals 1.5x damage (stacks)', ok, d.join(' '));
+  })();
+
   return JSON.stringify(R);
 })();
 """
