@@ -1423,12 +1423,7 @@ let bossGapTimer = 0;         // 10-15s surge gap between the medium wave dying 
 let gapSpawnTimer = 0;        // cadence for the DENSE monster surge during that gap
 let score = 0;
 let highScore = parseInt(localStorage.getItem('shooter_high') || '0', 10);
-let shakeTime = 0;
-let shakeAmt = 0;          // legacy scalar (kept for back-compat); setShake fills the rest
-let shakeMag = 0;          // current shake amplitude
-let shakeDur = 0.15;       // duration the current shake decays over
-let shakeDirX = 0, shakeDirY = 0;  // unit recoil direction; (0,0) = random radial
-let playerShakeCd = 0;     // cooldown so continuous player damage (poison/rapid fire) can't stutter the screen
+// Screen shake fully removed — the camera/UI stay perfectly stable at all times.
 let hitStopTime = 0;       // brief global freeze (skip updatePlaying, keep drawing) on heavy impacts
 let stateTime = 0;
 let bossSpawnPulse = 0;
@@ -2319,14 +2314,8 @@ function createPickup(x,y,kind){
 // ============================================================
 // PARTICLES
 // ============================================================
-// Combat-juice helpers. setShake stores amplitude + an optional unit direction
-// (dx,dy=0 -> random radial). hitStop briefly freezes updatePlaying while draw keeps
-// running. spawnDecal drops a visual-only ground mark (capped, no physics).
-function setShake(time, mag, dx=0, dy=0){
-  shakeTime = Math.max(shakeTime, time); shakeDur = time;
-  shakeMag = Math.max(shakeMag, mag); shakeAmt = shakeMag;
-  shakeDirX = dx; shakeDirY = dy;
-}
+// Combat-juice helpers. hitStop briefly freezes updatePlaying while draw keeps running
+// (a time pause, NOT a camera move). spawnDecal drops a visual-only ground mark.
 function hitStop(ms){ hitStopTime = Math.max(hitStopTime, ms / 1000); }
 function spawnDecal(x, y, r, kind){
   if(decals.length >= DECAL_CAP) decals.shift();
@@ -2509,7 +2498,6 @@ function triggerSkill(name, dx, dy, mag){
       emit(rand(0, worldW), rand(0, worldH), 3, '#fff', 40, 160, 0.35);
       emit(rand(0, worldW), rand(0, worldH), 3, '#f39c12', 40, 160, 0.35);
     }
-    setShake(0.2, 3);
     try { sfx.explode(); } catch(err){ /* audio nodes are best-effort */ }
     return true;
   }
@@ -2578,7 +2566,6 @@ function triggerSkill(name, dx, dy, mag){
       });
     }
     emit(player.x, player.y, 14, '#e67e22', 40, 130, 0.35);
-    setShake(0.18, 3);
     sfx.rocket();
     return true;
   }
@@ -2613,7 +2600,6 @@ function triggerSkill(name, dx, dy, mag){
       entities.push(createBullet(player.x + Math.cos(a) * 9, player.y + Math.sin(a) * 9, a, 'player', { dmg: gd, speed: 340, radius: 2, life: 0.5 }));
     }
     emit(player.x, player.y, 16, '#e67e22', 50, 170, 0.4);
-    setShake(0.18, 2);
     sfx.rocket();
     return true;
   }
@@ -2656,12 +2642,7 @@ function damageEnemy(en, dmg, fromPlayer){
 function explode(x, y, radius, dmg, fromPlayer){
   emit(x, y, 22, '#f39c12', 60, 180, 0.6, true);
   emit(x, y, 12, '#fff', 40, 150, 0.4, true);
-  // NO screen shake / hit-stop here: explode() is the shared AoE primitive fired by
-  // bomber-ally bombs, drone missiles, exploder enemies, grenades AND the blast skill —
-  // shaking on every one of those (especially the auto-firing ally bombs/missiles) was
-  // the real screen-shake fatigue. Explosions read via the bloom particles + scorch
-  // decal + sfx instead. The deliberate player ULTIMATES (nuke / barrage / fanfire) still
-  // shake once at cast via their own setShake, and boss death/spawn still shake.
+  // Explosions read via the bloom particles + scorch decal + sfx (no screen shake).
   spawnDecal(x, y, Math.max(10, radius * 0.9), 'scorch');
   sfx.explode();
   // Snapshot the enemy list — killEnemy can push splitter children into entities,
@@ -2732,7 +2713,6 @@ function spawnBoss(kind){
   bossSpawnName = (kind === levelData.boss ? (levelData.bossName || BOSS_NAMES[kind]) : BOSS_NAMES[kind]) || 'BOSS';
   bossSpawnPulse = 1;
   sfx.bossSpawn();
-  setShake(0.4, 5);
   return b;
 }
 // The medium-boss kinds for a level's Phase-1 wave (1 for L11-20, 2 for L21-40).
@@ -2929,8 +2909,6 @@ function update(dt){
 function updatePlaying(dt){
   // ---- Decay global & powerup timers ----
   if(slowMoTime > 0) slowMoTime -= dt;
-  if(shakeTime > 0) shakeTime -= dt;
-  if(playerShakeCd > 0) playerShakeCd -= dt;
   if(player.speedTime > 0)  player.speedTime  -= dt;
   if(player.sprintTime > 0) player.sprintTime -= dt;
   if(player.damageTime > 0) player.damageTime -= dt;
@@ -3289,8 +3267,6 @@ function updatePlaying(dt){
 
   entities = entities.filter(e => !e.dead);
 
-  if(shakeTime > 0) shakeTime -= dt;
-
   // Win/loss
   const enemiesAlive = entities.some(e => e.type === 'enemy');
   const midDone = !mediumBossKinds(levelData).length || midbossSpawned;
@@ -3312,7 +3288,6 @@ function updatePlaying(dt){
   }
   if(player.hp <= 0){
     state = STATE.GAME_OVER; stateTime = 0; sfx.gameOver();
-    shakeTime = 0; shakeAmt = 0; shakeMag = 0;
     grantXp(0);     // resolve + persist the accrued kill XP/gold even on a loss
     if(score > highScore){ highScore = score; localStorage.setItem('shooter_high', String(highScore)); }
   }
@@ -3681,15 +3656,6 @@ function fireWeapon(mx, my){
   // Shotgun: a bright muzzle-flash polygon at the barrel tip (a `flash` star particle).
   if(player.char === 'bounty_hunter' && particles.length < 300){
     particles.push({ flash:true, x: mx, y: my, vx:0, vy:0, angle: player.angle, r: 7, color: '#ffd27f', life: 0.07, maxLife: 0.07 });
-  }
-  // Heavy-weapon RECOIL — WHITELISTED to Leo's SHOTGUN only, and kept very brief, so the
-  // screen kicks for the one genuinely heavy basic attack along the inverse shot vector.
-  // The Soldier pistol, Scout SMG/lasers, Ong magnum/bio-gun, and the Tank slug do NOT
-  // shake on fire (they're fast/basic — shaking them causes screen-shake fatigue). No
-  // hit-stop on basic fire either. (If a weapon-tier system is added later, gate a
-  // Tank-slug recoil to Tier 4/5 here — there is no tier system today.)
-  if(player.char === 'bounty_hunter'){
-    setShake(0.1, 2.5, -Math.cos(player.angle), -Math.sin(player.angle));
   }
   fireSfx();
 }
@@ -4210,9 +4176,6 @@ function damagePlayer(amount){
   player.hp -= amount;
   player.invuln = 0.9;
   player.hitFlash = 0.15;
-  // Player-damage shake is rate-limited (0.5s cooldown) so continuous damage — standing
-  // in a poison cloud, rapid fire, a gas pool — can't stutter the screen every frame.
-  if(playerShakeCd <= 0){ setShake(0.2, 4); playerShakeCd = 0.5; }
   emit(player.x, player.y, 8, '#e74c3c', 40, 130, 0.5);
   sfx.playerHurt();
 }
@@ -4241,11 +4204,7 @@ function killEnemy(en){
   profile.gold += Math.max(0, Math.floor(en.score / GOLD_PER_KILL_DIV * (1 + passiveValue('greed'))));
   emit(en.x, en.y, en.isBoss ? 40 : 14,
        en.isBoss ? '#9b59b6' : '#c0392b', 50, 200, en.isBoss ? 0.9 : 0.6);
-  // Enemy-impact shake is WHITELISTED to massive events only — a BOSS dying (here) or an
-  // explosion detonating (explode()). Ordinary kills (incl. the heavy 'tank' enemy) no
-  // longer shake; normal hits read via the white hit-flash + death particles instead.
   if(en.isBoss){
-    setShake(0.7, 6);
     // Boss death drops a guaranteed special equipment
     const drops = {
       bruiser:'rapid', sniper:'shield', splitter:'multi', summoner:'damage', overlord:'pierce',
@@ -5252,11 +5211,9 @@ function drawDecor(kind, idx, bw, bh){
   }
 }
 
-// Screen shake + sub-pixel camera offset are applied ONLY inside the world transform
-// (the inner save/translate/restore below); drawHUD() + overlays + menus render after
-// the restore, so the HUD / health bars / menus never shake. Shake is whitelisted to
-// high-impact events (Leo shotgun fire, explosions, boss death/spawn, big skills,
-// rate-limited player damage) — basic attacks and ordinary hits do NOT shake.
+// Screen shake has been fully removed: the world is drawn under a plain
+// translate(-camX,-camY) camera follow, and drawHUD()/overlays/menus render after the
+// restore. The camera and UI stay perfectly stable regardless of combat events.
 function draw(){
   ctx.save();
 
@@ -5268,15 +5225,8 @@ function draw(){
 
   if(useGameTheme){
     ctx.save();
-    // Sub-pixel camera + directional screen shake. Amplitude decays with shakeTime;
-    // a set direction (heavy-weapon recoil) shakes along that vector, else random radial.
-    let ox = 0, oy = 0;
-    if(shakeTime > 0){
-      const f = shakeMag * Math.min(1, shakeTime / (shakeDur || 0.15));
-      if(shakeDirX || shakeDirY){ ox = shakeDirX * f * (0.6 + Math.random()*0.4); oy = shakeDirY * f * (0.6 + Math.random()*0.4); }
-      else { ox = (Math.random()-0.5) * 2 * f; oy = (Math.random()-0.5) * 2 * f; }
-    }
-    ctx.translate(-camX + ox, -camY + oy);
+    // Sub-pixel camera follow only — no screen shake offset (the camera stays stable).
+    ctx.translate(-camX, -camY);
     drawBackground(themeForLevel(levelIdx), levelIdx, worldW, worldH);
     drawGame();
     ctx.restore();
