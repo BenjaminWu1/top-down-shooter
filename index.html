@@ -1326,7 +1326,7 @@ const PASSIVE_BUY_BASE = 300;        // gold to BUY a passive (level 0 -> 1)
 const PASSIVE_UP_GROWTH = 1.45;      // each further level costs ~45% more (cheap early, steep late)
 const pctFmt = v => '+' + Math.round(v * 100) + '%';
 const PASSIVES = {
-  lifesteal: { label:'LIFESTEAL', color:'#e74c3c', a:0.01, b:0.06, fmt:pctFmt },
+  lifesteal: { label:'LIFESTEAL', color:'#e74c3c', a:0.001, b:0.03, fmt:v => '+' + (Math.round(v * 1000) / 10) + '%' },
   hpregen:   { label:'HP REGEN',  color:'#2ecc71', a:0.10, b:1.00, fmt:v => (Math.round(v*100)/100) + '/s' },
   resource:  { label:'RESOURCE',  color:'#f1c40f', a:0.15, b:1.00, fmt:v => (Math.round(v*100)/100) + '/kill' },
   greed:     { label:'GREED',     color:'#f5d76e', a:0.05, b:0.50, fmt:pctFmt },
@@ -4815,7 +4815,7 @@ function drawStats(){
   const hpRegenV = passiveValue('hpregen');
   const hpRegen = hpRegenV > 0 ? fmt(Math.round(hpRegenV * 100) / 100) + '/s' : '—';
   const lifestealV = passiveValue('lifesteal');
-  const lifesteal = lifestealV > 0 ? Math.round(lifestealV * 100) + '%' : '—';
+  const lifesteal = lifestealV > 0 ? PASSIVES.lifesteal.fmt(lifestealV) : '—';
   const baseSpd = p.speed;
   const effSpd  = p.speed * playerSpeedMult();
   const spdVal  = (Math.abs(effSpd - baseSpd) > 0.5)
@@ -6110,7 +6110,7 @@ function drawParameters(){
   // HP-regen + lifesteal are now UNIVERSAL equippable passives (account-wide; live
   // profile values, '—' when not equipped) — no longer class-specific.
   const hpRegen = passiveEquipped('hpregen') ? PASSIVES.hpregen.fmt(passiveValue('hpregen')) : '—';
-  const secExtra = ['LIFESTEAL', passiveEquipped('lifesteal') ? Math.round(passiveValue('lifesteal') * 100) + '%' : '—'];
+  const secExtra = ['LIFESTEAL', passiveEquipped('lifesteal') ? PASSIVES.lifesteal.fmt(passiveValue('lifesteal')) : '—'];
   const shieldStr = (key === 'tank' ? 4 : 0) + ' / ' + (key === 'tank' ? 5 : 3);
 
   // Column rows: {h:'HEADER'} or [label, value, deltaTokenOrNull].
