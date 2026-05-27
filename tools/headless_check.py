@@ -548,6 +548,94 @@ DRIVER_BALANCE = r"""
     check('Assistants: level scaling raises HP/damage (frac 0.35 -> 1.0)', ok, d.join(' '));
   })();
 
+  // 14) Skill tiers: across tiers 1..5 the per-cast cooldown (skillCdFor) strictly
+  //     FALLS, the upgrade cost (skillUpgradeCost) strictly RISES and is null at max,
+  //     every tier has a non-empty blurb, and resolvePlayerLoadout still resolves an
+  //     owned skill with skillLevels populated.
+  (function(){
+    var saved = profile, ok = true, d = [];
+    ['heal','sprint','grenade','blast','nuke','resummon'].forEach(function(id){
+      profile = DEFAULT_PROFILE();
+      if(profile.ownedSkills.indexOf(id) < 0) profile.ownedSkills.push(id);
+      var prevCd = Infinity, prevUp = -1;
+      for(var t = 1; t <= SKILL_MAX_TIER; t++){
+        profile.skillLevels[id] = t;
+        var cd = skillCdFor(id);
+        if(!(cd < prevCd)) { ok = false; d.push(id + ':cd!down@' + t); }
+        prevCd = cd;
+        if(!skillBlurb(id, t)) { ok = false; d.push(id + ':blurb@' + t); }
+        if(t < SKILL_MAX_TIER){
+          var up = skillUpgradeCost(id);
+          if(!(up > prevUp)) { ok = false; d.push(id + ':up!rise@' + t); }
+          prevUp = up;
+        } else if(skillUpgradeCost(id) !== null){ ok = false; d.push(id + ':maxNotNull'); }
+      }
+    });
+    profile = DEFAULT_PROFILE(); profile.level = 20;
+    profile.ownedSkills.push('blast'); profile.loadout.x = 'blast'; profile.skillLevels.blast = 3;
+    if(resolvePlayerLoadout().x !== 'blast'){ ok = false; d.push('loadout'); }
+    profile = saved;
+    check('Skill tiers: cd falls + cost rises + blurb per tier (1..5)', ok, d.join(' '));
+  })();
+
+  // 15) RESUMMON: revives a DEAD equipped assistant (entity count rises, ally no longer
+  //     dead) and returns true; with no dead ally it returns false (charges no cooldown).
+  (function(){
+    var savedC = selectedChar, savedP = profile, ok = true, d = [];
+    profile = DEFAULT_PROFILE();
+    selectedChar = 'soldier'; startGame(); state = STATE.PLAYING;
+    player = createPlayer('soldier'); entities = [player];
+    var ally = createAssistant('drone'); ally.dead = true; allies = [ally];
+    profile.skillLevels.resummon = 5;
+    var before = entities.length;
+    var fired = triggerSkill('resummon', 1, 0, 1);
+    if(!fired)                          { ok = false; d.push('didntFireOnDead'); }
+    if(!(entities.length > before))     { ok = false; d.push('noRevive'); }
+    if(allies[0] && allies[0].dead)     { ok = false; d.push('stillDead'); }
+    var fired2 = triggerSkill('resummon', 1, 0, 1);   // none dead now
+    if(fired2 !== false)                { ok = false; d.push('firedWithNoneDead'); }
+    selectedChar = savedC; profile = savedP;
+    check('Resummon: revives a dead equipped ally; no-op when none dead', ok, d.join(' '));
+  })();
+
+  // 16) Assistant evolutions: every roster ally built at L10 reports level 10 and its AI
+  //     runs ~200 ticks against a (high-HP) enemy without throwing or breaching the 480
+  //     entity cap; the L10 drone fires an explosive AoE missile within a few seconds.
+  (function(){
+    var savedP = profile, ok = true, d = [];
+    profile = DEFAULT_PROFILE();
+    profile.ownedAssistants = ['drone','henchman','nunchaku','bomber','poison'];
+    if(!player){ selectedChar = 'soldier'; startGame(); state = STATE.PLAYING; }
+    var updaters = { drone:updateCompanion, henchman:updateMeleeAlly, nunchaku:updateMeleeAlly, bomber:updateBomberAlly, poison:updatePoisonAlly };
+    ['drone','henchman','nunchaku','bomber','poison'].forEach(function(key){
+      profile.assistantLevels = {}; profile.assistantLevels[key] = ASSIST_MAX_LEVEL;
+      var a = createAssistant(key);
+      if(a.level !== ASSIST_MAX_LEVEL){ ok = false; d.push(key + ':lvl'); }
+      var en = createEnemy('grunt', player.x + 20, player.y); en.hp = en.maxHp = 99999;
+      entities = [player, a, en];
+      var fn = updaters[key];
+      try {
+        for(var i = 0; i < 200; i++){ fn(a, 1/60); if(entities.length >= 480){ ok = false; d.push(key + ':cap'); break; } }
+      } catch(e){ ok = false; d.push(key + ':throw'); }
+    });
+    // L10 drone emits an explosive ally missile (every 3rd shot).
+    profile.assistantLevels = { drone:ASSIST_MAX_LEVEL };
+    var dr = createAssistant('drone');
+    var en2 = createEnemy('grunt', player.x + 20, player.y); en2.hp = en2.maxHp = 99999;
+    entities = [player, dr, en2];
+    var sawMissile = false;
+    for(var j = 0; j < 300 && !sawMissile; j++){
+      updateCompanion(dr, 1/60);
+      for(var k = 0; k < entities.length; k++){
+        var b = entities[k];
+        if(b.type === 'bullet' && b.explosive && b.fromAlly){ sawMissile = true; break; }
+      }
+    }
+    if(!sawMissile){ ok = false; d.push('drone:noMissile'); }
+    profile = savedP;
+    check('Assistant evolutions: L10 AIs run clean + drone fires missiles', ok, d.join(' '));
+  })();
+
   return JSON.stringify(R);
 })();
 """

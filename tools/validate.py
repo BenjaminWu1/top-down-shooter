@@ -273,6 +273,33 @@ def main():
     else:
         warn("C8 GAMEPLAY_KEYS coverage", "GAMEPLAY_KEYS set not found")
 
+    # C9 -- new meta-progression wiring (5-tier skills + RESUMMON). The RESUMMON skill
+    # must be registered in BOTH SKILLS and the skillCdMax fallback map; the per-skill
+    # tier store (skillLevels) must be initialized in DEFAULT_PROFILE so returning
+    # players don't crash; and every shop skill should declare a tier array (t:[...]).
+    # Light regex checks (not a JS parser), mirroring C7's style.
+    c9_ok = True
+    c9_detail = []
+    skills_m = re.search(r"const\s+SKILLS\s*=\s*\{(.*?)\n\};", code, re.S)
+    if not skills_m or "resummon" not in skills_m.group(1):
+        c9_ok = False
+        c9_detail.append("resummon missing from SKILLS")
+    if not (cd_m and "resummon" in cd_m.group(1)):
+        c9_ok = False
+        c9_detail.append("resummon missing from skillCdMax")
+    dp_m = re.search(r"function\s+DEFAULT_PROFILE\(\)\s*\{(.*?)\n\}", code, re.S)
+    if not dp_m or "skillLevels" not in dp_m.group(1):
+        c9_ok = False
+        c9_detail.append("skillLevels missing from DEFAULT_PROFILE")
+    order_m = re.search(r"const\s+SKILL_ORDER\s*=\s*\[([^\]]*)\]", code)
+    if skills_m and order_m:
+        tier_arrays = len(re.findall(r"\bt:\s*\[", skills_m.group(1)))
+        n_ids = len(re.findall(r"'[a-z]+'", order_m.group(1)))
+        if tier_arrays < n_ids:
+            c9_ok = False
+            c9_detail.append(f"only {tier_arrays} t:[] arrays for {n_ids} shop skills")
+    check("C9 resummon + skill tiers + skillLevels wired", c9_ok, "; ".join(c9_detail))
+
     return finish()
 
 

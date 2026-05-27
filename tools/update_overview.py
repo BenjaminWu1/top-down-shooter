@@ -267,6 +267,24 @@ INSERTS = [
         "throwaway createAssistant so the numbers reflect the current profile.assistantLevels "
         "upgrade level - upgrading an ally in the shop visibly raises them.",
 
+        "5-TIER SKILLS: every skill (incl. HEAL) now upgrades across 5 tiers in the SHOP - "
+        "each tier gives a stronger effect AND a shorter cooldown, with a non-linear gold cost "
+        "(cheap early, steep late). Each SKILLS[id] carries a t:[...] array of per-tier knobs; "
+        "the active tier lives in profile.skillLevels[id], and triggerSkill reads skillStat(id) "
+        "for every magnitude/duration while the dispatch + HUD read skillCdFor(id). Balance "
+        "ramps weak->strong (tier 1 is weaker than the old single value, tier ~3 about matches "
+        "it, tier 5 exceeds it); already-owned skills start at tier 1. The SHOP skills tab shows "
+        "5 tier pips per card + a hover detail panel with the current effect and the next tier's "
+        "effect in parens.",
+
+        "ASSISTANT EVOLUTIONS + RESUMMON: each ally's upgrade level also unlocks behavioral "
+        "evolutions (L1-3 base / L4-6 secondary / L7-10 ultimate) layered on the AI - e.g. the "
+        "drone fires an AoE missile every 3rd shot at L4-6 and gains a periodic x2-firerate "
+        "berserk at L7-10; brute slam+enrage, nunchaku whirlwind+flurry, bomber cluster+carpet, "
+        "poison spore-nova+plague. RESUMMON is a new universal loadout skill that revives a dead "
+        "equipped assistant near you (no-op, no cooldown spent, when none are dead; higher tiers "
+        "grant brief invuln and can revive two).",
+
         "CHARACTER PARAMETERS screen (STATE.PARAMETERS): a PARAMETERS button on the MENU "
         "(top-right, just below the profile bar's COINS line) opens a menu-side version of "
         "the same readout, with three class tabs. Since there is no live player on the "

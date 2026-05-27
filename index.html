@@ -1310,11 +1310,18 @@ const ASSIST_MAX_LEVEL = 10;
 const ASSIST_UPGRADE_BASE = 250;     // gold to go from level 1 -> 2
 const ASSIST_UPGRADE_GROWTH = 1.5;   // each subsequent level costs ~50% more
 // => ~250 (L1->2) climbing to ~6400 (L9->10); ~18,700 gold total to max one ally.
+// ---- Skill tiers (every skill upgrades 1..5 in the SHOP; higher tier = stronger
+// effect + shorter cooldown). Gold cost rises non-linearly: upgrade cost = the
+// skill's tier-1 buy price * SKILL_UP_MUL[nextTier] (cheap early, steep late). ----
+const SKILL_MAX_TIER = 5;
+const SKILL_UP_MUL = { 2:1.5, 3:3, 4:6, 5:12 };
+const SKILL_UP_BASE_MIN = 400;       // upgrade-cost base for free skills (heal has cost 0)
 
 function DEFAULT_PROFILE(){
   return { v:1, level:1, xp:0, gold:0,
            ownedSkills:['heal'], ownedAssistants:['drone'],
            assistantLevels:{ drone:1 },
+           skillLevels:{ heal:1 },
            loadout:{ x:null, c:null, b:null, v:null },
            defaultAssistant:'drone', equippedAssistants:['drone'] };
 }
@@ -1352,6 +1359,14 @@ function loadProfile(){
   for(const k of out.ownedAssistants){
     out.assistantLevels[k] = Math.max(1, Math.min(ASSIST_MAX_LEVEL, Math.floor(al[k]) || 1));
   }
+  // Per-skill upgrade tier (1..5), kept only for owned skills. Returning players
+  // whose save predates skill tiers simply default every owned skill to tier 1.
+  const sl = (p.skillLevels && typeof p.skillLevels === 'object') ? p.skillLevels : {};
+  out.skillLevels = {};
+  for(const k of out.ownedSkills){
+    out.skillLevels[k] = Math.max(1, Math.min(SKILL_MAX_TIER, Math.floor(sl[k]) || 1));
+  }
+  if(!out.skillLevels.heal) out.skillLevels.heal = 1;
   return out;
 }
 function saveProfile(){
@@ -1417,6 +1432,23 @@ function assistantStatLines(key){
   else if(a.type === 'poison_ally') rows.push(['DPS', r1(a.dps)],      ['RNG', r0(a.auraRadius)],    ['AURA', 'CONT']);
   return rows;
 }
+// Short threshold-ability readout for the SHOP / LOADOUT: what an ally's CURRENT
+// level (1..10) has unlocked (`now`) and what the NEXT threshold unlocks (`next`).
+// L1-3 = base, L4-6 = the secondary ability, L7-10 = the ultimate. Mirrors the
+// behaviors wired into the assistant AI update functions.
+function assistantEvoBlurb(key, level){
+  const E = {
+    drone:    ['AoE MISSILES', 'BERSERK x2'],
+    henchman: ['GROUND SLAM',  'ENRAGE'],
+    nunchaku: ['WHIRLWIND',    'FLURRY x2'],
+    bomber:   ['CLUSTER x3',   'CARPET BOMB'],
+    poison:   ['SPORE NOVA',   'PLAGUE']
+  }[key] || ['', ''];
+  const L = level || 1;
+  if(L >= 7) return { now: E[1], next: null };
+  if(L >= 4) return { now: E[0], next: E[1] + ' @L7' };
+  return { now: 'BASE', next: E[0] + ' @L4' };
+}
 
 // ---- Character profiles. X (sprint) and F (heal) are universal; C is the
 // class-unique slot (slowmo / wall); the optional V slot is Tank-only. ----
@@ -1452,24 +1484,101 @@ const CHARACTERS = {
 // easy/utility skills stay the cheapest (still affordable early) while the big power
 // skills are a much more expensive long-term goal. Tier 1 (200-600), tier 2 (1400-
 // 2400), tier 3 (4000-5800), nuke (top, 9000).
+// Each skill now scales across 5 TIERS. `t[i]` (i=0..4 => tier 1..5) holds that
+// tier's per-cast cooldown `cd` PLUS the effect knobs that triggerSkill reads. Effects
+// grow and cooldowns shrink with tier; tier ~3-4 is roughly the old single-value
+// power, tier 1 is deliberately weaker (the ramp the user picked). `cost` is the
+// tier-1 BUY price; upgrades cost cost*SKILL_UP_MUL[nextTier] (see skillUpgradeCost).
+// `tier` is the shop GROUP (cosmetic ordering only). heal is owned + tier-1 by default.
 const SKILLS = {
-  heal:      { label:'HEAL',    color:'#2ecc71', cd:20,  cost:0,    tier:0 },
-  sprint:    { label:'SPRINT',  color:'#1abc9c', cd:20,  cost:200,  tier:1 },
-  dash:      { label:'DASH',    color:'#f1c40f', cd:3.5, cost:320,  tier:1 },
-  grenade:   { label:'GRENADE', color:'#e67e22', cd:6,   cost:450,  tier:1 },
-  blast:     { label:'BLAST',   color:'#e67e22', cd:20,  cost:600,  tier:1 },
-  blink:     { label:'BLINK',   color:'#f1c40f', cd:5,   cost:1400, tier:2 },
-  slowmo:    { label:'SLOWMO',  color:'#3498db', cd:18,  cost:1700, tier:2 },
-  invuln:    { label:'INVINC',  color:'#7fe9ff', cd:20,  cost:2000, tier:2 },
-  summon:    { label:'KNIGHT',  color:'#f1c40f', cd:25,  cost:2400, tier:2 },
-  wall:      { label:'WALL',    color:'#27ae60', cd:18,  cost:4000, tier:3 },
-  flameburst:{ label:'NAPALM',  color:'#e67e22', cd:20,  cost:4600, tier:3 },
-  barrage:   { label:'BARRAGE', color:'#e67e22', cd:24,  cost:5200, tier:3 },
-  vsummon:   { label:'BLADE+',  color:'#f39c12', cd:25,  cost:5800, tier:3 },
-  nuke:      { label:'NUKE',    color:'#e74c3c', cd:60,  cost:9000, tier:3 }
+  heal:      { label:'HEAL',    color:'#2ecc71', cost:0,    tier:0, t:[
+                {cd:22,hp:1},{cd:20,hp:1},{cd:18,hp:2},{cd:16,hp:2},{cd:14,hp:3}] },
+  sprint:    { label:'SPRINT',  color:'#1abc9c', cost:200,  tier:1, t:[
+                {cd:22,spd:0.10,dur:5},{cd:20,spd:0.15,dur:6},{cd:18,spd:0.20,dur:7},{cd:16,spd:0.25,dur:8},{cd:14,spd:0.35,dur:9}] },
+  dash:      { label:'DASH',    color:'#f1c40f', cost:320,  tier:1, t:[
+                {cd:4.5,dist:60,iframe:0.30},{cd:4.2,dist:66,iframe:0.32},{cd:3.5,dist:72,iframe:0.35},{cd:3.0,dist:80,iframe:0.40},{cd:2.5,dist:92,iframe:0.45}] },
+  grenade:   { label:'GRENADE', color:'#e67e22', cost:450,  tier:1, t:[
+                {cd:6.6,dmg:3,radius:28},{cd:6.3,dmg:3.5,radius:31},{cd:6.0,dmg:4,radius:34},{cd:5.5,dmg:5,radius:38},{cd:5.0,dmg:6.5,radius:42}] },
+  blast:     { label:'BLAST',   color:'#e67e22', cost:600,  tier:1, t:[
+                {cd:24,r:55,dmgMul:1.0},{cd:22,r:62,dmgMul:1.3},{cd:20,r:70,dmgMul:1.6},{cd:18,r:80,dmgMul:2.0},{cd:16,r:92,dmgMul:2.6}] },
+  blink:     { label:'BLINK',   color:'#f1c40f', cost:1400, tier:2, t:[
+                {cd:7.0,iframe:0.35},{cd:6.2,iframe:0.40},{cd:5.5,iframe:0.45},{cd:4.8,iframe:0.55},{cd:4.0,iframe:0.70}] },
+  slowmo:    { label:'SLOWMO',  color:'#3498db', cost:1700, tier:2, t:[
+                {cd:22,dur:2.0},{cd:20,dur:2.5},{cd:18,dur:3.0},{cd:16,dur:3.8},{cd:14,dur:4.5}] },
+  invuln:    { label:'INVINC',  color:'#7fe9ff', cost:2000, tier:2, t:[
+                {cd:24,dur:1.0},{cd:22,dur:1.5},{cd:20,dur:2.0},{cd:18,dur:2.6},{cd:16,dur:3.2}] },
+  resummon:  { label:'RESUMMON',color:'#9b59b6', cost:1600, tier:2, t:[
+                {cd:30,reviveCount:1,iframe:0},{cd:26,reviveCount:1,iframe:1.0},{cd:22,reviveCount:1,iframe:1.5},{cd:18,reviveCount:1,iframe:2.0},{cd:14,reviveCount:2,iframe:2.5}] },
+  summon:    { label:'KNIGHT',  color:'#f1c40f', cost:2400, tier:2, t:[
+                {cd:28,hpMul:1.0,dmgMul:1.0,rateMul:1.0},{cd:27,hpMul:1.15,dmgMul:1.15,rateMul:1.1},{cd:26,hpMul:1.3,dmgMul:1.3,rateMul:1.2},{cd:24,hpMul:1.5,dmgMul:1.5,rateMul:1.35},{cd:22,hpMul:1.8,dmgMul:1.8,rateMul:1.5}] },
+  wall:      { label:'WALL',    color:'#27ae60', cost:4000, tier:3, t:[
+                {cd:22,dur:2.5},{cd:20,dur:3.2},{cd:18,dur:4.0},{cd:16,dur:5.0},{cd:14,dur:6.0}] },
+  flameburst:{ label:'NAPALM',  color:'#e67e22', cost:4600, tier:3, t:[
+                {cd:24,dur:2.0,dmgMul:1.0},{cd:22,dur:2.5,dmgMul:1.15},{cd:20,dur:3.0,dmgMul:1.3},{cd:18,dur:3.5,dmgMul:1.45},{cd:16,dur:4.0,dmgMul:1.6}] },
+  barrage:   { label:'BARRAGE', color:'#e67e22', cost:5200, tier:3, t:[
+                {cd:28,shells:3,dmgMul:1.0},{cd:26,shells:4,dmgMul:1.15},{cd:24,shells:5,dmgMul:1.3},{cd:20,shells:6,dmgMul:1.45},{cd:18,shells:7,dmgMul:1.6}] },
+  vsummon:   { label:'BLADE+',  color:'#f39c12', cost:5800, tier:3, t:[
+                {cd:28,hpMul:1.0,dmgMul:1.0,rateMul:1.0},{cd:27,hpMul:1.15,dmgMul:1.15,rateMul:1.1},{cd:26,hpMul:1.3,dmgMul:1.3,rateMul:1.2},{cd:24,hpMul:1.5,dmgMul:1.5,rateMul:1.35},{cd:22,hpMul:1.8,dmgMul:1.8,rateMul:1.5}] },
+  nuke:      { label:'NUKE',    color:'#e74c3c', cost:9000, tier:3, t:[
+                {cd:72,bossDmg:8},{cd:66,bossDmg:10},{cd:60,bossDmg:12},{cd:54,bossDmg:16},{cd:48,bossDmg:20}] }
 };
-// Shop ordering (ids except the free default heal), grouped by tier, cheapest-first.
-const SKILL_ORDER = ['sprint','dash','grenade','blast','blink','slowmo','invuln','summon','wall','flameburst','barrage','vsummon','nuke'];
+// Shop ordering, grouped by tier, cheapest-first. heal leads (owned + free at tier 1,
+// but now UPGRADABLE in the shop like every other skill); it stays out of the loadout
+// dropdown (cycleSkillList) because F is permanently locked to HEAL. 15 ids => the
+// skills tab fills exactly 3 rows of 5 compact cards.
+const SKILL_ORDER = ['heal','sprint','dash','grenade','blast','blink','slowmo','invuln','resummon','summon','wall','flameburst','barrage','vsummon','nuke'];
+
+// ---- Skill-tier helpers (read the player's current tier from profile.skillLevels) ----
+function skillTier(id){
+  const sl = profile.skillLevels || {};
+  return Math.max(1, Math.min(SKILL_MAX_TIER, Math.floor(sl[id]) || 1));
+}
+// The active tier's param object {cd, ...effect knobs} for a skill id.
+function skillStat(id){
+  const s = SKILLS[id];
+  if(!s || !s.t) return {};
+  return s.t[skillTier(id) - 1] || s.t[0];
+}
+// Per-cast cooldown for a skill at its CURRENT tier (falls back to the player's
+// vestigial skillCdMax map, then the tier-1 cd, so a missing entry can never NaN).
+function skillCdFor(id){
+  const st = skillStat(id);
+  if(st && typeof st.cd === 'number') return st.cd;
+  if(typeof player !== 'undefined' && player && player.skillCdMax && player.skillCdMax[id] != null) return player.skillCdMax[id];
+  return (SKILLS[id] && SKILLS[id].t && SKILLS[id].t[0].cd) || 20;
+}
+// Gold to upgrade a skill from its current tier to the next (null if already maxed).
+// Free skills (heal, cost 0) use SKILL_UP_BASE_MIN so their upgrades aren't free.
+function skillUpgradeCost(id){
+  const t = skillTier(id);
+  if(t >= SKILL_MAX_TIER) return null;
+  const base = (SKILLS[id] && SKILLS[id].cost > 0) ? SKILLS[id].cost : SKILL_UP_BASE_MIN;
+  return Math.round(base * (SKILL_UP_MUL[t + 1] || 1));
+}
+// A short human-readable effect string for a given tier (HUD/shop detail panel).
+function skillBlurb(id, tier){
+  const s = SKILLS[id];
+  if(!s || !s.t) return '';
+  const T = s.t[Math.max(0, Math.min(s.t.length - 1, (tier || 1) - 1))];
+  switch(id){
+    case 'sprint':     return '+' + Math.round(T.spd * 100) + '% ' + T.dur + 's';
+    case 'heal':       return '+' + T.hp + ' HP';
+    case 'blast':      return 'r' + T.r + ' x' + T.dmgMul;
+    case 'invuln':
+    case 'wall':       return T.dur + 's invuln';
+    case 'slowmo':     return 'slow ' + T.dur + 's';
+    case 'dash':       return T.dist + 'px ' + T.iframe + 's i';
+    case 'blink':      return 'tp ' + T.iframe + 's i';
+    case 'flameburst': return T.dur + 's x' + T.dmgMul;
+    case 'grenade':    return T.dmg + 'dmg r' + T.radius;
+    case 'barrage':    return T.shells + ' shells x' + T.dmgMul;
+    case 'summon':
+    case 'vsummon':    return 'knight x' + T.dmgMul;
+    case 'nuke':       return 'boss ' + T.bossDmg;
+    case 'resummon':   return 'revive ' + T.reviveCount + (T.iframe ? ' +' + T.iframe + 's i' : '');
+    default:           return '';
+  }
+}
 
 let selectedChar = 'soldier';
 let selectedLevel = 0;
@@ -1665,17 +1774,17 @@ function createPlayer(charKey){
     maxPower: charKey === 'scout' ? 20 : 0,
     // Passive powerups (temporary buffs)
     speedTime:0, damageTime:0, magnetTime:0, scoreTime:0,
-    // X-skill sprint buff timer (+30% move speed for 5s). Stacks multiplicatively
-    // with the SPEED powerup via playerSpeedMult().
-    sprintTime:0,
-    // Tank's old B-key flameburst timer. The flameburst handler is now orphaned
-    // (V replaced it), but the field/timer is harmless and left for easy revival.
-    flameburstTime:0,
+    // X-skill sprint buff timer + per-cast speed multiplier (set from the SPRINT
+    // skill's current tier). Stacks multiplicatively with the SPEED powerup.
+    sprintTime:0, sprintMult:1.3,
+    // NAPALM (flameburst) ring timer + per-cast damage multiplier (set from the
+    // skill's current tier; read by tickFlameburst).
+    flameburstTime:0, flameburstMul:1,
     // Special-skill cooldowns. X (sprint), F (heal) and B (blast) are universal;
     // C is class-specific (per CHARACTERS.skills); each class now also fills the V
     // slot (Soldier barrage / Scout dash / Tank vsummon).
     skillCd:{ x:0, c:0, v:0, f:0, b:0 },
-    skillCdMax:{ x:4, c:12, blink:5, dash:3.5, wall:18, summon:25, vsummon:25, flameburst:20, barrage:24, sprint:20, heal:20, blast:20, invuln:20, grenade:6, slowmo:18, nuke:60 },
+    skillCdMax:{ x:4, c:12, blink:5, dash:3.5, wall:18, summon:25, vsummon:25, flameburst:20, barrage:24, sprint:20, heal:20, blast:20, invuln:20, grenade:6, slowmo:18, nuke:60, resummon:22 },
     // RMB cadence scale (Scout laser): 1 until applyLevelScaling lowers it.
     laserScale:1,
     // Active-skill LOADOUT (F=heal always; X/C/B/V from profile, gated by level + ownership).
@@ -1733,6 +1842,9 @@ function createCompanion(){
     vx:0, vy:0, angle:0, radius:4,
     hp:6, maxHp:6,
     fireCooldown:0, fireRate:0.25, dmg:3, detectRange:280,
+    // Evolution state (gated on a.level): L4-6 fires an AoE missile every 3rd shot;
+    // L7-10 also enters a 5s ×2-firerate berserk every 25s.
+    shotCount:0, berserkCd:25, berserkT:0,
     hitInvuln:0.85, deathColor:'#3498db',
     hitFlash:0, invuln:0, frame:0, frameT:0, dead:false
   };
@@ -1761,6 +1873,9 @@ function createHenchman(){
     attackRange:40, attackArc:Math.PI * 5/6, // ~150° wide, 40-unit reach (large scope)
     attackCd:0, attackRate:0.5, swingTime:0, swingDmg:3, // normal damage
     moveSpeed:130, leash:110, swingColor:'#c8923a',
+    // Evolution state: L4-6 GROUND SLAM (AoE + knockback) every ~4s; L7-10 ENRAGE
+    // (faster/wider swings + self-heal) every ~12s for 4s.
+    slamCd:0, enrageCd:0, enrageT:0,
     hitInvuln:0.5, deathColor:'#c0392b',
     hitFlash:0, invuln:0, frame:0, frameT:0, dead:false
   };
@@ -1776,6 +1891,9 @@ function createNunchaku(){
     attackRange:30, attackArc:Math.PI * 0.6, // ~108° medium scope
     attackCd:0, attackRate:0.4, swingTime:0, swingDmg:8, // high damage, quick
     moveSpeed:138, leash:120, swingColor:'#ecf0f1',
+    // Evolution state: L4-6 WHIRLWIND (full-circle strike + clears enemy bullets)
+    // every ~3.5s; L7-10 FLURRY (double attack speed) every ~10s for 3s.
+    spinCd:0, flurryCd:0, flurryT:0,
     hitInvuln:0.45, deathColor:'#ecf0f1',
     hitFlash:0, invuln:0, frame:0, frameT:0, dead:false
   };
@@ -1791,6 +1909,9 @@ function createBomberAlly(){
     fireCooldown:0, fireRate:1.25, fireRange:210,
     bombDmg:10, explodeRadius:48, projSpeed:185,
     moveSpeed:120, leash:200,
+    // Evolution state: L4-6 CLUSTER (3-bomb spread per volley); L7-10 CARPET
+    // (5-bomb arc barrage) every ~12s.
+    carpetCd:0,
     hitInvuln:0.5, deathColor:'#e67e22',
     hitFlash:0, invuln:0, frame:0, frameT:0, dead:false
   };
@@ -1805,6 +1926,9 @@ function createPoisonAlly(){
     hp:5, maxHp:5,
     auraRadius:50, dps:5, puffT:0,
     moveSpeed:122, leash:130,
+    // Evolution state: L4-6 SPORE NOVA (periodic AoE burst) every ~5s; L7-10 PLAGUE
+    // (large nova + briefly boosted aura) every ~10s.
+    novaCd:0, plagueCd:0, plagueBoostT:0,
     hitInvuln:0.5, deathColor:'#27ae60',
     hitFlash:0, invuln:0, frame:0, frameT:0, dead:false
   };
@@ -1909,26 +2033,33 @@ function emit(x,y,count,color,sMin=20,sMax=80,life=0.5){
 function playerSpeedMult(){
   let m = 1;
   if(player.speedTime  > 0) m *= 1.5;
-  if(player.sprintTime > 0) m *= 1.3;
+  // sprintMult is set per-cast from the SPRINT skill's current tier (1 + spd).
+  if(player.sprintTime > 0) m *= (player.sprintMult || 1.3);
   return m;
 }
 
 // Dispatch a skill by name. Returns true if the skill actually fired
 // (so the caller can charge cooldown only on successful use).
 function triggerSkill(name, dx, dy, mag){
+  // T = the effect knobs for this skill at the player's CURRENT tier (from
+  // profile.skillLevels). Every magnitude/duration below reads from T, so a
+  // higher tier is automatically stronger; cooldowns come from skillCdFor at the
+  // dispatch site. `|| {}` keeps a malformed/unknown id from throwing.
+  const T = skillStat(name) || {};
   if(name === 'sprint'){
-    // X skill: +30% move speed for 5s. Re-casting refreshes the timer.
-    player.sprintTime = Math.max(player.sprintTime, 5);
+    // X skill: +spd% move speed for dur seconds. Re-casting refreshes the timer.
+    player.sprintTime = Math.max(player.sprintTime, T.dur || 5);
+    player.sprintMult = 1 + (T.spd || 0.3);
     emit(player.x, player.y, 18, '#1abc9c', 40, 130, 0.4);
     emit(player.x, player.y, 8, '#fff', 25, 90, 0.3);
     sfx.teleport();
     return true;
   }
   if(name === 'heal'){
-    // F skill: restore 1 HP (capped at maxHp). Only fires — and only charges its
+    // F skill: restore T.hp HP (capped at maxHp). Only fires — and only charges its
     // cooldown — when there's actually damage to heal.
     if(player.hp >= player.maxHp) return false;
-    player.hp = Math.min(player.maxHp, player.hp + 1);
+    player.hp = Math.min(player.maxHp, player.hp + (T.hp || 1));
     emit(player.x, player.y, 18, '#2ecc71', 35, 110, 0.5);
     emit(player.x, player.y, 8, '#fff', 25, 90, 0.35);
     sfx.shieldHit();
@@ -1938,9 +2069,9 @@ function triggerSkill(name, dx, dy, mag){
     // B skill (Scout/Tank): a CIRCLE damage burst centered on the player. Every
     // enemy inside the radius instantly takes normal damage. explode() applies
     // the damage + fire particles + sfx; we add an expanding ring so the
-    // circular area of effect is clearly visible.
-    const R = 70;
-    const bd = 3 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
+    // circular area of effect is clearly visible. Radius + damage scale by tier.
+    const R = T.r || 70;
+    const bd = 3 * (T.dmgMul || 1) * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
     explode(player.x, player.y, R, bd, true);
     // Expanding shockwave ring (visual only): grows from the player out to R.
     if(particles.length < 300) particles.push({
@@ -1951,10 +2082,10 @@ function triggerSkill(name, dx, dy, mag){
     return true;
   }
   if(name === 'invuln'){
-    // Dr.Syed's B skill: 2 seconds of full invincibility (20 s cooldown).
-    // Mirrors the Tank's `wall` but shorter. The player sprite blinks while
-    // invuln > 0, so the immunity is visible in-game.
-    player.invuln = Math.max(player.invuln, 2);
+    // Dr.Syed's B skill: T.dur seconds of full invincibility. Mirrors the Tank's
+    // `wall` but shorter. The player sprite blinks while invuln > 0, so the
+    // immunity is visible in-game.
+    player.invuln = Math.max(player.invuln, T.dur || 2);
     emit(player.x, player.y, 24, '#7fe9ff', 40, 130, 0.6);
     emit(player.x, player.y, 10, '#fff', 25, 90, 0.4);
     if(particles.length < 300) particles.push({
@@ -1966,11 +2097,12 @@ function triggerSkill(name, dx, dy, mag){
     return true;
   }
   if(name === 'dash'){
+    const D = T.dist || 60;
     let ax = dx, ay = dy;
     if(mag === 0){ ax = Math.cos(player.angle); ay = Math.sin(player.angle); }
-    player.x = clamp(player.x + ax * 60, 8, worldW - 8);
-    player.y = clamp(player.y + ay * 60, 8, worldH - 10);
-    player.invuln = Math.max(player.invuln, 0.35);
+    player.x = clamp(player.x + ax * D, 8, worldW - 8);
+    player.y = clamp(player.y + ay * D, 8, worldH - 10);
+    player.invuln = Math.max(player.invuln, T.iframe || 0.35);
     emit(player.x, player.y, 14, '#f1c40f', 60, 180, 0.35);
     emit(player.x - ax*20, player.y - ay*20, 10, '#fff', 30, 100, 0.3);
     sfx.teleport();
@@ -1983,22 +2115,48 @@ function triggerSkill(name, dx, dy, mag){
     const ty = clamp(mouse.y + camY, 8, worldH - 10);
     emit(player.x, player.y, 12, '#f1c40f', 40, 140, 0.35);
     player.x = tx; player.y = ty;
-    player.invuln = Math.max(player.invuln, 0.45);
+    player.invuln = Math.max(player.invuln, T.iframe || 0.45);
     emit(player.x, player.y, 18, '#fff', 50, 160, 0.4);
     sfx.teleport();
     return true;
   }
   if(name === 'slowmo'){
-    slowMoTime = Math.max(slowMoTime, 3);
+    slowMoTime = Math.max(slowMoTime, T.dur || 3);
     emit(player.x, player.y, 20, '#3498db', 30, 90, 0.5);
     sfx.laser();
     return true;
   }
   if(name === 'wall'){
-    // Tank's signature: 4 seconds of full invulnerability.
-    player.invuln = Math.max(player.invuln, 4);
+    // Tank's signature: T.dur seconds of full invulnerability.
+    player.invuln = Math.max(player.invuln, T.dur || 4);
     emit(player.x, player.y, 28, '#27ae60', 40, 130, 0.6);
     sfx.shieldHit();
+    return true;
+  }
+  if(name === 'resummon'){
+    // Universal: revive up to T.reviveCount of the run's EQUIPPED assistants that
+    // have died (live entries in `allies` marked dead). Picks randomly among the
+    // dead; grants the revived ally T.iframe seconds of invuln at higher tiers.
+    // Returns false (charging no cooldown) when nothing is dead to revive.
+    const dead = [];
+    for(let i = 0; i < allies.length; i++){ if(allies[i] && allies[i].dead) dead.push(i); }
+    if(!dead.length) return false;
+    let revived = 0;
+    const want = Math.max(1, T.reviveCount || 1);
+    while(revived < want && dead.length && entities.length < 480){
+      const pick = dead.splice(Math.floor(Math.random() * dead.length), 1)[0];
+      const key = allies[pick].assistKey;
+      const a = createAssistant(key);
+      positionAllyByPlayer(a, pick);
+      a.invuln = Math.max(a.invuln || 0, T.iframe || 0);
+      allies[pick] = a;
+      entities.push(a);
+      emit(a.x, a.y, 22, '#9b59b6', 50, 160, 0.55);
+      emit(a.x, a.y, 10, '#fff', 28, 110, 0.4);
+      revived++;
+    }
+    if(!revived) return false;
+    sfx.teleport();
     return true;
   }
   if(name === 'nuke'){
@@ -2015,7 +2173,7 @@ function triggerSkill(name, dx, dy, mag){
     for(const en of targets){
       if(!en || en.dead) continue;
       try {
-        damageEnemy(en, en.isBoss ? 12 : 999, true);
+        damageEnemy(en, en.isBoss ? (T.bossDmg || 12) : 999, true);
       } catch(err){
         console.error('[shooter] nuke kill error on', en && en.kind, err);
         if(en) en.dead = true;
@@ -2030,63 +2188,61 @@ function triggerSkill(name, dx, dy, mag){
     return true;
   }
   if(name === 'flameburst'){
-    // Arm a 3-second ring of fire centered on the player. The per-frame damage
-    // and flame particles are emitted in updatePlaying via tickFlameburst().
-    player.flameburstTime = Math.max(player.flameburstTime, 3);
+    // Arm a T.dur-second ring of fire centered on the player. The per-frame damage
+    // and flame particles are emitted in updatePlaying via tickFlameburst(); the
+    // tier's damage multiplier is stashed on the player for tickFlameburst to read.
+    player.flameburstTime = Math.max(player.flameburstTime, T.dur || 3);
+    player.flameburstMul = T.dmgMul || 1;
     sfx.explode();
     return true;
   }
-  if(name === 'summon'){
-    // Banish any previous sword ally so only one is active at a time.
+  if(name === 'summon' || name === 'vsummon'){
+    // Summon a sword-knight (one alive at a time). vsummon swings ~1.5x faster than
+    // summon (the Tank's signature). Higher tiers scale the knight's HP / damage /
+    // swing-speed up (rateMul divides attackRate); cooldown drops via skillCdFor.
     for(const e of entities){
       if(e.type === 'sword_ally' && !e.dead){ e.dead = true; }
     }
     const sa = createSwordAlly(player.x, player.y);
+    const base = (name === 'vsummon') ? 1.5 : 1;       // vsummon's inherent speed-up
+    sa.attackRate /= (base * (T.rateMul || 1));
+    sa.maxHp = Math.max(1, Math.round(sa.maxHp * (T.hpMul || 1))); sa.hp = sa.maxHp;
+    sa.swingDmg = sa.swingDmg * (T.dmgMul || 1);
     entities.push(sa);
-    emit(sa.x, sa.y, 24, '#f1c40f', 50, 160, 0.55);
-    emit(sa.x, sa.y, 12, '#fff', 30, 110, 0.4);
-    sfx.teleport();
-    return true;
-  }
-  if(name === 'vsummon'){
-    // Tank's V skill: release a sword-knight that swings ~1.5x faster than the
-    // X-summoned one (attackRate 0.55s -> ~0.37s). Same one-alive-at-a-time rule
-    // as 'summon', so re-casting either X or V replaces the current knight.
-    for(const e of entities){
-      if(e.type === 'sword_ally' && !e.dead){ e.dead = true; }
-    }
-    const sa = createSwordAlly(player.x, player.y);
-    sa.attackRate /= 1.5;
-    entities.push(sa);
-    emit(sa.x, sa.y, 26, '#f39c12', 55, 180, 0.6);
+    const col = (name === 'vsummon') ? '#f39c12' : '#f1c40f';
+    emit(sa.x, sa.y, 26, col, 55, 180, 0.6);
     emit(sa.x, sa.y, 12, '#fff', 30, 110, 0.4);
     sfx.teleport();
     return true;
   }
   if(name === 'grenade'){
     // Soldier's signature: lobbed projectile that explodes after a short fuse
-    // (or instantly on direct enemy contact).
-    const gd = 4 * (player.damageMult || 1);
+    // (or instantly on direct enemy contact). Damage + radius scale by tier.
+    const gd = (T.dmg || 4) * (player.damageMult || 1);
+    const er = T.radius || 34;
     entities.push({
       type:'bullet', owner:'player', x:player.x, y:player.y,
       vx:Math.cos(player.angle) * 180, vy:Math.sin(player.angle) * 180,
       angle:player.angle, radius:3,
       sprite:SPR.bullet_rocket,
       dmg:gd, life:0.5, isGrenade:true,
-      explosive:true, explodeRadius:34, explodeDmg:gd
+      explosive:true, explodeRadius:er, explodeDmg:gd
     });
     emit(player.x, player.y, 8, '#e67e22', 30, 90, 0.25);
     sfx.rocket();
     return true;
   }
   if(name === 'barrage'){
-    // Soldier's V: lob a fan of 5 grenade-style shells with staggered fuses, so
-    // the blasts walk across an arc instead of stacking into one giant nuke.
+    // Soldier's V: lob a fan of T.shells grenade-style shells with staggered fuses,
+    // so the blasts walk across an arc instead of stacking into one giant nuke.
     // Reuses the exact bullet shape from the 'grenade' handler (isGrenade +
-    // explosive -> detonates on contact OR at end of fuse).
-    const gd = 3 * (player.damageMult || 1);
-    for(let i = 0; i < 5; i++){
-      const a = player.angle + (i - 2) * 0.16;   // ~9° between shells, ~37° fan
+    // explosive -> detonates on contact OR at end of fuse). Shell count + damage
+    // scale by tier.
+    const shells = Math.max(1, T.shells || 5);
+    const gd = 3 * (T.dmgMul || 1) * (player.damageMult || 1);
+    const mid = (shells - 1) / 2;
+    for(let i = 0; i < shells; i++){
+      const a = player.angle + (i - mid) * 0.16;   // ~9° between shells
       entities.push({
         type:'bullet', owner:'player', x:player.x, y:player.y,
         vx:Math.cos(a) * 170, vy:Math.sin(a) * 170,
@@ -2436,7 +2592,7 @@ function updatePlaying(dt){
   for(const [code, slot] of SKILL_KEYS){
     const id = player.loadout[slot];
     if(id && keys[code] && player.skillCd[slot] <= 0){
-      if(triggerSkill(id, dx, dy, mag)) player.skillCd[slot] = player.skillCdMax[id];
+      if(triggerSkill(id, dx, dy, mag)) player.skillCd[slot] = skillCdFor(id);
     }
   }
 
@@ -2734,7 +2890,8 @@ function updatePlaying(dt){
 // contact but a Tank enemy needs to sit in the ring for ~2s and bosses survive.
 function tickFlameburst(dt){
   const radius = 36;
-  const dps = 6 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
+  // flameburstMul is set per-cast from the NAPALM skill's current tier.
+  const dps = 6 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1) * (player.flameburstMul || 1);
   // Damage any enemy inside the ring this tick.
   for(const en of entities){
     if(en.type !== 'enemy' || en.dead) continue;
@@ -2990,6 +3147,19 @@ function updateCompanion(c, dt){
   c.frameT += dt;
   if(c.frameT > 0.18){ c.frameT = 0; c.frame = (c.frame + 1) % 2; }
 
+  // ---- EVOLUTIONS (gated on c.level, set by applyAssistantLevel) ----
+  const lvl = c.level || 1;
+  // L7-10 BERSERK: every 25s, 5s of doubled attack speed.
+  if(lvl >= 7){
+    c.berserkCd -= dt;
+    if(c.berserkT > 0) c.berserkT -= dt;
+    if(c.berserkCd <= 0 && c.berserkT <= 0){
+      c.berserkT = 5; c.berserkCd = 25;
+      emit(c.x, c.y, 16, '#e74c3c', 50, 150, 0.5);
+    }
+  }
+  const berserk = c.berserkT > 0;
+
   // Auto-fire at nearest enemy in range. Detection range + bullet damage scale
   // with the drone's upgrade level (see applyAssistantLevel).
   c.fireCooldown -= dt;
@@ -3003,12 +3173,28 @@ function updateCompanion(c, dt){
   if(nearest){
     c.angle = Math.atan2(nearest.y - c.y, nearest.x - c.x);
     if(c.fireCooldown <= 0){
-      // Companion bullets are friendly to player (owner='player') so they share collision logic.
-      entities.push(createBullet(c.x, c.y, c.angle, 'player', {
-        sprite: SPR.bullet_companion, speed: 260, dmg: c.dmg || 3, radius: 2, life: 1.5, fromAlly: true
-      }));
-      c.fireCooldown = c.fireRate;
-      emit(c.x, c.y, 1, '#aed6f1', 20, 60, 0.15);
+      c.shotCount = (c.shotCount || 0) + 1;
+      // L4-6+ MISSILES: every 3rd shot is a large-AoE explosive missile instead of
+      // a dot (raw explosive bullet, mirrors the bomber bomb; gated by the cap).
+      if(lvl >= 4 && c.shotCount % 3 === 0 && entities.length < 480){
+        const md = (c.dmg || 3) * 2;
+        entities.push({
+          type:'bullet', owner:'player', x:c.x, y:c.y,
+          vx:Math.cos(c.angle) * 230, vy:Math.sin(c.angle) * 230,
+          angle:c.angle, radius:3, sprite:SPR.bullet_rocket,
+          dmg:md, life:1.3, isGrenade:true, explosive:true, fromAlly:true,
+          explodeRadius:36, explodeDmg:md, dead:false
+        });
+        emit(c.x, c.y, 4, '#f39c12', 30, 90, 0.25);
+        if(sfx.rocket) sfx.rocket();
+      } else {
+        // Companion bullets are friendly to player (owner='player') so they share collision logic.
+        entities.push(createBullet(c.x, c.y, c.angle, 'player', {
+          sprite: SPR.bullet_companion, speed: 260, dmg: c.dmg || 3, radius: 2, life: 1.5, fromAlly: true
+        }));
+        emit(c.x, c.y, 1, '#aed6f1', 20, 60, 0.15);
+      }
+      c.fireCooldown = berserk ? c.fireRate * 0.5 : c.fireRate;
     }
   }
 }
@@ -3121,6 +3307,34 @@ function updateMeleeAlly(s, dt){
   const pSpeed = player.speed * playerSpeedMult();
   const moveSpeed = Math.max(s.moveSpeed, pSpeed * 1.15);
 
+  // ---- EVOLUTIONS (gated on s.level). effRate (swing cooldown) and arcMul (swing
+  // width) are applied at the attack site below; independent pulses fire on timers. ----
+  const lvl = s.level || 1;
+  let effRate = s.attackRate, arcMul = 1;
+  if(s.assistKey === 'henchman'){
+    if(lvl >= 4){                                  // GROUND SLAM (utility): AoE + knockback
+      s.slamCd -= dt;
+      if(s.slamCd <= 0){ henchmanSlam(s); s.slamCd = 4; }
+    }
+    if(lvl >= 7){                                  // ENRAGE (offense): faster/wider + self-heal
+      s.enrageCd -= dt;
+      if(s.enrageT > 0) s.enrageT -= dt;
+      if(s.enrageCd <= 0 && s.enrageT <= 0){ s.enrageT = 4; s.enrageCd = 12; emit(s.x, s.y, 16, '#c0392b', 50, 150, 0.5); }
+      if(s.enrageT > 0){ effRate = s.attackRate * 0.6; arcMul = 1.3; s.hp = Math.min(s.maxHp, s.hp + s.maxHp * 0.05 * dt); }
+    }
+  } else if(s.assistKey === 'nunchaku'){
+    if(lvl >= 4){                                  // WHIRLWIND (utility): full-circle + bullet clear
+      s.spinCd -= dt;
+      if(s.spinCd <= 0){ nunchakuWhirl(s); s.spinCd = 3.5; }
+    }
+    if(lvl >= 7){                                  // FLURRY (offense): double attack speed
+      s.flurryCd -= dt;
+      if(s.flurryT > 0) s.flurryT -= dt;
+      if(s.flurryCd <= 0 && s.flurryT <= 0){ s.flurryT = 3; s.flurryCd = 10; emit(s.x, s.y, 14, '#ecf0f1', 45, 140, 0.4); }
+      if(s.flurryT > 0) effRate = s.attackRate * 0.5;
+    }
+  }
+
   let target = null, td = Infinity;
   for(const en of entities){
     if(en.type !== 'enemy' || en.dead) continue;
@@ -3138,7 +3352,12 @@ function updateMeleeAlly(s, dt){
       s.vy = (dy / d) * moveSpeed;
     } else {
       s.vx *= 0.6; s.vy *= 0.6;
-      if(s.attackCd <= 0){ meleeAllyAttack(s); s.attackCd = s.attackRate; s.swingTime = 0.2; }
+      if(s.attackCd <= 0){
+        const baseArc = s.attackArc; s.attackArc = baseArc * arcMul;
+        meleeAllyAttack(s);
+        s.attackArc = baseArc;
+        s.attackCd = effRate; s.swingTime = 0.2;
+      }
     }
   } else {
     const tx = player.x + Math.cos(player.angle + Math.PI / 2) * 16;
@@ -3187,6 +3406,41 @@ function meleeAllyAttack(s){
   }
 }
 
+// Brute L4-6 GROUND SLAM: damage every enemy in a radius AND knock them outward
+// a few px (a self-contained crowd-control pulse — no enemy-AI changes needed).
+function henchmanSlam(s){
+  const R = 50;
+  let hit = false;
+  for(const en of entities){
+    if(en.type !== 'enemy' || en.dead || en.isBoss) continue;
+    const dx = en.x - s.x, dy = en.y - s.y;
+    const d = Math.hypot(dx, dy);
+    if(d > R + en.radius) continue;
+    damageEnemy(en, s.swingDmg, false);
+    const k = 12 / (d || 1);   // knockback strength tapers with distance
+    en.x = clamp(en.x + dx * k, 6, worldW - 6);
+    en.y = clamp(en.y + dy * k, 6, worldH - 8);
+    hit = true;
+  }
+  if(hit) sfx.hit();
+  if(particles.length < 300) particles.push({ x:s.x, y:s.y, vx:0, vy:0, life:0.35, maxLife:0.35, color:'#c8923a', ring:true, r0:8, r1:R });
+  emit(s.x, s.y, 8, '#c8923a', 40, 120, 0.3);
+}
+
+// Nunchaku L4-6 WHIRLWIND: one full-circle strike (temporarily 360° arc) plus a
+// DEFLECT that clears nearby enemy bullets.
+function nunchakuWhirl(s){
+  const baseArc = s.attackArc, baseAng = s.angle;
+  s.attackArc = Math.PI * 2;
+  meleeAllyAttack(s);
+  s.attackArc = baseArc; s.angle = baseAng;
+  const R = 30;
+  for(const b of entities){
+    if(b.type === 'bullet' && b.owner === 'enemy' && !b.dead && dist2(s, b) < R * R) b.dead = true;
+  }
+  if(particles.length < 300) particles.push({ x:s.x, y:s.y, vx:0, vy:0, life:0.3, maxLife:0.3, color:'#ecf0f1', ring:true, r0:6, r1:R });
+}
+
 // ---- Bomber ally ----
 // Stays near the player (fragile) and lobs a high-damage, large-radius bomb at
 // the nearest enemy in range. The bomb explodes on contact OR at end of fuse.
@@ -3215,23 +3469,43 @@ function updateBomberAlly(s, dt){
     const dd = dist2(s, en);
     if(dd < nd){ nd = dd; target = en; }
   }
+  // ---- EVOLUTIONS (gated on s.level) ----
+  const lvl = s.level || 1;
+  // L7-10 CARPET BOMB: every ~12s lob a 5-bomb arc barrage (independent of normal fire).
+  if(lvl >= 7){
+    s.carpetCd -= dt;
+    if(s.carpetCd <= 0){
+      s.carpetCd = 12;
+      for(let i = 0; i < 5; i++) bomberBomb(s, s.angle + (i - 2) * 0.18);
+      emit(s.x, s.y, 12, '#e67e22', 45, 140, 0.4);
+      if(sfx.rocket) sfx.rocket();
+    }
+  }
   if(target){
     s.angle = Math.atan2(target.y - s.y, target.x - s.x);
     if(s.fireCooldown <= 0){
-      const dmg = s.bombDmg * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
-      // Raw bullet object (mirrors the Soldier grenade) so isGrenade/explodeDmg stick.
-      entities.push({
-        type:'bullet', owner:'player', x:s.x, y:s.y,
-        vx:Math.cos(s.angle) * s.projSpeed, vy:Math.sin(s.angle) * s.projSpeed,
-        angle:s.angle, radius:3, sprite:SPR.bullet_rocket,
-        dmg, life:1.1, isGrenade:true, explosive:true, fromAlly:true,
-        explodeRadius:s.explodeRadius, explodeDmg:dmg, dead:false
-      });
+      // L4-6+ CLUSTER: 3-bomb spread per volley instead of a single bomb.
+      const shots = lvl >= 4 ? 3 : 1;
+      for(let i = 0; i < shots; i++) bomberBomb(s, s.angle + (i - (shots - 1) / 2) * 0.12);
       s.fireCooldown = s.fireRate;
       emit(s.x, s.y, 4, '#e67e22', 30, 90, 0.25);
       sfx.rocket();
     }
   }
+}
+
+// Spawn one bomber bomb along `angle` (raw bullet mirroring the Soldier grenade so
+// isGrenade/explodeDmg stick). Gated by the entity cap so cluster/carpet can't flood.
+function bomberBomb(s, angle){
+  if(entities.length >= 480) return;
+  const dmg = s.bombDmg * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
+  entities.push({
+    type:'bullet', owner:'player', x:s.x, y:s.y,
+    vx:Math.cos(angle) * s.projSpeed, vy:Math.sin(angle) * s.projSpeed,
+    angle, radius:3, sprite:SPR.bullet_rocket,
+    dmg, life:1.1, isGrenade:true, explosive:true, fromAlly:true,
+    explodeRadius:s.explodeRadius, explodeDmg:dmg, dead:false
+  });
 }
 
 // ---- Poison ally ----
@@ -3268,7 +3542,19 @@ function updatePoisonAlly(s, dt){
   s.frameT += dt;
   if(s.frameT > 0.18){ s.frameT = 0; s.frame = (s.frame + 1) % 2; }
 
-  const dps = s.dps * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
+  // ---- EVOLUTIONS (gated on s.level) ----
+  const lvl = s.level || 1;
+  if(s.plagueBoostT > 0) s.plagueBoostT -= dt;
+  if(lvl >= 4){                                  // SPORE NOVA: periodic AoE burst
+    s.novaCd -= dt;
+    if(s.novaCd <= 0){ s.novaCd = 5; poisonNova(s, s.auraRadius * 1.2, s.dps * 0.8, '#27ae60'); }
+  }
+  if(lvl >= 7){                                  // PLAGUE: big nova + briefly boosted aura
+    s.plagueCd -= dt;
+    if(s.plagueCd <= 0){ s.plagueCd = 10; s.plagueBoostT = 3; poisonNova(s, s.auraRadius * 2, s.dps * 1.5, '#2ecc71'); }
+  }
+  // Aura DPS (boosted while a PLAGUE wave lingers).
+  const dps = s.dps * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1) * (s.plagueBoostT > 0 ? 1.5 : 1);
   for(const en of entities){
     if(en.type !== 'enemy' || en.dead) continue;
     const rr = s.auraRadius + en.radius;
@@ -3288,6 +3574,18 @@ function updatePoisonAlly(s, dt){
       color: Math.random() < 0.5 ? '#27ae60' : '#2ecc71', size: 1
     });
   }
+}
+
+// Poison L4-6 SPORE NOVA / L7-10 PLAGUE: a one-frame AoE damage burst around the
+// ally, plus an expanding toxic ring so the area reads clearly.
+function poisonNova(s, radius, dmg, color){
+  for(const en of entities){
+    if(en.type !== 'enemy' || en.dead) continue;
+    const rr = radius + en.radius;
+    if(dist2(s, en) < rr * rr) damageEnemy(en, dmg, false);
+  }
+  if(particles.length < 300) particles.push({ x:s.x, y:s.y, vx:0, vy:0, life:0.4, maxLife:0.4, color, ring:true, r0:8, r1:radius });
+  emit(s.x, s.y, 10, color, 50, 130, 0.4);
 }
 
 // ============================================================
@@ -5099,7 +5397,7 @@ function drawSkillHUD(){
   for(const [key, slot] of [['F','f'],['X','x'],['C','c'],['B','b'],['V','v']]){
     const id = player.loadout[slot];
     if(!id || !SKILLS[id]) continue;
-    skills.push({ key, label:SKILLS[id].label, cd:player.skillCd[slot], max:player.skillCdMax[id], color:SKILLS[id].color });
+    skills.push({ key, label:SKILLS[id].label, cd:player.skillCd[slot], max:skillCdFor(id), color:SKILLS[id].color });
   }
   ctx.textAlign = 'left';
   let x = 6;
@@ -5282,6 +5580,7 @@ const ASSISTANT_COST = { drone:0, henchman:200, nunchaku:280, bomber:320, poison
 const SHOP_ASSIST_ORDER = ['drone','henchman','nunchaku','bomber','poison'];
 let shopTab = 'skills';      // 'skills' | 'allies'
 let shopMsgUntil = 0;        // stateTime until which the "NOT ENOUGH GOLD" flash shows
+let shopHoverSkill = null;   // skill id under the cursor (skills tab) -> bottom detail panel
 let paramChar = 'soldier';   // which class the PARAMETERS screen is currently showing
 
 function shopTabRect(i){ return { x: W/2 - 86 + i * 88, y: 26, w: 84, h: 14 }; }
@@ -5326,6 +5625,7 @@ function drawShop(){
   }
 
   const items = shopTab === 'skills' ? SKILL_ORDER : SHOP_ASSIST_ORDER;
+  shopHoverSkill = null;
   for(let i = 0; i < items.length; i++){
     const id = items[i];
     const r = shopItemRect(i);
@@ -5333,17 +5633,21 @@ function drawShop(){
     const meta = isSkill ? SKILLS[id] : ASSISTANTS[id];
     const owned = isSkill ? profile.ownedSkills.includes(id) : profile.ownedAssistants.includes(id);
     const col = meta.color;
+    // Skills: current tier (1..5, or 0 if unowned) drives pips + which price to show.
     // Assistants: level (1..10) + the relevant gold price (buy if unowned, else upgrade).
+    const sTier = isSkill ? (owned ? skillTier(id) : 0) : 0;
+    const sMaxed = isSkill && owned && sTier >= SKILL_MAX_TIER;
     const lvl = isSkill ? 0 : assistantLevel(id);
     const maxed = !isSkill && owned && lvl >= ASSIST_MAX_LEVEL;
     let cost;
-    if(isSkill) cost = SKILLS[id].cost;
+    if(isSkill) cost = !owned ? SKILLS[id].cost : (sMaxed ? 0 : (skillUpgradeCost(id) || 0));
     else if(!owned) cost = ASSISTANT_COST[id] || 0;
     else cost = maxed ? 0 : assistUpgradeCost(lvl);
     const afford = profile.gold >= cost;
-    // "done" = nothing more to buy here (a skill you own, or a maxed assistant).
-    const done = isSkill ? owned : maxed;
+    // "done" = nothing more to buy here (a maxed-tier skill, or a maxed assistant).
+    const done = isSkill ? sMaxed : maxed;
     const hov = clickedRect(r.x, r.y, r.w, r.h);
+    if(isSkill && hov) shopHoverSkill = id;
     ctx.fillStyle = done ? '#15241a' : (hov && afford ? '#23303f' : '#141822');
     ctx.fillRect(r.x, r.y, r.w, r.h);
     ctx.strokeStyle = done ? '#2ecc71' : col;
@@ -5355,9 +5659,12 @@ function drawShop(){
     ctx.textAlign = 'center';
     ctx.fillText(isSkill ? meta.label : meta.name, r.x + r.w/2, r.y + 13);
     if(isSkill){
-      ctx.font = 'bold 6px monospace';
-      ctx.fillStyle = '#7f8c8d';
-      ctx.fillText('TIER ' + meta.tier, r.x + r.w/2, r.y + 23);
+      // 5 tier pips (filled up to the owned tier). Centered under the name.
+      const pn = SKILL_MAX_TIER, gapP = 8, x0 = r.x + r.w/2 - (pn - 1) * gapP / 2, yP = r.y + 24;
+      for(let t = 0; t < pn; t++){
+        ctx.fillStyle = t < sTier ? col : '#34404e';
+        ctx.beginPath(); ctx.arc(x0 + t * gapP, yP, 2.4, 0, Math.PI * 2); ctx.fill();
+      }
     } else {
       // Assistant: level + progress bar (owned) or tags (unowned), then the LEVEL-SCALED
       // stat block (HP/DMG/RNG/ROF) — reflects profile.assistantLevels via assistantStatLines.
@@ -5374,12 +5681,17 @@ function drawShop(){
       }
       const stats = assistantStatLines(id);
       ctx.font = 'bold 7px monospace';
-      let sy = r.y + 40;
+      let sy = r.y + 37;
       for(const [lab, val] of stats){
         ctx.fillStyle = '#8b94a3'; ctx.textAlign = 'left';  ctx.fillText(lab, r.x + 10, sy);
         ctx.fillStyle = '#eef2f7'; ctx.textAlign = 'right'; ctx.fillText(val, r.x + r.w - 10, sy);
-        sy += 10;
+        sy += 9;
       }
+      // Threshold-ability readout: what this ally's CURRENT level unlocks + what's NEXT.
+      const evo = assistantEvoBlurb(id, lvl || 1);
+      ctx.textAlign = 'center'; ctx.font = 'bold 6px monospace';
+      ctx.fillStyle = '#2ecc71'; ctx.fillText('NOW: ' + evo.now, r.x + r.w/2, sy + 2);
+      ctx.fillStyle = '#7f8c8d'; ctx.fillText(evo.next ? 'NEXT: ' + evo.next : 'MAXED', r.x + r.w/2, sy + 10);
       ctx.textAlign = 'center';
     }
     // Bottom line: status / price (anchored to the bottom of whichever card height).
@@ -5387,10 +5699,39 @@ function drawShop(){
     ctx.font = 'bold 8px monospace';
     if(done){
       ctx.fillStyle = '#2ecc71';
-      ctx.fillText(maxed ? 'MAX LV' : 'OWNED', r.x + r.w/2, priceY);
+      ctx.fillText(isSkill ? 'MAX TIER' : 'MAX LV', r.x + r.w/2, priceY);
     } else {
       ctx.fillStyle = afford ? '#f5d76e' : '#7d6608';
-      ctx.fillText((!isSkill && owned ? 'UP  G ' : 'G ') + cost, r.x + r.w/2, priceY);
+      const upgrading = (isSkill ? owned : owned);   // owned -> UPGRADE, unowned -> BUY
+      ctx.fillText((upgrading ? 'UP  G ' : 'G ') + cost, r.x + r.w/2, priceY);
+    }
+  }
+
+  // SKILL DETAIL PANEL (bottom): the hovered skill's CURRENT tier effect, then the
+  // NEXT tier's effect in parens (per the requested "Effect (Next: …)" format).
+  if(shopTab === 'skills' && shopHoverSkill){
+    const id = shopHoverSkill, meta = SKILLS[id];
+    const owned = profile.ownedSkills.includes(id);
+    const tier = owned ? skillTier(id) : 1;
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 8px monospace';
+    ctx.fillStyle = meta.color;
+    const curCd = (meta.t[tier - 1] || {}).cd;
+    const head = owned
+      ? (meta.label + '  Lv' + tier + '/' + SKILL_MAX_TIER + ': ' + skillBlurb(id, tier) + ', cd ' + curCd + 's')
+      : (meta.label + '  (unowned): ' + skillBlurb(id, 1) + ', cd ' + (meta.t[0].cd) + 's');
+    ctx.fillText(head, W/2, 218);
+    ctx.font = 'bold 7px monospace';
+    if(owned && tier < SKILL_MAX_TIER){
+      const nx = meta.t[tier];
+      ctx.fillStyle = '#bcd2e8';
+      ctx.fillText('(Next Lv' + (tier + 1) + ': ' + skillBlurb(id, tier + 1) + ', cd ' + nx.cd + 's)   G ' + (skillUpgradeCost(id) || 0), W/2, 230);
+    } else if(owned){
+      ctx.fillStyle = '#2ecc71';
+      ctx.fillText('MAX TIER', W/2, 230);
+    } else {
+      ctx.fillStyle = '#bcd2e8';
+      ctx.fillText('(Next Lv2: ' + skillBlurb(id, 2) + ', cd ' + meta.t[1].cd + 's)   BUY G ' + meta.cost, W/2, 230);
     }
   }
 
@@ -5434,11 +5775,23 @@ function handleShop(){
     if(!clickedRect(r.x, r.y, r.w, r.h)) continue;
     const id = items[i];
     if(shopTab === 'skills'){
-      if(profile.ownedSkills.includes(id)) return;
-      const cost = SKILLS[id].cost;
+      // BUY (tier 1) if unowned, else UPGRADE one tier (cost rises non-linearly).
+      if(!profile.ownedSkills.includes(id)){
+        const cost = SKILLS[id].cost;
+        if(profile.gold < cost){ shopMsgUntil = stateTime + 1.2; return; }
+        profile.gold -= cost;
+        profile.ownedSkills.push(id);
+        profile.skillLevels[id] = 1;
+        saveProfile();
+        if(sfx.pickup) sfx.pickup();
+        return;
+      }
+      const tier = skillTier(id);
+      if(tier >= SKILL_MAX_TIER) return;            // already max tier
+      const cost = skillUpgradeCost(id) || 0;
       if(profile.gold < cost){ shopMsgUntil = stateTime + 1.2; return; }
       profile.gold -= cost;
-      profile.ownedSkills.push(id);
+      profile.skillLevels[id] = tier + 1;
       saveProfile();
       if(sfx.pickup) sfx.pickup();
       return;
