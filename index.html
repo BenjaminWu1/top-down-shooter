@@ -48,7 +48,12 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 canvas.width = W * PX; canvas.height = H * PX;
 ctx.scale(PX, PX);
-ctx.imageSmoothingEnabled = false;
+// HD vector aesthetic: smoothing ON + sub-pixel coordinates so curves/gradients and
+// motion are buttery smooth (the retro pixel-snap was retired). Note: fillRect sprites
+// pick up mild anti-alias softening at fractional coords — that's the intended look.
+ctx.imageSmoothingEnabled = true;
+ctx.imageSmoothingQuality = 'high';
+const TAU = Math.PI * 2;
 
 function resize(){
   // CSS scale stays anchored to logical W/H so on-screen size is unchanged.
@@ -1123,7 +1128,9 @@ function drawSprite(sp, x, y){
   }
 }
 function drawSpriteCentered(sp, x, y){
-  drawSprite(sp, Math.floor(x - sp.w/2), Math.floor(y - sp.h/2));
+  // Sub-pixel (no floor) so entity motion is smooth — fractional coords soften the
+  // fillRect cells slightly, which is the intended HD look.
+  drawSprite(sp, x - sp.w/2, y - sp.h/2);
 }
 function drawSpriteTinted(sp, x, y, tint){
   const rows = sp.rows, pal = sp.pal;
@@ -1394,6 +1401,10 @@ let player = null;
 let allies = [];              // the chosen assistant entities live in here (also in `entities`)
 let entities = [];
 let particles = [];
+// Visual-only ground decals (scorch marks, toxic spills). NOT entities — excluded from
+// every physics/collision loop and from the 600-entity cap. Long-lived (≈10s), fading.
+let decals = [];
+const DECAL_CAP = 40;
 let groundFields = [];   // boss poison-gas pools: {x,y,radius,life,maxLife,warn} (warn = arming delay, no damage)
 let levelIdx = 0;
 let levelData = null;
@@ -1413,7 +1424,11 @@ let gapSpawnTimer = 0;        // cadence for the DENSE monster surge during that
 let score = 0;
 let highScore = parseInt(localStorage.getItem('shooter_high') || '0', 10);
 let shakeTime = 0;
-let shakeAmt = 0;
+let shakeAmt = 0;          // legacy scalar (kept for back-compat); setShake fills the rest
+let shakeMag = 0;          // current shake amplitude
+let shakeDur = 0.15;       // duration the current shake decays over
+let shakeDirX = 0, shakeDirY = 0;  // unit recoil direction; (0,0) = random radial
+let hitStopTime = 0;       // brief global freeze (skip updatePlaying, keep drawing) on heavy impacts
 let stateTime = 0;
 let bossSpawnPulse = 0;
 let bossSpawnName = '';   // name shown in the boss-arrival flash (mid-boss or end boss)
@@ -2264,6 +2279,9 @@ function createBullet(x,y,angle,owner,opts={}){
     sprite: opts.sprite ?? (owner==='player' ? SPR.bullet_p : SPR.bullet_e),
     // Optional render/behaviour tag (e.g. 'pellet' for Leo's shotgun line-tracers).
     kind: opts.kind ?? null,
+    // Vector glow colour (energy/plasma look): hot white core fading to this. Enemy
+    // bullets default to red; player projectiles set it per class in fireWeapon.
+    glow: opts.glow ?? (owner==='enemy' ? '#ff6b6b' : '#ffe08a'),
     hitSet: opts.pierce ? new Set() : null,
     // `fromAlly` marks an owner:'player' bullet that was actually fired by an ally
     // (drone/bomber), so Syed's lifesteal passive doesn't credit him for it.
@@ -2279,7 +2297,25 @@ function createPickup(x,y,kind){
 // ============================================================
 // PARTICLES
 // ============================================================
-function emit(x,y,count,color,sMin=20,sMax=80,life=0.5){
+// Combat-juice helpers. setShake stores amplitude + an optional unit direction
+// (dx,dy=0 -> random radial). hitStop briefly freezes updatePlaying while draw keeps
+// running. spawnDecal drops a visual-only ground mark (capped, no physics).
+function setShake(time, mag, dx=0, dy=0){
+  shakeTime = Math.max(shakeTime, time); shakeDur = time;
+  shakeMag = Math.max(shakeMag, mag); shakeAmt = shakeMag;
+  shakeDirX = dx; shakeDirY = dy;
+}
+function hitStop(ms){ hitStopTime = Math.max(hitStopTime, ms / 1000); }
+function spawnDecal(x, y, r, kind){
+  if(decals.length >= DECAL_CAP) decals.shift();
+  const life = 10;
+  const color = kind === 'toxic' ? 'rgba(39,174,96,' : 'rgba(14,10,8,';
+  decals.push({ x, y, r, life, maxLife: life, kind, color });
+}
+
+// `glow=true` tags the motes as additive-bloom energy/embers (rendered under
+// 'lighter' with a hot white core); plain emits stay simple round dots.
+function emit(x,y,count,color,sMin=20,sMax=80,life=0.5,glow=false){
   for(let i=0;i<count;i++){
     if(particles.length > 300) break;
     const a = Math.random()*Math.PI*2;
@@ -2287,7 +2323,7 @@ function emit(x,y,count,color,sMin=20,sMax=80,life=0.5){
     particles.push({
       x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s,
       life: rand(life*0.5, life), maxLife: life,
-      color, size: 1 + Math.floor(Math.random()*2)
+      color, size: 1 + Math.floor(Math.random()*2), glow
     });
   }
 }
@@ -2451,7 +2487,7 @@ function triggerSkill(name, dx, dy, mag){
       emit(rand(0, worldW), rand(0, worldH), 3, '#fff', 40, 160, 0.35);
       emit(rand(0, worldW), rand(0, worldH), 3, '#f39c12', 40, 160, 0.35);
     }
-    shakeTime = 0.2; shakeAmt = 3;
+    setShake(0.2, 3);
     try { sfx.explode(); } catch(err){ /* audio nodes are best-effort */ }
     return true;
   }
@@ -2520,7 +2556,7 @@ function triggerSkill(name, dx, dy, mag){
       });
     }
     emit(player.x, player.y, 14, '#e67e22', 40, 130, 0.35);
-    shakeTime = 0.18; shakeAmt = 3;
+    setShake(0.18, 3);
     sfx.rocket();
     return true;
   }
@@ -2555,7 +2591,7 @@ function triggerSkill(name, dx, dy, mag){
       entities.push(createBullet(player.x + Math.cos(a) * 9, player.y + Math.sin(a) * 9, a, 'player', { dmg: gd, speed: 340, radius: 2, life: 0.5 }));
     }
     emit(player.x, player.y, 16, '#e67e22', 50, 170, 0.4);
-    shakeTime = 0.18; shakeAmt = 2;
+    setShake(0.18, 2);
     sfx.rocket();
     return true;
   }
@@ -2580,9 +2616,13 @@ function triggerSkill(name, dx, dy, mag){
 // lifesteal passive work at every damage source.
 function damageEnemy(en, dmg, fromPlayer){
   if(!en || en.dead || en._killed) return true;
-  if(en.invulnT > 0){ en.hitFlash = 0.05; return true; }   // invuln boss absorbs it
+  if(en.invulnT > 0){ en.hitFlash = 0.06; return true; }   // invuln boss absorbs it
   en.hp -= dmg;
-  en.hitFlash = 0.07;
+  en.hitFlash = 0.09;   // brief pure-white pop (drawEnemy white-tints while > 0)
+  // Hit-stop on a heavy DISCRETE hit to a boss (dmg threshold excludes the tiny
+  // per-frame ticks of continuous weapons like the spear/flame/machete, so they
+  // don't stutter the game — only shots / skills / big blasts freeze it).
+  if(en.isBoss && fromPlayer && dmg >= 3) hitStop(40);
   if(fromPlayer && dmg > 0 && player.hp > 0){
     const ls = passiveValue('lifesteal');
     if(ls > 0) player.hp = Math.min(player.maxHp, player.hp + dmg * ls);
@@ -2592,9 +2632,11 @@ function damageEnemy(en, dmg, fromPlayer){
 }
 
 function explode(x, y, radius, dmg, fromPlayer){
-  emit(x, y, 22, '#f39c12', 60, 180, 0.6);
-  emit(x, y, 12, '#fff', 40, 150, 0.4);
-  shakeTime = 0.25; shakeAmt = 5;
+  emit(x, y, 22, '#f39c12', 60, 180, 0.6, true);
+  emit(x, y, 12, '#fff', 40, 150, 0.4, true);
+  setShake(0.25, 5);
+  hitStop(50);
+  spawnDecal(x, y, Math.max(10, radius * 0.9), 'scorch');
   sfx.explode();
   // Snapshot the enemy list — killEnemy can push splitter children into entities,
   // and we don't want this single blast to keep visiting them and cascading.
@@ -2664,7 +2706,7 @@ function spawnBoss(kind){
   bossSpawnName = (kind === levelData.boss ? (levelData.bossName || BOSS_NAMES[kind]) : BOSS_NAMES[kind]) || 'BOSS';
   bossSpawnPulse = 1;
   sfx.bossSpawn();
-  shakeTime = 0.4; shakeAmt = 5;
+  setShake(0.4, 5);
   return b;
 }
 // The medium-boss kinds for a level's Phase-1 wave (1 for L11-20, 2 for L21-40).
@@ -2773,6 +2815,7 @@ function startLevel(idx){
   camX = 0; camY = 0;
   entities = entities.filter(e => e.type === 'player');
   particles = [];
+  decals = [];
   groundFields = [];
   if(!player){ player = createPlayer(selectedChar); entities.push(player); }
   else { player.x = worldW/2; player.y = worldH/2; player.invuln = 1.2; }
@@ -2810,6 +2853,7 @@ function startGame(){
   allies = [];
   spawnSelectedAssistants();
   particles = [];
+  decals = [];
   groundFields = [];
   startLevel(0);
 }
@@ -2844,7 +2888,12 @@ function update(dt){
   else if(state === STATE.ASSISTANT_SELECT) handleAssistantSelect();
   else if(state === STATE.LEVEL_COMPLETE) handleLevelComplete();
   else if(state === STATE.GAME_OVER || state === STATE.VICTORY) handleEndScreen();
-  else if(state === STATE.PLAYING){ if(!paused && !showStats) updatePlaying(dt); }
+  else if(state === STATE.PLAYING){
+    // Hit-stop: a brief freeze on heavy impacts. We still decrement it (real time) and
+    // keep draw() running, so the frozen frame reads as a punch of impact.
+    if(hitStopTime > 0) hitStopTime -= dt;
+    else if(!paused && !showStats) updatePlaying(dt);
+  }
   // Safety net for the sustained flamethrower loop: kill it whenever we're not in
   // active play (pause, Tab-stats, death/menu, level transitions) so it can't drone.
   if(state !== STATE.PLAYING || paused || showStats) flameAudioStop();
@@ -2854,11 +2903,17 @@ function update(dt){
 function updatePlaying(dt){
   // ---- Decay global & powerup timers ----
   if(slowMoTime > 0) slowMoTime -= dt;
+  if(shakeTime > 0) shakeTime -= dt;
   if(player.speedTime > 0)  player.speedTime  -= dt;
   if(player.sprintTime > 0) player.sprintTime -= dt;
   if(player.damageTime > 0) player.damageTime -= dt;
   if(player.magnetTime > 0) player.magnetTime -= dt;
   if(player.scoreTime > 0)  player.scoreTime  -= dt;
+  // Visual-only decals fade over ~10s (no physics/collision).
+  if(decals.length){
+    for(const d of decals) d.life -= dt;
+    decals = decals.filter(d => d.life > 0);
+  }
 
   // ---- Player movement (SPEED powerup + X-skill sprint boost it) ----
   let dx=0, dy=0;
@@ -3223,7 +3278,7 @@ function updatePlaying(dt){
   }
   if(player.hp <= 0){
     state = STATE.GAME_OVER; stateTime = 0; sfx.gameOver();
-    shakeTime = 0; shakeAmt = 0;
+    shakeTime = 0; shakeAmt = 0; shakeMag = 0;
     grantXp(0);     // resolve + persist the accrued kill XP/gold even on a loss
     if(score > highScore){ highScore = score; localStorage.setItem('shooter_high', String(highScore)); }
   }
@@ -3314,7 +3369,7 @@ function fireFlamethrower(dt){
       x: px, y: py, vx, vy,
       life: 0.3 + Math.random() * 0.15,
       maxLife: 0.45, color: pal[i % 4],
-      size: 1 + Math.floor(Math.random() * 2)
+      size: 1 + Math.floor(Math.random() * 2), glow: true
     });
   }
   if(particles.length > 300) particles.length = 300;
@@ -3437,10 +3492,10 @@ function fireMachete(dt){
 function fireBiogun(){
   const a = player.angle;
   const mx = player.x + Math.cos(a) * 9, my = player.y + Math.sin(a) * 9;
-  const b = createBullet(mx, my, a, 'player', { dmg: 1 * (player.damageMult || 1), speed: 260, radius: 3, life: 0.8, sprite: SPR.bullet_bio });
+  const b = createBullet(mx, my, a, 'player', { dmg: 1 * (player.damageMult || 1), speed: 260, radius: 3, life: 0.8, sprite: SPR.bullet_bio, glow: '#2ecc71' });
   b.spawnsCloud = true; b.cloudRadius = 24; b.cloudLife = 2; b.cloudDps = 6; b.cloudSlow = 0;
   entities.push(b);
-  emit(mx, my, 4, '#27ae60', 30, 90, 0.2);
+  emit(mx, my, 4, '#27ae60', 30, 90, 0.2, true);
   sfx.shoot();
 }
 
@@ -3458,7 +3513,7 @@ function spawnPoisonCloud(x, y, b){
 
 function updatePoisonCloud(c, dt){
   c.life -= dt;
-  if(c.life <= 0){ c.dead = true; return; }
+  if(c.life <= 0){ c.dead = true; spawnDecal(c.x, c.y, c.auraRadius, 'toxic'); return; }
   const dps = c.dps * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
   for(const en of entities){
     if(en.type !== 'enemy' || en.dead) continue;
@@ -3519,7 +3574,7 @@ function fireLaserBeams(){
       vx:0, vy:0, color:'#4fc3f7', life:0.14, maxLife:0.14
     });
   }
-  emit(lx, ly, 6, '#4fc3f7', 40, 150, 0.18);
+  emit(lx, ly, 6, '#4fc3f7', 40, 150, 0.18, true);
   sfx.laserBeam();
 }
 
@@ -3538,11 +3593,11 @@ function fireWeapon(mx, my){
   if(player.char === 'scout'){
     // Assassin SMG: fast, light, low-damage blue laser dots. High sustained DPS up
     // close; each shot is weak — rewards landing many hits.
-    opts = { dmg: 0.85 * dmgMult, speed: 360, radius: 2, life: 1.0, sprite: SPR.bullet_dot_blue };
+    opts = { dmg: 0.85 * dmgMult, speed: 360, radius: 2, life: 1.0, sprite: SPR.bullet_dot_blue, glow: '#4fc3f7' };
     cd = 0.06; flashN = 2; flashCol = '#b3e5fc'; flashSpd = 110; flashLife = 0.14;
   } else if(player.char === 'tank'){
     // Heavy slug: 2× base damage, slightly larger/slower projectile, pistol cadence.
-    opts = { dmg: 2 * dmgMult, radius: 3, speed: 300, life: 1.6 };
+    opts = { dmg: 2 * dmgMult, radius: 3, speed: 300, life: 1.6, glow: '#ffb24a' };
     cd = player.fireRate; flashN = 4; flashCol = '#e67e22'; flashSpd = 100; flashLife = 0.22;
   } else if(player.char === 'bounty_hunter'){
     // Shotgun: a 3-pellet spread, short range (low `life`), slow cadence. Heavy burst
@@ -3551,11 +3606,11 @@ function fireWeapon(mx, my){
     cd = 0.5; flashN = 5; flashCol = '#e67e22'; flashSpd = 120; flashLife = 0.2; fireSfx = sfx.shotgun;
   } else if(player.char === 'cyborg'){
     // Large-caliber magnum: slow cadence, single heavy high-damage slug, moderate range.
-    opts = { dmg: 3.4 * dmgMult, speed: 300, radius: 3, life: 1.2 };
+    opts = { dmg: 3.4 * dmgMult, radius: 3, speed: 300, life: 1.2, glow: '#dfefff' };
     cd = 0.34; flashN = 4; flashCol = '#fff'; flashSpd = 120; flashLife = 0.2;
   } else {
     // Soldier default pistol (createBullet defaults: bullet_p sprite, base speed/life).
-    opts = { dmg: 1 * dmgMult };
+    opts = { dmg: 1 * dmgMult, glow: '#ffe08a' };
     cd = player.fireRate; flashN = 3; flashCol = '#f1c40f'; flashSpd = 100; flashLife = 0.18;
   }
   if(player.pierceTime > 0) opts.pierce = true;
@@ -3574,10 +3629,16 @@ function fireWeapon(mx, my){
     }
   }
   player.fireCooldown = cd * rapidFactor;
-  emit(mx, my, flashN, flashCol, 30, flashSpd, flashLife);
+  emit(mx, my, flashN, flashCol, 30, flashSpd, flashLife, true);
   // Shotgun: a bright muzzle-flash polygon at the barrel tip (a `flash` star particle).
   if(player.char === 'bounty_hunter' && particles.length < 300){
     particles.push({ flash:true, x: mx, y: my, vx:0, vy:0, angle: player.angle, r: 7, color: '#ffd27f', life: 0.07, maxLife: 0.07 });
+  }
+  // Heavy-weapon RECOIL: shotgun / tank slug / magnum kick the screen along the inverse
+  // shot vector (directional shake) + a tiny hit-stop for the shotgun/slug punch.
+  if(player.char === 'bounty_hunter' || player.char === 'tank' || player.char === 'cyborg'){
+    setShake(0.12, player.char === 'bounty_hunter' ? 3.5 : 3, -Math.cos(player.angle), -Math.sin(player.angle));
+    if(player.char !== 'cyborg') hitStop(30);
   }
   fireSfx();
 }
@@ -4098,7 +4159,7 @@ function damagePlayer(amount){
   player.hp -= amount;
   player.invuln = 0.9;
   player.hitFlash = 0.15;
-  shakeTime = 0.2; shakeAmt = 4;
+  setShake(0.2, 4);
   emit(player.x, player.y, 8, '#e74c3c', 40, 130, 0.5);
   sfx.playerHurt();
 }
@@ -4128,9 +4189,9 @@ function killEnemy(en){
   emit(en.x, en.y, en.isBoss ? 40 : 14,
        en.isBoss ? '#9b59b6' : '#c0392b', 50, 200, en.isBoss ? 0.9 : 0.6);
   if(en.kind === 'tank'){
-    shakeTime = 0.25; shakeAmt = 4;
+    setShake(0.25, 4);
   } else if(en.isBoss){
-    shakeTime = 0.7; shakeAmt = 6;
+    setShake(0.7, 6);
     // Boss death drops a guaranteed special equipment
     const drops = {
       bruiser:'rapid', sniper:'shield', splitter:'multi', summoner:'damage', overlord:'pierce',
@@ -5150,7 +5211,15 @@ function draw(){
 
   if(useGameTheme){
     ctx.save();
-    ctx.translate(-Math.floor(camX), -Math.floor(camY));
+    // Sub-pixel camera + directional screen shake. Amplitude decays with shakeTime;
+    // a set direction (heavy-weapon recoil) shakes along that vector, else random radial.
+    let ox = 0, oy = 0;
+    if(shakeTime > 0){
+      const f = shakeMag * Math.min(1, shakeTime / (shakeDur || 0.15));
+      if(shakeDirX || shakeDirY){ ox = shakeDirX * f * (0.6 + Math.random()*0.4); oy = shakeDirY * f * (0.6 + Math.random()*0.4); }
+      else { ox = (Math.random()-0.5) * 2 * f; oy = (Math.random()-0.5) * 2 * f; }
+    }
+    ctx.translate(-camX + ox, -camY + oy);
     drawBackground(themeForLevel(levelIdx), levelIdx, worldW, worldH);
     drawGame();
     ctx.restore();
@@ -5354,7 +5423,22 @@ function drawStats(){
 
 // World-space drawing only: entities and particles. HUD is screen-space and
 // is called by `draw()` after the camera translate is restored.
+// Lingering visual-only decals: soft radial scorch / toxic-spill discs that fade their
+// alpha over ~10s. Drawn under everything; never touched by physics/collision.
+function drawDecals(){
+  for(const d of decals){
+    const a = clamp(d.life / d.maxLife, 0, 1);
+    const base = d.kind === 'toxic' ? 0.28 : 0.5;
+    const g = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.r);
+    g.addColorStop(0, d.color + (base * a) + ')');
+    g.addColorStop(1, d.color + '0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, TAU); ctx.fill();
+  }
+}
+
 function drawGame(){
+  drawDecals();   // lingering scorch/toxic marks, under everything
   // Boss poison-gas pools: translucent green discs drawn beneath the entities.
   for(const gf of groundFields){
     if(gf.warn > 0){
@@ -5400,21 +5484,29 @@ function drawGame(){
     const a = clamp(p.life / p.maxLife, 0, 1);
     ctx.globalAlpha = a;
     if(p.beam){
-      // Scout's straight laser beam: a line from the muzzle along its angle,
-      // fading as it ages. Drawn as a translucent wide glow + a bright thin core
-      // so the three beams read as solid beams of light, not projectiles.
+      // Scout's straight laser beam: a hitscan line that fades as it ages. Drawn
+      // additively as a wide soft glow + a gradient core (hot white at the muzzle →
+      // the beam colour → transparent at the tip) so it reads as a true beam of light.
       const ex = p.x + Math.cos(p.angle) * p.len;
       const ey = p.y + Math.sin(p.angle) * p.len;
+      ctx.globalCompositeOperation = 'lighter';
       ctx.lineCap = 'round';
+      // Wide translucent glow.
       ctx.strokeStyle = p.color;
-      ctx.lineWidth = 3;
-      ctx.globalAlpha = a * 0.4;
+      ctx.lineWidth = 4;
+      ctx.globalAlpha = a * 0.35;
       ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(ex, ey); ctx.stroke();
-      ctx.strokeStyle = '#eaffff';
-      ctx.lineWidth = 1;
+      // Bright gradient core.
+      const lg = ctx.createLinearGradient(p.x, p.y, ex, ey);
+      lg.addColorStop(0, '#ffffff');
+      lg.addColorStop(0.5, p.color);
+      lg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.strokeStyle = lg;
+      ctx.lineWidth = 1.5;
       ctx.globalAlpha = a;
       ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(ex, ey); ctx.stroke();
       ctx.lineCap = 'butt';
+      ctx.globalCompositeOperation = 'source-over';
     } else if(p.ring){
       // Expanding shockwave outline (e.g. the B-blast circle AoE): the radius
       // grows from r0 -> r1 as the particle ages, tracing the damage area.
@@ -5434,14 +5526,15 @@ function drawGame(){
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.fill();
     } else if(p.spark){
-      // Rectangular spark shard (machete-impact shrapnel) — a small 2D rect.
+      // Rectangular spark shard (machete-impact shrapnel) — sub-pixel 2D rect.
       ctx.fillStyle = p.color;
-      ctx.fillRect(Math.floor(p.x), Math.floor(p.y), p.w || 2, p.h || 1);
+      ctx.fillRect(p.x, p.y, p.w || 2, p.h || 1);
     } else if(p.flash){
       // Sharp geometric flash (shotgun muzzle / machete impact): a 4-point star
-      // oriented by p.angle, scaled by p.r, fading with the particle's life.
+      // oriented by p.angle, scaled by p.r, fading with the particle's life. Bloomed.
       ctx.save();
-      ctx.translate(Math.floor(p.x), Math.floor(p.y));
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.translate(p.x, p.y);
       ctx.rotate(p.angle || 0);
       ctx.fillStyle = p.color;
       const r = p.r || 6, s = r * 0.4;
@@ -5450,12 +5543,26 @@ function drawGame(){
       ctx.lineTo(-r, 0); ctx.lineTo(-s, -s); ctx.lineTo(0, -r); ctx.lineTo(s, -s);
       ctx.closePath(); ctx.fill();
       ctx.restore();
-    } else {
+    } else if(p.glow){
+      // Glowing ember/energy mote: an additive soft halo + a hot near-white core, so
+      // overlapping motes bloom into bright focal points (explosions, flame, muzzles).
+      ctx.globalCompositeOperation = 'lighter';
+      const r = p.size;
+      ctx.globalAlpha = a * 0.5;
       ctx.fillStyle = p.color;
-      ctx.fillRect(Math.floor(p.x), Math.floor(p.y), p.size, p.size);
+      ctx.beginPath(); ctx.arc(p.x, p.y, r * 2.4, 0, TAU); ctx.fill();
+      ctx.globalAlpha = a;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(p.x, p.y, r * 0.85, 0, TAU); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+    } else {
+      // Plain mote — a smooth round dot (was a blocky square).
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, TAU); ctx.fill();
     }
   }
   ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
 }
 
 function drawPlayer(p){
@@ -5472,76 +5579,89 @@ function drawPlayer(p){
     ctx.arc(p.x, p.y, KATANA_RANGE, p.angle - KATANA_HALF, p.angle + KATANA_HALF);
     ctx.closePath();
     ctx.fill();
-    // Helper: draw one spear pose (shaft + gray head) at a given angle/reach/alpha.
-    const drawSpear = (ang, reach, alpha, wood) => {
-      const ca = Math.cos(ang), sa = Math.sin(ang);
-      const bx = p.x + ca * 3, by = p.y + sa * 3;           // butt, just off the body
-      const tx = p.x + ca * reach, ty = p.y + sa * reach;   // spear tip
-      const hx = p.x + ca * (reach - 6), hy = p.y + sa * (reach - 6); // head base
-      ctx.globalAlpha = alpha;
-      if(wood){
-        // Wooden shaft: brown core under a lighter brown highlight.
-        ctx.strokeStyle = '#6b4a2a'; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(hx, hy); ctx.stroke();
-        ctx.strokeStyle = '#8a5a2a'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(hx, hy); ctx.stroke();
-        // Gray spearhead triangle.
-        const px = -sa, py = ca;  // perpendicular
-        ctx.fillStyle = '#bdc3c7';
-        ctx.beginPath();
-        ctx.moveTo(tx, ty);
-        ctx.lineTo(hx + px * 2.4, hy + py * 2.4);
-        ctx.lineTo(hx - px * 2.4, hy - py * 2.4);
-        ctx.closePath(); ctx.fill();
-        ctx.strokeStyle = '#eceff1'; ctx.lineWidth = 1; ctx.stroke();
-      } else {
-        // Afterimage: a fast white/silver streak line.
-        ctx.strokeStyle = '#e8eef2'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(p.x + ca * 6, p.y + sa * 6); ctx.lineTo(tx, ty); ctx.stroke();
-      }
-    };
     // Thrust phase: tip darts in/out fast; the aim sweeps across the fan more slowly.
     const reachAt = t => KATANA_RANGE * (0.45 + 0.55 * Math.abs(Math.sin(t * 22)));
     const angAt   = t => p.angle + Math.sin(t * 9) * KATANA_HALF;
-    // Trailing afterimages (older = fainter), then the live spear on top.
-    for(let k = 3; k >= 1; k--){
-      const t = stateTime - k * 0.045;
-      drawSpear(angAt(t), reachAt(t), 0.18 * (4 - k), false);
+    const tipAt   = t => { const an = angAt(t), rr = reachAt(t); return { x: p.x + Math.cos(an)*rr, y: p.y + Math.sin(an)*rr }; };
+    // Smooth white/silver motion-trail through the recent tip positions (quadratic
+    // through midpoints), drawn additively so it reads as a fast blur of light.
+    ctx.globalCompositeOperation = 'lighter';
+    const pts = [];
+    for(let k = 5; k >= 0; k--) pts.push(tipAt(stateTime - k * 0.025));
+    ctx.strokeStyle = '#e8eef2'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.globalAlpha = 0.6;
+    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+    for(let i = 1; i < pts.length - 1; i++){
+      const mx = (pts[i].x + pts[i+1].x)/2, my = (pts[i].y + pts[i+1].y)/2;
+      ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
     }
-    drawSpear(angAt(stateTime), reachAt(stateTime), 1, true);
+    ctx.stroke();
+    ctx.lineCap = 'butt'; ctx.globalCompositeOperation = 'source-over';
+    // Live wooden spear: brown shaft (core + highlight) + a gray head, at the current pose.
+    const ang = angAt(stateTime), reach = reachAt(stateTime);
+    const ca = Math.cos(ang), sa = Math.sin(ang);
+    const bx = p.x + ca * 3, by = p.y + sa * 3;
+    const tx = p.x + ca * reach, ty = p.y + sa * reach;
+    const hx = p.x + ca * (reach - 6), hy = p.y + sa * (reach - 6);
+    ctx.globalAlpha = 1;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#6b4a2a'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(hx, hy); ctx.stroke();
+    ctx.strokeStyle = '#8a5a2a'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(hx, hy); ctx.stroke();
+    ctx.lineCap = 'butt';
+    const px = -sa, py = ca;
+    ctx.fillStyle = '#bdc3c7';
+    ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx + px*2.4, hy + py*2.4); ctx.lineTo(hx - px*2.4, hy - py*2.4); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#eceff1'; ctx.lineWidth = 1; ctx.stroke();
+    // Soft glow at the spear tip.
+    ctx.globalCompositeOperation = 'lighter';
+    const tg = ctx.createRadialGradient(tx, ty, 0, tx, ty, 6);
+    tg.addColorStop(0, 'rgba(255,255,255,0.9)'); tg.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = tg;
+    ctx.beginPath(); ctx.arc(tx, ty, 6, 0, TAU); ctx.fill();
     ctx.restore();
     ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
   }
   // Leo's MACHETE (RMB): an explosive diagonal slash — a bold orange-red FILLED wedge
   // sweeping the fan with a bright yellow outline, trailed by fading afterimage wedges.
   // Locked to MACHETE_RANGE/MACHETE_HALF (matches the damage check in fireMachete).
   if(p.char === 'bounty_hunter' && mouse.rdown && p.fury > 0){
     ctx.save();
-    // One blade wedge (a half-fan slice) centered on `ang`, at the given alpha.
-    const drawWedge = (ang, alpha) => {
-      const w = 0.42;  // wedge half-width
+    ctx.globalCompositeOperation = 'lighter';
+    // A smooth crescent (scimitar) slice: outer arc sweep + a curved inner edge via
+    // quadraticCurveTo pulled toward the player, filled with a hot-core→edge gradient.
+    const drawCrescent = (ang, alpha) => {
+      const w = 0.55, r1 = MACHETE_RANGE, r0 = MACHETE_RANGE * 0.5;
+      const a0 = ang - w, a1 = ang + w;
+      const sx = p.x + Math.cos(a0) * r1, sy = p.y + Math.sin(a0) * r1;
+      const cx = p.x + Math.cos(ang) * r0, cy = p.y + Math.sin(ang) * r0;  // inner control
+      const mx = p.x + Math.cos(ang) * r1, my = p.y + Math.sin(ang) * r1;  // outer mid
       ctx.globalAlpha = alpha;
-      ctx.fillStyle = 'rgba(230,80,40,0.38)';
+      const g = ctx.createLinearGradient(cx, cy, mx, my);
+      g.addColorStop(0, '#fff7d6'); g.addColorStop(0.5, '#ff8c42'); g.addColorStop(1, 'rgba(231,76,60,0.15)');
+      ctx.fillStyle = g;
       ctx.beginPath();
-      ctx.moveTo(p.x, p.y);
-      ctx.arc(p.x, p.y, MACHETE_RANGE, ang - w, ang + w);
+      ctx.moveTo(sx, sy);
+      ctx.arc(p.x, p.y, r1, a0, a1);          // outer sweep
+      ctx.quadraticCurveTo(cx, cy, sx, sy);   // smooth curved inner edge back
       ctx.closePath();
       ctx.fill();
-      ctx.strokeStyle = '#ffe04d'; ctx.lineWidth = 1.5;
-      ctx.stroke();
+      ctx.strokeStyle = '#ffe04d'; ctx.lineWidth = 1.5; ctx.stroke();
     };
     // Blade sweeps across the fan (cos -> a diagonal-feeling back-and-forth).
     const swing = t => p.angle + Math.cos(t * 26) * MACHETE_HALF;
     // Sequential afterimages (older = fainter) then the live blade on top.
-    for(let k = 3; k >= 1; k--) drawWedge(swing(stateTime - k * 0.04), 0.12 * (4 - k));
-    drawWedge(swing(stateTime), 1);
+    for(let k = 3; k >= 1; k--) drawCrescent(swing(stateTime - k * 0.04), 0.1 * (4 - k));
+    drawCrescent(swing(stateTime), 0.95);
     ctx.restore();
     ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
   }
   const pair = playerSprites(p.char);
   const sp = p.frame === 0 ? pair.a : pair.b;
   if(p.hitFlash > 0){
-    drawSpriteTinted(sp, Math.floor(p.x - sp.w/2), Math.floor(p.y - sp.h/2), '#fff');
+    drawSpriteTinted(sp, p.x - sp.w/2, p.y - sp.h/2, '#fff');
   } else {
     drawSpriteCentered(sp, p.x, p.y);
   }
@@ -5652,9 +5772,9 @@ function drawEnemy(e){
   if(drawScale !== 1){ ctx.save(); ctx.translate(e.x, e.y); ctx.scale(drawScale, drawScale); ctx.translate(-e.x, -e.y); }
   if(e.invulnT > 0 && Math.floor(stateTime * 20) % 2){
     // Brief-invincibility shield: flash the boss blue (it's absorbing all damage).
-    drawSpriteTinted(sp, Math.floor(e.x - sp.w/2), Math.floor(e.y - sp.h/2), '#5dade2');
+    drawSpriteTinted(sp, e.x - sp.w/2, e.y - sp.h/2, '#5dade2');
   } else if(e.hitFlash > 0){
-    drawSpriteTinted(sp, Math.floor(e.x - sp.w/2), Math.floor(e.y - sp.h/2), '#fff');
+    drawSpriteTinted(sp, e.x - sp.w/2, e.y - sp.h/2, '#fff');
   } else {
     drawSpriteCentered(sp, e.x, e.y);
   }
@@ -5690,7 +5810,7 @@ function drawSwordAlly(s){
   if(s.invuln > 0 && Math.floor(s.invuln * 20) % 2) return;
   const sp = s.frame === 0 ? SPR.sword_ally_a : SPR.sword_ally_b;
   if(s.hitFlash > 0){
-    drawSpriteTinted(sp, Math.floor(s.x - sp.w/2), Math.floor(s.y - sp.h/2), '#fff');
+    drawSpriteTinted(sp, s.x - sp.w/2, s.y - sp.h/2, '#fff');
   } else {
     drawSpriteCentered(sp, s.x, s.y);
   }
@@ -5721,7 +5841,7 @@ function drawHenchman(s){
   if(s.invuln > 0 && Math.floor(s.invuln * 20) % 2) return;
   const sp = s.frame === 0 ? SPR.henchman_a : SPR.henchman_b;
   if(s.hitFlash > 0){
-    drawSpriteTinted(sp, Math.floor(s.x - sp.w/2), Math.floor(s.y - sp.h/2), '#fff');
+    drawSpriteTinted(sp, s.x - sp.w/2, s.y - sp.h/2, '#fff');
   } else {
     drawSpriteCentered(sp, s.x, s.y);
   }
@@ -5736,7 +5856,7 @@ function drawCompanion(c){
   if(c.invuln > 0 && Math.floor(c.invuln * 18) % 2) return;
   const sp = c.frame === 0 ? SPR.companion_a : SPR.companion_b;
   if(c.hitFlash > 0){
-    drawSpriteTinted(sp, Math.floor(c.x - sp.w/2), Math.floor(c.y - sp.h/2), '#fff');
+    drawSpriteTinted(sp, c.x - sp.w/2, c.y - sp.h/2, '#fff');
   } else {
     drawSpriteCentered(sp, c.x, c.y);
   }
@@ -5752,7 +5872,7 @@ function drawAllySprite(s, sprA, sprB, pipColor, halfW){
   if(s.invuln > 0 && Math.floor(s.invuln * 20) % 2) return;
   const sp = s.frame === 0 ? sprA : sprB;
   if(s.hitFlash > 0){
-    drawSpriteTinted(sp, Math.floor(s.x - sp.w/2), Math.floor(s.y - sp.h/2), '#fff');
+    drawSpriteTinted(sp, s.x - sp.w/2, s.y - sp.h/2, '#fff');
   } else {
     drawSpriteCentered(sp, s.x, s.y);
   }
@@ -5805,29 +5925,43 @@ function drawPoisonAlly(s){
 }
 
 function drawBulletEntity(b){
-  // Leo's shotgun pellets render as fast line-tracers with a short grayish-white
-  // trail + a bright head, instead of the bullet sprite.
+  // Leo's shotgun pellets render as fast neon line-tracers with a short grayish-white
+  // trail + a bright head (sub-pixel, additive).
   if(b.kind === 'pellet'){
     const sp = Math.hypot(b.vx, b.vy) || 1;
-    const tlx = b.x - (b.vx / sp) * 6, tly = b.y - (b.vy / sp) * 6;
-    ctx.strokeStyle = '#cfd8dc'; ctx.lineWidth = 1; ctx.globalAlpha = 0.85;
-    ctx.beginPath(); ctx.moveTo(Math.floor(tlx), Math.floor(tly)); ctx.lineTo(Math.floor(b.x), Math.floor(b.y)); ctx.stroke();
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = '#fdfdff';
-    ctx.fillRect(Math.floor(b.x) - 1, Math.floor(b.y) - 1, 2, 2);
+    const tlx = b.x - (b.vx / sp) * 7, tly = b.y - (b.vy / sp) * 7;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#cfd8dc'; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.85;
+    ctx.beginPath(); ctx.moveTo(tlx, tly); ctx.lineTo(b.x, b.y); ctx.stroke();
+    ctx.globalAlpha = 1; ctx.fillStyle = '#fdfdff';
+    ctx.beginPath(); ctx.arc(b.x, b.y, 1.3, 0, TAU); ctx.fill();
+    ctx.lineCap = 'butt';
+    ctx.globalCompositeOperation = 'source-over';
     return;
   }
+  // All other player/enemy projectiles: a vector "plasma" orb — a hot white core
+  // fading out into the bullet's glow colour, drawn additively so overlaps bloom.
+  const col = b.glow || '#ffe08a';
+  const R = (b.radius || 2) * 2.6;
   ctx.save();
-  ctx.translate(Math.floor(b.x), Math.floor(b.y));
-  ctx.rotate(b.angle);
-  const sp = b.sprite;
-  drawSprite(sp, -Math.floor(sp.w/2), -Math.floor(sp.h/2));
+  ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, R);
+  g.addColorStop(0, '#ffffff');
+  g.addColorStop(0.35, col);
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(b.x, b.y, R, 0, TAU); ctx.fill();
+  // Solid bright core for a crisp center.
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(b.x, b.y, Math.max(1, (b.radius || 2) * 0.6), 0, TAU); ctx.fill();
   ctx.restore();
+  ctx.globalCompositeOperation = 'source-over';
   if(b.pierce){
-    // glow trail
-    ctx.fillStyle = '#27ae60';
+    // Pierce trail: a soft green wake.
     ctx.globalAlpha = 0.4;
-    ctx.fillRect(Math.floor(b.x)-1, Math.floor(b.y)-1, 3, 3);
+    ctx.fillStyle = '#27ae60';
+    ctx.beginPath(); ctx.arc(b.x, b.y, 2, 0, TAU); ctx.fill();
     ctx.globalAlpha = 1;
   }
 }

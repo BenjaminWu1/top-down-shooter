@@ -823,6 +823,22 @@ DRIVER_BALANCE = r"""
     check('Flamethrower heat: <50% fuel deals 1.5x damage (stacks)', ok, d.join(' '));
   })();
 
+  // 31) Decals are visual-only: spawnDecal never touches `entities`, is capped, and
+  //     explode() drops one. (Guards the 600-entity-cap-safety + no-physics invariant.)
+  (function(){
+    var ok = true, d = [];
+    decals = []; entities = [player];
+    var e0 = entities.length;
+    for(var i = 0; i < 80; i++) spawnDecal(100 + i, 100, 12, i % 2 ? 'toxic' : 'scorch');
+    if(decals.length > DECAL_CAP){ ok = false; d.push('cap=' + decals.length); }
+    if(entities.length !== e0){ ok = false; d.push('leakedToEntities'); }
+    var before = decals.length;
+    explode(player.x, player.y, 30, 1, true);
+    if(!(decals.length >= Math.min(DECAL_CAP, before))){ ok = false; d.push('explodeNoDecal'); }
+    decals = [];
+    check('Decals: visual-only (capped, never entities, explode spawns one)', ok, d.join(' '));
+  })();
+
   return JSON.stringify(R);
 })();
 """
