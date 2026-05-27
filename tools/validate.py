@@ -197,7 +197,10 @@ def main():
     check("C6b every boss kind has a BOSS_NAMES entry",
           not missing_names, ", ".join(missing_names))
 
-    # C5 -- the three drop pools in killEnemy each sum to 1.0, kinds/weights aligned.
+    # C5 -- the killEnemy drop pool is now ONE shared template (kinds/weights) that must
+    # sum to 1.0 and stay aligned, plus a per-class resource map RES that swaps slot[1]
+    # for the current character. Because the weights are shared, EVERY class's pool sums
+    # to 1.0 by construction; we additionally require RES to cover all 5 playable chars.
     ke_start = code.find("function killEnemy(")
     ke_end = code.find("\nfunction ", ke_start + 1)
     body = code[ke_start:ke_end] if ke_start != -1 else ""
@@ -205,22 +208,31 @@ def main():
     weights_arrs = re.findall(r"weights\s*=\s*\[([^\]]*)\]", body)
     pool_detail = []
     pool_ok = True
-    if len(kinds_arrs) != 3 or len(weights_arrs) != 3:
+    if len(kinds_arrs) != 1 or len(weights_arrs) != 1:
         pool_ok = False
-        pool_detail.append(f"expected 3 pools, found kinds={len(kinds_arrs)} weights={len(weights_arrs)}")
+        pool_detail.append(f"expected 1 drop template, found kinds={len(kinds_arrs)} weights={len(weights_arrs)}")
     else:
-        names = ["tank", "soldier", "scout/default"]
-        for nm, k, w in zip(names, kinds_arrs, weights_arrs):
-            kn = re.findall(r"'([^']+)'", k)
-            wn = [float(x) for x in re.findall(r"[0-9]*\.?[0-9]+", w)]
-            s = sum(wn)
-            if abs(s - 1.0) > EPS:
-                pool_ok = False
-                pool_detail.append(f"{nm} sum={s:.4f}")
-            if len(kn) != len(wn):
-                pool_ok = False
-                pool_detail.append(f"{nm} kinds({len(kn)})!=weights({len(wn)})")
-    check("C5 all 3 drop pools sum to 1.0 (kinds/weights aligned)",
+        kn = re.findall(r"'([^']+)'", kinds_arrs[0])
+        wn = [float(x) for x in re.findall(r"[0-9]*\.?[0-9]+", weights_arrs[0])]
+        s = sum(wn)
+        if abs(s - 1.0) > EPS:
+            pool_ok = False
+            pool_detail.append(f"template sum={s:.4f}")
+        if len(kn) != len(wn):
+            pool_ok = False
+            pool_detail.append(f"kinds({len(kn)})!=weights({len(wn)})")
+    res_m = re.search(r"RES\s*=\s*\{([^}]*)\}", body)
+    required_chars = {"tank", "soldier", "scout", "bounty_hunter", "cyborg"}
+    if not res_m:
+        pool_ok = False
+        pool_detail.append("RES resource map not found in killEnemy")
+    else:
+        res_keys = set(re.findall(r"(\w+)\s*:", res_m.group(1)))
+        missing_res = sorted(required_chars - res_keys)
+        if missing_res:
+            pool_ok = False
+            pool_detail.append("RES missing chars: " + ", ".join(missing_res))
+    check("C5 drop template sums to 1.0 + RES covers all 5 characters",
           pool_ok, "; ".join(pool_detail))
 
     # C7 -- character skills wired: each class has skills+skillLabels over the
@@ -238,9 +250,9 @@ def main():
         # Each class: name:'...' then skills:{...} and skillLabels:{...}
         skills_blocks = re.findall(r"skills:\s*\{([^}]*)\}", chars_m.group(1))
         labels_blocks = re.findall(r"skillLabels:\s*\{([^}]*)\}", chars_m.group(1))
-        if len(skills_blocks) != 3 or len(labels_blocks) != 3:
+        if len(skills_blocks) != 5 or len(labels_blocks) != 5:
             c7_ok = False
-            c7_detail.append(f"found {len(skills_blocks)} skills / {len(labels_blocks)} skillLabels blocks (want 3 each)")
+            c7_detail.append(f"found {len(skills_blocks)} skills / {len(labels_blocks)} skillLabels blocks (want 5 each)")
         for i, (sb, lb) in enumerate(zip(skills_blocks, labels_blocks)):
             s_keys = set(re.findall(r"(\w+)\s*:\s*'", sb))
             l_keys = set(re.findall(r"(\w+)\s*:\s*'", lb))

@@ -163,10 +163,10 @@ DRIVER = r"""
     safe('draw ' + s, function(){ state = STATE[s]; draw(); });
   });
 
-  // PARAMETERS screen reads per-class scaled stats for each tab — exercise all three.
+  // PARAMETERS screen reads per-class scaled stats for each tab — exercise all five.
   safe('draw PARAMETERS tabs', function(){
     state = STATE.PARAMETERS;
-    ['soldier','scout','tank'].forEach(function(c){ paramChar = c; draw(); });
+    ['soldier','scout','tank','bounty_hunter','cyborg'].forEach(function(c){ paramChar = c; draw(); });
   });
 
   // SHOP ASSISTANTS tab + LOADOUT both render per-ally level-scaled stat blocks
@@ -205,11 +205,11 @@ DRIVER = r"""
     profile = DEFAULT_PROFILE();
   });
 
-  // Exercise the CHARACTER STATS window (Tab overlay) for all three classes —
+  // Exercise the CHARACTER STATS window (Tab overlay) for all five classes —
   // its per-class branches read different RMB-pool / regen / damage fields.
   safe('draw stats window', function(){
     state = STATE.PLAYING; showStats = true;
-    ['soldier','scout','tank'].forEach(function(c){ player = createPlayer(c); draw(); });
+    ['soldier','scout','tank','bounty_hunter','cyborg'].forEach(function(c){ player = createPlayer(c); draw(); });
     showStats = false;
   });
 
@@ -527,23 +527,26 @@ DRIVER_BALANCE = r"""
     var savedChar = selectedChar, savedProfile = profile, dt = 1 / 60, ok = true, d = [];
     profile = DEFAULT_PROFILE();
     selectedChar = 'soldier'; startGame(); state = STATE.PLAYING;   // sets up level/world/state once
-    [['soldier','energy','maxEnergy'],
-     ['tank','fuel','maxFuel'],
-     ['scout','power','maxPower']].forEach(function(spec){
-      var cls = spec[0], pool = spec[1], maxF = spec[2];
-      function fresh(){ player = createPlayer(cls); entities = [player]; allies = []; mouse.rdown = true; mouse.down = false; if(cls === 'scout') player.laserCd = 0; player.hp = player.maxHp; }
+    // [class, poolField, maxField, perShot(1 use=1) , cadenceField]
+    [['soldier','energy','maxEnergy',false,null],
+     ['tank','fuel','maxFuel',false,null],
+     ['scout','power','maxPower',true,'laserCd'],
+     ['bounty_hunter','fury','maxFury',false,null],
+     ['cyborg','toxin','maxToxin',true,'bioCd']].forEach(function(spec){
+      var cls = spec[0], pool = spec[1], maxF = spec[2], perShot = spec[3], cad = spec[4];
+      function fresh(){ player = createPlayer(cls); entities = [player]; allies = []; mouse.rdown = true; mouse.down = false; if(cad) player[cad] = 0; player.hp = player.maxHp; }
       // (a) recover while held: empty pool, not locked -> regen still bumps it above 0.
       fresh(); player[pool] = 0; player.rmbLockT = 0; update(dt);
       if(!(player[pool] > 0)) { ok = false; d.push(cls + ':noRegenHeld'); }
       // (b) lockout engages: pool just over one use -> fires once, empties, sets ~1s lock.
-      fresh(); player.rmbLockT = 0; player[pool] = (cls === 'scout') ? 1 : dt * 1.5; if(cls === 'scout') player.laserCd = 0; update(dt);
+      fresh(); player.rmbLockT = 0; player[pool] = perShot ? 1 : dt * 1.5; if(cad) player[cad] = 0; update(dt);
       if(!(player.rmbLockT > 0.9)) { ok = false; d.push(cls + ':noLockout(' + (player.rmbLockT || 0).toFixed(2) + ')'); }
       // (c) locked -> no drain: full pool but rmbLockT high -> stays full (regen only).
-      fresh(); player[pool] = player[maxF]; player.rmbLockT = 1; if(cls === 'scout') player.laserCd = 0; update(dt);
+      fresh(); player[pool] = player[maxF]; player.rmbLockT = 1; if(cad) player[cad] = 0; update(dt);
       if(player[pool] < player[maxF] - 1e-6) { ok = false; d.push(cls + ':drainedWhileLocked'); }
     });
     selectedChar = savedChar; profile = savedProfile;
-    check('RMB: regen-while-held + 1s empty-lockout (all 3 classes)', ok, d.join(' '));
+    check('RMB: regen-while-held + 1s empty-lockout (all 5 classes)', ok, d.join(' '));
   })();
 
   // 13) Assistant level scaling: assistLevelFrac runs 0.35 (L1) -> 1.0 (L10) and is
@@ -753,6 +756,48 @@ DRIVER_BALANCE = r"""
     if(!(boost.x > base.x)){ ok = false; d.push('scholar!scale'); }
     selectedChar = savedC; profile = savedP;
     check('Passives: class passives removed + universal lifesteal/resource/greed/scholar apply', ok, d.join(' '));
+  })();
+
+  // 29) New classes (Leo/Ong): bio-gun glob drops a poison_cloud that damages enemies,
+  //     the machete arc hits, the shotgun fires 3 pellets, and the 4 new skills fire via
+  //     triggerSkill without error (biobomb spawns a cloud; fanfire spawns bullets;
+  //     grit grants shield; overclock arms rapidTime).
+  (function(){
+    var savedC = selectedChar, savedP = profile, ok = true, d = [];
+    profile = DEFAULT_PROFILE(); profile.level = 40;
+    selectedChar = 'cyborg'; startGame(); state = STATE.PLAYING;
+    function clouds(){ return entities.filter(function(e){ return e.type === 'poison_cloud'; }).length; }
+    // (a) bio-gun: a glob that hits an enemy spawns a poison_cloud which then damages it.
+    player = createPlayer('cyborg'); entities = [player];
+    var en = createEnemy('grunt', player.x + 20, player.y); en.hp = en.maxHp = 9999; entities.push(en);
+    player.angle = 0; fireBiogun();
+    var hadBullet = entities.some(function(e){ return e.type === 'bullet' && e.spawnsCloud; });
+    if(!hadBullet){ ok = false; d.push('biogun:noBullet'); }
+    for(var i = 0; i < 30; i++) update(1/60);            // glob travels, hits, drops cloud, cloud ticks
+    if(clouds() < 1){ ok = false; d.push('biogun:noCloud'); }
+    if(!(en.hp < en.maxHp)){ ok = false; d.push('cloud:noDamage'); }
+    // (b) shotgun LMB fires 3 pellets (the spread form), still respecting MULTI off.
+    player = createPlayer('bounty_hunter'); entities = [player]; player.angle = 0;
+    fireWeapon(player.x + 9, player.y);
+    if(entities.filter(function(e){ return e.type === 'bullet'; }).length !== 3){ ok = false; d.push('shotgun!=3pellets'); }
+    // (c) machete arc damages an enemy in front.
+    player = createPlayer('bounty_hunter'); entities = [player]; player.angle = 0;
+    var em = createEnemy('grunt', player.x + 12, player.y); em.hp = em.maxHp = 9999; entities.push(em);
+    fireMachete(1/60);
+    if(!(em.hp < em.maxHp)){ ok = false; d.push('machete:noDamage'); }
+    // (d) the 4 new skills fire via triggerSkill cleanly with their intended effect.
+    profile.ownedSkills = ['heal','grit','overclock','fanfire','biobomb'];
+    profile.skillLevels = { heal:1, grit:1, overclock:1, fanfire:1, biobomb:1 };
+    player = createPlayer('bounty_hunter'); entities = [player]; player.shieldHp = 0;
+    if(triggerSkill('grit') !== true || !(player.shieldHp > 0)){ ok = false; d.push('grit'); }
+    player.rapidTime = 0;
+    if(triggerSkill('overclock') !== true || !(player.rapidTime > 0)){ ok = false; d.push('overclock'); }
+    entities = [player];
+    if(triggerSkill('fanfire') !== true || entities.filter(function(e){ return e.type === 'bullet'; }).length < 5){ ok = false; d.push('fanfire'); }
+    entities = [player];
+    if(triggerSkill('biobomb') !== true || clouds() < 1){ ok = false; d.push('biobomb'); }
+    selectedChar = savedC; profile = savedP;
+    check('New classes: bio-gun cloud / shotgun pellets / machete / Leo+Ong skills fire', ok, d.join(' '));
   })();
 
   return JSON.stringify(R);

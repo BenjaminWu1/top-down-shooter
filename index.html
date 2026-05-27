@@ -199,6 +199,74 @@ const SPR = {
     "..33......33..",
     "...3......3..."
   ]),
+  // Leo (bounty_hunter): cowboy hat brim (1), duster coat (2), boots (3), skin (4),
+  // shotgun across chest (5), red bandana (6), gold badge (7). Frames differ in legs.
+  player_bounty_hunter_a: S({'.':null,'1':'#3a2a17','2':'#8a5a2a','3':'#4a2f15','4':'#caa472','5':'#2c2c2c','6':'#c0392b','7':'#f1c40f'}, [
+    "..............",
+    "..1111111111..",
+    "....111111....",
+    "...14444441...",
+    "...14444441...",
+    "...16444461...",
+    "....144441....",
+    "..2222222222..",
+    ".255555555552.",
+    ".222222222222.",
+    ".222722222222.",
+    "..2222222222..",
+    "...22....22...",
+    "..33......33.."
+  ]),
+  player_bounty_hunter_b: S({'.':null,'1':'#3a2a17','2':'#8a5a2a','3':'#4a2f15','4':'#caa472','5':'#2c2c2c','6':'#c0392b','7':'#f1c40f'}, [
+    "..............",
+    "..1111111111..",
+    "....111111....",
+    "...14444441...",
+    "...14444441...",
+    "...16444461...",
+    "....144441....",
+    "..2222222222..",
+    ".255555555552.",
+    ".222222222222.",
+    ".222722222222.",
+    "..2222222222..",
+    "...22....22...",
+    "...33....33..."
+  ]),
+  // Ong (cyborg): steel shell (1), chrome plate (2/4), dark joints (3/5), purple
+  // reactor core (6), toxin glow (7), red optic visor (9). Frames differ in legs.
+  player_cyborg_a: S({'.':null,'1':'#5a6470','2':'#8a97a3','3':'#2c333b','4':'#c5d0d8','5':'#1a1f24','6':'#8e44ad','7':'#2ecc71','9':'#e74c3c'}, [
+    "..............",
+    "....111111....",
+    "...12222221...",
+    "...12499421...",
+    "...12444421...",
+    "....124421....",
+    ".112222222211.",
+    ".112266662211.",
+    ".112277772211.",
+    ".112222222211.",
+    ".512222222215.",
+    "..1222222221..",
+    "...11....11...",
+    "..55......55.."
+  ]),
+  player_cyborg_b: S({'.':null,'1':'#5a6470','2':'#8a97a3','3':'#2c333b','4':'#c5d0d8','5':'#1a1f24','6':'#8e44ad','7':'#2ecc71','9':'#e74c3c'}, [
+    "..............",
+    "....111111....",
+    "...12222221...",
+    "...12499421...",
+    "...12444421...",
+    "....124421....",
+    ".112222222211.",
+    ".112266662211.",
+    ".112277772211.",
+    ".112222222211.",
+    ".512222222215.",
+    "..1222222221..",
+    "...11....11...",
+    "...55....55..."
+  ]),
   grunt_a: S({'.':null,'1':'#7d3838','2':'#c0392b','3':'#2d1414','e':'#fff'}, [
     "..1111..",
     ".112211.",
@@ -820,6 +888,24 @@ const SPR = {
     ".2132.",
     ".2222."
   ]),
+  // Leo's FURY refill: a protein/meat haunch (brown/red).
+  p_protein: S({'.':null,'1':'#c0392b','2':'#922b21','3':'#f5cba7','4':'#fff'}, [
+    "..44..",
+    ".3113.",
+    "31123.",
+    "31213.",
+    ".3223.",
+    "..33.."
+  ]),
+  // Ong's TOXIN refill: a glowing isotope vial (purple/green).
+  p_isotope: S({'.':null,'1':'#8e44ad','2':'#5b2c6f','3':'#2ecc71','4':'#fff'}, [
+    "..44..",
+    ".2332.",
+    ".2112.",
+    ".2112.",
+    ".2112.",
+    ".2222."
+  ]),
   p_health: S({'.':null,'1':'#fff','2':'#e74c3c'}, [
     ".2222.",
     "221122",
@@ -990,6 +1076,13 @@ const SPR = {
     ".1.",
     "121",
     ".1."
+  ]),
+  // Ong's bio-gun glob: toxic green with a pale core.
+  bullet_bio: S({'.':null,'1':'#27ae60','2':'#a9f5bc'}, [
+    ".11.",
+    "1221",
+    "1221",
+    ".11."
   ]),
   bullet_rocket: S({'.':null,'1':'#7f8c8d','2':'#e67e22','3':'#fff'}, [
     ".11..",
@@ -1539,6 +1632,18 @@ const CHARACTERS = {
     color:'#27ae60', hp:12, speed:95, damageMult:1.2, startShield:4,
     skills:{ x:'sprint', c:'wall', v:'vsummon', f:'heal', b:'blast' },
     skillLabels:{ x:'SPRINT', c:'WALL', v:'BLADE+', f:'HEAL', b:'BLAST' }
+  },
+  bounty_hunter: {
+    name:'Leo', desc:'BOUNTY HUNTER · SHOTGUN · MACHETE (RMB) · FURY',
+    color:'#d35400', hp:11, speed:120, damageMult:1.3, startShield:0,
+    skills:{ x:'sprint', c:'grit', v:'fanfire', f:'heal', b:'blast' },
+    skillLabels:{ x:'SPRINT', c:'GRIT', v:'FANFIRE', f:'HEAL', b:'BLAST' }
+  },
+  cyborg: {
+    name:'Ong', desc:'CYBORG · MAGNUM · BIO-GUN (RMB) · TOXIN',
+    color:'#8e44ad', hp:10, speed:140, damageMult:1.15, startShield:2,
+    skills:{ x:'sprint', c:'overclock', v:'biobomb', f:'heal', b:'blast' },
+    skillLabels:{ x:'SPRINT', c:'OVRCLK', v:'BIOBOMB', f:'HEAL', b:'BLAST' }
   }
 };
 // NOTE: the per-class `skills`/`skillLabels` maps above are now LEGACY/vestigial —
@@ -1589,13 +1694,22 @@ const SKILLS = {
   vsummon:   { label:'BLADE+',  color:'#f39c12', cost:5800, tier:3, t:[
                 {cd:28,hpMul:1.0,dmgMul:1.0,rateMul:1.0},{cd:27,hpMul:1.15,dmgMul:1.15,rateMul:1.1},{cd:26,hpMul:1.3,dmgMul:1.3,rateMul:1.2},{cd:24,hpMul:1.5,dmgMul:1.5,rateMul:1.35},{cd:22,hpMul:1.8,dmgMul:1.8,rateMul:1.5}] },
   nuke:      { label:'NUKE',    color:'#e74c3c', cost:9000, tier:3, t:[
-                {cd:72,bossDmg:8},{cd:66,bossDmg:10},{cd:60,bossDmg:12},{cd:54,bossDmg:16},{cd:48,bossDmg:20}] }
+                {cd:72,bossDmg:8},{cd:66,bossDmg:10},{cd:60,bossDmg:12},{cd:54,bossDmg:16},{cd:48,bossDmg:20}] },
+  // ---- Leo & Ong signature skills (universally equippable, like every skill here) ----
+  grit:      { label:'GRIT',    color:'#d35400', cost:1500, tier:2, t:[
+                {cd:18,shield:2,iframe:0.3},{cd:17,shield:3,iframe:0.4},{cd:15,shield:3,iframe:0.5},{cd:13,shield:4,iframe:0.7},{cd:11,shield:5,iframe:0.9}] },
+  overclock: { label:'OVRCLK',  color:'#9b59b6', cost:1800, tier:2, t:[
+                {cd:18,dur:3},{cd:17,dur:4},{cd:15,dur:5},{cd:13,dur:6},{cd:11,dur:7}] },
+  fanfire:   { label:'FANFIRE', color:'#e67e22', cost:5000, tier:3, t:[
+                {cd:24,pellets:7,dmg:3},{cd:22,pellets:9,dmg:3.4},{cd:20,pellets:11,dmg:3.8},{cd:18,pellets:13,dmg:4.4},{cd:16,pellets:15,dmg:5}] },
+  biobomb:   { label:'BIOBOMB', color:'#27ae60', cost:5400, tier:3, t:[
+                {cd:26,radius:40,dps:6,dur:3},{cd:24,radius:48,dps:7,dur:3.5},{cd:22,radius:56,dps:9,dur:4},{cd:20,radius:64,dps:10,dur:5},{cd:18,radius:72,dps:12,dur:6}] }
 };
 // Shop ordering, grouped by tier, cheapest-first. heal leads (owned + free at tier 1,
 // but now UPGRADABLE in the shop like every other skill); it stays out of the loadout
 // dropdown (cycleSkillList) because F is permanently locked to HEAL. 15 ids => the
 // skills tab fills exactly 3 rows of 5 compact cards.
-const SKILL_ORDER = ['heal','sprint','dash','grenade','blast','blink','slowmo','invuln','resummon','summon','wall','flameburst','barrage','vsummon','nuke'];
+const SKILL_ORDER = ['heal','sprint','dash','grenade','blast','blink','slowmo','invuln','resummon','grit','overclock','summon','wall','flameburst','barrage','vsummon','fanfire','biobomb','nuke'];
 
 // ---- Skill-tier helpers (read the player's current tier from profile.skillLevels) ----
 function skillTier(id){
@@ -1645,6 +1759,10 @@ function skillBlurb(id, tier){
     case 'vsummon':    return 'knight x' + T.dmgMul;
     case 'nuke':       return 'boss ' + T.bossDmg;
     case 'resummon':   return 'revive ' + T.reviveCount + (T.iframe ? ' +' + T.iframe + 's i' : '');
+    case 'grit':       return T.shield + ' shld ' + T.iframe + 's i';
+    case 'overclock':  return 'rapid ' + T.dur + 's';
+    case 'fanfire':    return T.pellets + ' pellets';
+    case 'biobomb':    return 'r' + T.radius + ' ' + T.dur + 's';
     default:           return '';
   }
 }
@@ -1774,6 +1892,8 @@ function playerSprites(charKey){
   if(charKey === 'soldier') return { a: SPR.player_soldier_a, b: SPR.player_soldier_b };
   if(charKey === 'scout')   return { a: SPR.player_scout_a,   b: SPR.player_scout_b   };
   if(charKey === 'tank')    return { a: SPR.player_tank_a,    b: SPR.player_tank_b    };
+  if(charKey === 'bounty_hunter') return { a: SPR.player_bounty_hunter_a, b: SPR.player_bounty_hunter_b };
+  if(charKey === 'cyborg')  return { a: SPR.player_cyborg_a,  b: SPR.player_cyborg_b  };
   return { a: SPR.player_a, b: SPR.player_b };
 }
 
@@ -1805,7 +1925,8 @@ function applyLevelScaling(p){
   if(vt > 0) p.maxHp = Math.round(p.maxHp * (1 + vt));
   p.hp = p.maxHp;
   const rmbMul = RMB_BASE_FRAC * (1 + Math.min(RMB_DUR_CAP, L * RMB_DUR_PER));
-  [['maxFuel','fuel'],['maxEnergy','energy'],['maxPower','power']].forEach(([mx, cur]) => {
+  [['maxFuel','fuel'],['maxEnergy','energy'],['maxPower','power'],
+   ['maxFury','fury'],['maxToxin','toxin']].forEach(([mx, cur]) => {
     if(p[mx] > 0){ p[mx] = Math.max(1, Math.round(p[mx] * rmbMul)); p[cur] = p[mx]; }
   });
 }
@@ -1844,6 +1965,15 @@ function createPlayer(charKey){
     // 'battery' pickup. Mirrors Soldier energy / Tank fuel.
     power: charKey === 'scout' ? 20 : 0,
     maxPower: charKey === 'scout' ? 20 : 0,
+    // Leo's machete FURY: ~6 s of continuous slashing (mirrors Soldier energy):
+    // drained by dt while RMB held, self-regens 0.2/s, topped up by 'protein'.
+    fury: charKey === 'bounty_hunter' ? 6 : 0,
+    maxFury: charKey === 'bounty_hunter' ? 6 : 0,
+    // Ong's bio-gun TOXIN: ~12 RMB shots (mirrors Scout power): drained 1 per shot,
+    // self-regens 0.6/s, topped up by 'isotope'. bioCd gates the per-shot cadence.
+    toxin: charKey === 'cyborg' ? 12 : 0,
+    maxToxin: charKey === 'cyborg' ? 12 : 0,
+    bioCd:0,
     // Passive powerups (temporary buffs)
     speedTime:0, damageTime:0, magnetTime:0, scoreTime:0,
     // X-skill sprint buff timer + per-cast speed multiplier (set from the SPRINT
@@ -1856,7 +1986,7 @@ function createPlayer(charKey){
     // C is class-specific (per CHARACTERS.skills); each class now also fills the V
     // slot (Soldier barrage / Scout dash / Tank vsummon).
     skillCd:{ x:0, c:0, v:0, f:0, b:0 },
-    skillCdMax:{ x:4, c:12, blink:5, dash:3.5, wall:18, summon:25, vsummon:25, flameburst:20, barrage:24, sprint:20, heal:20, blast:20, invuln:20, grenade:6, slowmo:18, nuke:60, resummon:22 },
+    skillCdMax:{ x:4, c:12, blink:5, dash:3.5, wall:18, summon:25, vsummon:25, flameburst:20, barrage:24, sprint:20, heal:20, blast:20, invuln:20, grenade:6, slowmo:18, nuke:60, resummon:22, grit:18, overclock:18, fanfire:24, biobomb:26 },
     // RMB cadence scale (Scout laser): 1 until applyLevelScaling lowers it.
     laserScale:1,
     // Active-skill LOADOUT (F=heal always; X/C/B/V from profile, gated by level + ownership).
@@ -2331,6 +2461,50 @@ function triggerSkill(name, dx, dy, mag){
     sfx.rocket();
     return true;
   }
+  if(name === 'grit'){
+    // Leo's C (defensive): instant temp shield + brief invuln. Raises the shield cap
+    // so the granted points aren't clipped by the base cap. Scales by tier.
+    const s = T.shield || 2;
+    player.shieldMax = Math.max(player.shieldMax, s);
+    player.shieldHp  = Math.max(player.shieldHp, s);
+    player.invuln    = Math.max(player.invuln, T.iframe || 0.3);
+    emit(player.x, player.y, 22, '#d35400', 40, 130, 0.5);
+    emit(player.x, player.y, 10, '#fff', 25, 90, 0.35);
+    sfx.shieldHit();
+    return true;
+  }
+  if(name === 'overclock'){
+    // Ong's C (utility): self rapid-fire for T.dur seconds (reuses the RAPID enhancer,
+    // so it halves the basic-attack cadence). Re-casting refreshes the timer.
+    player.rapidTime = Math.max(player.rapidTime, T.dur || 3);
+    emit(player.x, player.y, 18, '#9b59b6', 40, 130, 0.4);
+    emit(player.x, player.y, 8, '#fff', 25, 90, 0.3);
+    sfx.teleport();
+    return true;
+  }
+  if(name === 'fanfire'){
+    // Leo's V (ultimate): blast a wide fan of T.pellets high-damage shotgun pellets.
+    const n = Math.max(1, T.pellets || 7);
+    const gd = (T.dmg || 3) * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
+    const mid = (n - 1) / 2;
+    for(let i = 0; i < n; i++){
+      const a = player.angle + (i - mid) * (1.4 / Math.max(1, n - 1));
+      entities.push(createBullet(player.x + Math.cos(a) * 9, player.y + Math.sin(a) * 9, a, 'player', { dmg: gd, speed: 340, radius: 2, life: 0.5 }));
+    }
+    emit(player.x, player.y, 16, '#e67e22', 50, 170, 0.4);
+    shakeTime = 0.18; shakeAmt = 2;
+    sfx.rocket();
+    return true;
+  }
+  if(name === 'biobomb'){
+    // Ong's V (ultimate): drop a big lingering poison cloud on the player (reuses the
+    // bio-gun cloud system). Radius / dps / duration scale by tier.
+    spawnPoisonCloud(player.x, player.y, { cloudRadius: T.radius || 40, cloudLife: T.dur || 3, cloudDps: T.dps || 6, cloudSlow: 0 });
+    if(particles.length < 300) particles.push({ x: player.x, y: player.y, vx:0, vy:0, life:0.4, maxLife:0.4, color:'#27ae60', ring:true, r0:8, r1:(T.radius || 40) });
+    emit(player.x, player.y, 16, '#27ae60', 50, 150, 0.45);
+    sfx.explode();
+    return true;
+  }
   return false;
 }
 
@@ -2670,6 +2844,7 @@ function updatePlaying(dt){
   if(player.pierceTime > 0) player.pierceTime -= dt;
   if(player.multiTime  > 0) player.multiTime  -= dt;
   if(player.laserCd > 0) player.laserCd -= dt;
+  if(player.bioCd > 0) player.bioCd -= dt;
   // 1s firing lockout after Soldier/Tank drain their RMB pool to empty (see RMB blocks
   // below). Ticks down independently of regen — recovery is NOT influenced by it.
   if(player.rmbLockT > 0) player.rmbLockT -= dt;
@@ -2691,6 +2866,8 @@ function updatePlaying(dt){
   if(player.maxEnergy > 0) player.energy = Math.min(player.maxEnergy, player.energy + 0.2 * dt);
   if(player.maxFuel   > 0) player.fuel   = Math.min(player.maxFuel,   player.fuel   + 0.1 * dt);
   if(player.maxPower  > 0) player.power  = Math.min(player.maxPower,  player.power  + 0.6 * dt);
+  if(player.maxFury   > 0) player.fury   = Math.min(player.maxFury,   player.fury   + 0.2 * dt);
+  if(player.maxToxin  > 0) player.toxin  = Math.min(player.maxToxin,  player.toxin  + 0.6 * dt);
 
   // Universal HP REGEN passive (only when equipped; 0 otherwise). Capped at maxHp;
   // never revives a dead player.
@@ -2729,6 +2906,22 @@ function updatePlaying(dt){
     player.power = Math.max(0, player.power - 1);
     player.laserCd = 0.22 * (player.laserScale || 1);
     if(player.power < 1) player.rmbLockT = 1;   // drained this volley -> 1s no-fire lockout
+  }
+  // ---- Leo's secondary: continuous machete slash (right mouse) ----
+  // Mirrors Syed's blade: drains `fury` by dt while held + the same 1s empty-lockout.
+  if(player.char === 'bounty_hunter' && mouse.rdown && player.rmbLockT <= 0 && player.fury >= dt){
+    player.fury -= dt;
+    fireMachete(dt);
+    if(player.fury < dt) player.rmbLockT = 1;   // ran out this frame -> 1s no-fire lockout
+  }
+  // ---- Ong's secondary: bio-gun glob (right mouse) ----
+  // Per-shot like the Scout's volley: gated by bioCd (cadence) + `toxin` (1 per shot)
+  // + the same 1s empty-lockout. Each shot lobs a glob that drops a poison cloud.
+  if(player.char === 'cyborg' && mouse.rdown && player.rmbLockT <= 0 && player.bioCd <= 0 && player.toxin >= 1){
+    fireBiogun();
+    player.toxin = Math.max(0, player.toxin - 1);
+    player.bioCd = 0.5;
+    if(player.toxin < 1) player.rmbLockT = 1;   // drained this shot -> 1s no-fire lockout
   }
 
   if(player.invuln > 0) player.invuln -= dt;
@@ -2810,6 +3003,7 @@ function updatePlaying(dt){
     else if(e.type === 'henchman' || e.type === 'nunchaku') updateMeleeAlly(e, dt);
     else if(e.type === 'bomber_ally') updateBomberAlly(e, dt);
     else if(e.type === 'poison_ally') updatePoisonAlly(e, dt);
+    else if(e.type === 'poison_cloud') updatePoisonCloud(e, dt);
     else if(e.type === 'sword_ally') updateSwordAlly(e, dt);
     if(e.hitFlash > 0) e.hitFlash -= dt;
   }
@@ -2844,6 +3038,10 @@ function updatePlaying(dt){
           if(b.explosive){
             explode(b.x, b.y, b.explodeRadius, b.dmg, !b.fromAlly);
             b.dead = true;
+          } else if(b.spawnsCloud){
+            spawnPoisonCloud(b.x, b.y, b);
+            b.dead = true;
+            sfx.hit();
           } else if(b.pierce){
             b.hitSet.add(en);
             sfx.hit();
@@ -3080,6 +3278,93 @@ function fireKatana(dt){
   if(player.slashSfxT <= 0){ sfx.slash(); player.slashSfxT = 0.1; }
 }
 
+// Leo's RMB: a heavy machete — same swept-arc melee as Syed's blade but a bit longer
+// reach + higher DPS, drains `fury`. Range/half-angle are shared constants (kept in
+// lock-step with the arc drawn in drawPlayer). MACHETE_DPS is the balance lever.
+const MACHETE_RANGE = 38, MACHETE_HALF = 0.9, MACHETE_DPS = 46;
+function fireMachete(dt){
+  const dps = MACHETE_DPS * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
+  for(const en of entities){
+    if(en.type !== 'enemy' || en.dead) continue;
+    const dx = en.x - player.x, dy = en.y - player.y;
+    const d = Math.hypot(dx, dy);
+    if(d > MACHETE_RANGE + en.radius) continue;
+    let diff = Math.atan2(dy, dx) - player.angle;
+    while(diff >  Math.PI) diff -= 2 * Math.PI;
+    while(diff < -Math.PI) diff += 2 * Math.PI;
+    if(Math.abs(diff) > MACHETE_HALF) continue;
+    damageEnemy(en, dps * dt, true);
+  }
+  // Slash visual: crimson streaks sweeping the front arc.
+  for(let i = 0; i < 3; i++){
+    if(particles.length >= 300) break;
+    const a = player.angle + (Math.random() - 0.5) * MACHETE_HALF * 2;
+    const rr = MACHETE_RANGE * (0.5 + Math.random() * 0.5);
+    particles.push({
+      x: player.x + Math.cos(a) * rr, y: player.y + Math.sin(a) * rr,
+      vx: Math.cos(a + 1.4) * 45, vy: Math.sin(a + 1.4) * 45,
+      life: 0.1 + Math.random() * 0.06, maxLife: 0.16,
+      color: i % 2 ? '#e74c3c' : '#922b21', size: 1 + Math.floor(Math.random() * 2)
+    });
+  }
+  player.slashSfxT = (player.slashSfxT || 0) - dt;
+  if(player.slashSfxT <= 0){ sfx.slash(); player.slashSfxT = 0.1; }
+}
+
+// Ong's RMB: bio-gun — lobs a toxic glob (a real projectile, low direct damage) that,
+// on hitting an enemy OR reaching max range, deletes itself and drops a lingering
+// `poison_cloud` (AoE DoT). Cloud params ride on the bullet so a future tier pass only
+// has to bump them. Drains `toxin` (1 per shot, gated by bioCd in updatePlaying).
+function fireBiogun(){
+  const a = player.angle;
+  const mx = player.x + Math.cos(a) * 9, my = player.y + Math.sin(a) * 9;
+  const b = createBullet(mx, my, a, 'player', { dmg: 1 * (player.damageMult || 1), speed: 260, radius: 3, life: 0.8, sprite: SPR.bullet_bio });
+  b.spawnsCloud = true; b.cloudRadius = 24; b.cloudLife = 2; b.cloudDps = 6; b.cloudSlow = 0;
+  entities.push(b);
+  emit(mx, my, 4, '#27ae60', 30, 90, 0.2);
+  sfx.shoot();
+}
+
+// Spawn a player-owned poison cloud (lingering AoE DoT) from a bullet's cloud* params
+// or an explicit param object. Cap-gated against the 480 spawn limit.
+function spawnPoisonCloud(x, y, b){
+  if(entities.length >= 480) return;
+  entities.push({
+    type:'poison_cloud', owner:'player', x, y, radius:4,
+    auraRadius: b.cloudRadius || 24, dps: b.cloudDps || 6, slow: b.cloudSlow || 0,
+    life: b.cloudLife || 2, maxLife: b.cloudLife || 2, puffT:0,
+    hitFlash:0, invuln:0, dead:false
+  });
+}
+
+function updatePoisonCloud(c, dt){
+  c.life -= dt;
+  if(c.life <= 0){ c.dead = true; return; }
+  const dps = c.dps * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
+  for(const en of entities){
+    if(en.type !== 'enemy' || en.dead) continue;
+    const rr = c.auraRadius + en.radius;
+    if(dist2(c, en) < rr * rr) damageEnemy(en, dps * dt, true);
+  }
+  // Rising toxic puffs scattered through the cloud (cap-guarded).
+  c.puffT -= dt;
+  if(c.puffT <= 0 && particles.length < 300){
+    c.puffT = 0.06;
+    const ang = Math.random() * Math.PI * 2, r = c.auraRadius * Math.sqrt(Math.random());
+    particles.push({ x: c.x + Math.cos(ang) * r, y: c.y + Math.sin(ang) * r, vx:0, vy:-6, life:0.5, maxLife:0.5, color: Math.random() < 0.5 ? '#27ae60' : '#2ecc71', size:1 });
+  }
+}
+
+function drawPoisonCloud(c){
+  const a = clamp(c.life / c.maxLife, 0, 1);
+  ctx.globalAlpha = 0.12 + 0.10 * a;
+  ctx.fillStyle = '#16a765';
+  ctx.beginPath(); ctx.arc(Math.floor(c.x), Math.floor(c.y), c.auraRadius, 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = 0.3 * a;
+  ctx.strokeStyle = '#2ecc71'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
 // Scout RMB: THREE instant straight-line laser beams. Each beam is a line segment
 // from the mech's muzzle out to LASER_BEAM_LEN, fanned at ±LASER_BEAM_SPREAD around
 // the aim (plus one dead-center). It is HITSCAN, not a projectile: every enemy
@@ -3140,6 +3425,15 @@ function fireWeapon(mx, my){
     // Heavy slug: 2× base damage, slightly larger/slower projectile, pistol cadence.
     opts = { dmg: 2 * dmgMult, radius: 3, speed: 300, life: 1.6 };
     cd = player.fireRate; flashN = 4; flashCol = '#e67e22'; flashSpd = 100; flashLife = 0.22;
+  } else if(player.char === 'bounty_hunter'){
+    // Shotgun: a 3-pellet spread, short range (low `life`), slow cadence. Heavy burst
+    // up close where all pellets land; falls off at range. `spread` is the weapon FORM.
+    opts = { dmg: 1.1 * dmgMult, speed: 340, radius: 2, life: 0.45, spread: [-0.18, 0, 0.18] };
+    cd = 0.5; flashN = 5; flashCol = '#e67e22'; flashSpd = 120; flashLife = 0.2;
+  } else if(player.char === 'cyborg'){
+    // Large-caliber magnum: slow cadence, single heavy high-damage slug, moderate range.
+    opts = { dmg: 3.4 * dmgMult, speed: 300, radius: 3, life: 1.2 };
+    cd = 0.34; flashN = 4; flashCol = '#fff'; flashSpd = 120; flashLife = 0.2;
   } else {
     // Soldier default pistol (createBullet defaults: bullet_p sprite, base speed/life).
     opts = { dmg: 1 * dmgMult };
@@ -3147,11 +3441,18 @@ function fireWeapon(mx, my){
   }
   if(player.pierceTime > 0) opts.pierce = true;
 
+  // Weapon FORM = a list of angle offsets (default single shot; shotgun = a fan). The
+  // `spread` is the projectile shape, NOT an enhancer, so it stacks with MULTI below.
+  const spread = opts.spread || [0];
+  delete opts.spread;
   // MULTI: two parallel shots offset perpendicular to aim; otherwise a single shot.
   const offs = player.multiTime > 0 ? [-3, 3] : [0];
-  const perpX = Math.cos(player.angle + Math.PI / 2), perpY = Math.sin(player.angle + Math.PI / 2);
-  for(const o of offs){
-    entities.push(createBullet(mx + perpX * o, my + perpY * o, player.angle, 'player', opts));
+  for(const sa of spread){
+    const ang = player.angle + sa;
+    const perpX = Math.cos(ang + Math.PI / 2), perpY = Math.sin(ang + Math.PI / 2);
+    for(const o of offs){
+      entities.push(createBullet(mx + perpX * o, my + perpY * o, ang, 'player', opts));
+    }
   }
   player.fireCooldown = cd * rapidFactor;
   emit(mx, my, flashN, flashCol, 30, flashSpd, flashLife);
@@ -3183,6 +3484,8 @@ function applyPickup(kind){
   else if(kind === 'fuel')    player.fuel       = Math.min(player.maxFuel, player.fuel + 3);
   else if(kind === 'beverage') player.energy    = Math.min(player.maxEnergy, player.energy + 1);
   else if(kind === 'battery')  player.power     = Math.min(player.maxPower, player.power + 5);
+  else if(kind === 'protein')  player.fury      = Math.min(player.maxFury, player.fury + 2);
+  else if(kind === 'isotope')  player.toxin     = Math.min(player.maxToxin, player.toxin + 3);
 }
 
 // ============================================================
@@ -3744,22 +4047,14 @@ function killEnemy(en){
   if(!en.isBoss && Math.random() < dropGate){
     // Drop pool. Weights MUST sum to 1.0 for the pickWeighted loop below to give
     // every entry its intended share — appending past the cumulative-1.0 mark means
-    // the item never drops (the old fuel bug). Each class uses its own pool so its
-    // resource canister (fuel/beverage/battery) occupies a real slice. The four
+    // the item never drops (the old fuel bug). ONE shared template; slot [1] is the
+    // class RMB-resource canister, swapped per character via RES. Because the weights
+    // are shared, EVERY class's pool sums to exactly 1.0 (validator C5). The four
     // weapon pickups are now ENHANCERS only — rapid/pierce/multi/damage.
-    let kinds, weights;
-    if(player && player.char === 'tank'){
-      kinds   = ['health','fuel','rapid','pierce','multi','damage','shield','armor','speed','slowmo','score2x','magnet'];
-      weights = [ 0.14,   0.12,  0.10,   0.10,    0.10,   0.10,    0.07,    0.06,   0.07,   0.04,    0.04,     0.06    ];
-    } else if(player && player.char === 'soldier'){
-      // Beverage refills Syed's blade energy (also self-regens). Weights sum to 1.0.
-      kinds   = ['health','beverage','rapid','pierce','multi','damage','shield','armor','speed','slowmo','score2x','magnet'];
-      weights = [ 0.14,   0.12,      0.10,   0.10,    0.10,   0.10,    0.07,    0.06,   0.07,   0.04,    0.04,     0.06    ];
-    } else {
-      // Scout. Battery refills Xu Yihui's laser power (also self-regens). Sums to 1.0.
-      kinds   = ['health','battery','rapid','pierce','multi','damage','shield','armor','speed','slowmo','score2x','magnet'];
-      weights = [ 0.14,   0.12,     0.10,   0.10,    0.10,   0.10,    0.07,    0.06,   0.07,   0.04,    0.04,     0.06    ];
-    }
+    let kinds   = ['health','battery','rapid','pierce','multi','damage','shield','armor','speed','slowmo','score2x','magnet'];
+    let weights = [ 0.14,    0.12,     0.10,   0.10,    0.10,    0.10,    0.07,    0.06,   0.07,    0.04,    0.04,      0.06 ];
+    const RES = { tank:'fuel', soldier:'beverage', scout:'battery', bounty_hunter:'protein', cyborg:'isotope' };
+    kinds = kinds.slice(); kinds[1] = (player && RES[player.char]) || 'battery';
     // GATED VARIETY by the level being played (kinds[0]=health, kinds[1]=class
     // resource are allowed in every phase so the filtered pool is never empty):
     //   L1-15  : basics only (health, resource, rapid, shield).
@@ -4491,6 +4786,8 @@ function updateBullet(b, dt){
       // (player-owned, non-ally) — not the bomber ally's bombs or enemy grenades.
       explode(b.x, b.y, b.explodeRadius || 32, b.explodeDmg || 3, b.owner === 'player' && !b.fromAlly);
     }
+    // Bio-gun glob that reached max range without hitting: drop its poison cloud.
+    if(b.spawnsCloud && b.life <= 0) spawnPoisonCloud(b.x, b.y, b);
     b.dead = true;
   }
 }
@@ -4789,6 +5086,8 @@ function drawStats(){
   let primName, primDmg, primCd;
   if(p.char === 'scout'){ primName = 'LASER DOTS'; primDmg = 0.85 * dm; primCd = 0.06; }
   else if(p.char === 'tank'){ primName = 'HEAVY SLUG'; primDmg = 2 * dm; primCd = p.fireRate; }
+  else if(p.char === 'bounty_hunter'){ primName = 'SHOTGUN x3'; primDmg = 1.1 * dm; primCd = 0.5; }
+  else if(p.char === 'cyborg'){ primName = 'MAGNUM'; primDmg = 3.4 * dm; primCd = 0.34; }
   else { primName = 'PISTOL'; primDmg = 1 * dm; primCd = p.fireRate; }
   const primRate = primCd > 0 ? 1 / primCd : 0;   // shots/sec
 
@@ -4804,6 +5103,16 @@ function drawStats(){
     secDmg  = fmt(3 * dm) + ' /beam';
     capLabel = 'POWER';   capVal = fmt(p.power) + ' / ' + fmt(p.maxPower) + ' volleys';
     regenVal = '0.6 /s';  rmbExtra = fmt(1 / (0.22 * (p.laserScale || 1))) + ' volley/s';
+  } else if(p.char === 'bounty_hunter'){
+    secName = 'MACHETE';
+    secDmg  = fmt(46 * dm) + ' DPS';
+    capLabel = 'FURY';    capVal = fmt(p.fury) + ' / ' + fmt(p.maxFury) + ' s';
+    regenVal = '0.2 /s';  rmbExtra = '~103° arc · melee';
+  } else if(p.char === 'cyborg'){
+    secName = 'BIO-GUN';
+    secDmg  = fmt(6 * dm) + ' DPS cloud';
+    capLabel = 'TOXIN';   capVal = fmt(p.toxin) + ' / ' + fmt(p.maxToxin) + ' shots';
+    regenVal = '0.6 /s';  rmbExtra = 'spawns toxic cloud';
   } else {
     secName = 'FLAMETHROWER';
     secDmg  = fmt(7 * dm) + ' DPS';
@@ -4962,6 +5271,7 @@ function drawGame(){
     else if(e.type === 'nunchaku') drawNunchaku(e);
     else if(e.type === 'bomber_ally') drawBomberAlly(e);
     else if(e.type === 'poison_ally') drawPoisonAlly(e);
+    else if(e.type === 'poison_cloud') drawPoisonCloud(e);
   }
   for(const p of particles){
     const a = clamp(p.life / p.maxLife, 0, 1);
@@ -5029,6 +5339,30 @@ function drawPlayer(p){
     ctx.stroke();
     ctx.restore();
   }
+  // Leo's machete: the same swept-arc visual as Syed's blade, crimson-tinted, while
+  // RMB held + fury left. Locked to MACHETE_RANGE/MACHETE_HALF (matches the damage check).
+  if(p.char === 'bounty_hunter' && mouse.rdown && p.fury > 0){
+    ctx.save();
+    ctx.fillStyle = 'rgba(192,57,43,0.12)';
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.arc(p.x, p.y, MACHETE_RANGE, p.angle - MACHETE_HALF, p.angle + MACHETE_HALF);
+    ctx.closePath();
+    ctx.fill();
+    const bladeA = p.angle + Math.sin(stateTime * 70) * MACHETE_HALF;
+    ctx.strokeStyle = 'rgba(231,76,60,0.95)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, MACHETE_RANGE, bladeA - 0.5, bladeA + 0.5);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,160,150,0.85)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(p.x + Math.cos(bladeA) * 4, p.y + Math.sin(bladeA) * 4);
+    ctx.lineTo(p.x + Math.cos(bladeA) * MACHETE_RANGE, p.y + Math.sin(bladeA) * MACHETE_RANGE);
+    ctx.stroke();
+    ctx.restore();
+  }
   const pair = playerSprites(p.char);
   const sp = p.frame === 0 ? pair.a : pair.b;
   if(p.hitFlash > 0){
@@ -5050,6 +5384,8 @@ function drawPlayer(p){
   // Soldier knife slash / Scout laser: light the barrel while RMB held
   if(p.char === 'soldier' && mouse.rdown && p.energy > 0){ gunCol = '#7f8c8d'; tipCol = '#ecf0f1'; }  // steel knife
   if(p.char === 'scout' && mouse.rdown){ gunCol = '#1b4f72'; tipCol = '#4fc3f7'; }  // blue laser barrel
+  if(p.char === 'bounty_hunter' && mouse.rdown && p.fury > 0){ gunCol = '#7f8c8d'; tipCol = '#e74c3c'; }  // crimson machete
+  if(p.char === 'cyborg' && mouse.rdown){ gunCol = '#5b2c6f'; tipCol = '#a9f5bc'; }  // purple bio-gun barrel
   if(p.damageTime > 0){ tipCol = '#e74c3c'; }  // Damage buff: red barrel tip
   ctx.fillStyle = gunCol;
   ctx.fillRect(0, -1, 8, 3);
@@ -5317,7 +5653,8 @@ function drawPickupEntity(p){
     speed: SPR.p_speed,   slowmo: SPR.p_slowmo,
     score2x: SPR.p_score, magnet: SPR.p_magnet,
     fuel: SPR.p_fuel,     armor: SPR.p_armor,
-    beverage: SPR.p_beverage, battery: SPR.p_battery
+    beverage: SPR.p_beverage, battery: SPR.p_battery,
+    protein: SPR.p_protein, isotope: SPR.p_isotope
   };
   const sp = sprMap[p.kind];
   if(!sp) return;
@@ -5328,7 +5665,8 @@ function drawPickupEntity(p){
     speed:'#e91e63',  slowmo:'#3498db',
     score2x:'#f1c40f', magnet:'#e74c3c',
     fuel:'#e67e22',   armor:'#3498db',
-    beverage:'#2ecc71', battery:'#19f0ff'
+    beverage:'#2ecc71', battery:'#19f0ff',
+    protein:'#c0392b', isotope:'#8e44ad'
   };
   ctx.fillStyle = glowColors[p.kind] || '#fff';
   ctx.globalAlpha = 0.2 + 0.2 * Math.sin(stateTime * 8);
@@ -5390,6 +5728,8 @@ function drawHUD(){
   if(player.maxFuel > 0)        rmbBar = { cur:player.fuel,   max:player.maxFuel,   label:'FUEL',   back:'#3a1a08', fill:'#e67e22' };
   else if(player.maxEnergy > 0) rmbBar = { cur:player.energy, max:player.maxEnergy, label:'ENERGY', back:'#0b2e1a', fill:'#2ecc71' };
   else if(player.maxPower > 0)  rmbBar = { cur:player.power,  max:player.maxPower,  label:'POWER',  back:'#082a33', fill:'#19f0ff' };
+  else if(player.maxFury > 0)   rmbBar = { cur:player.fury,   max:player.maxFury,   label:'FURY',   back:'#3a0a0a', fill:'#c0392b' };
+  else if(player.maxToxin > 0)  rmbBar = { cur:player.toxin,  max:player.maxToxin,  label:'TOXIN',  back:'#2a0a33', fill:'#8e44ad' };
   if(rmbBar){
     ctx.fillStyle = '#000';
     ctx.fillRect(6, hudY, 66, 6);
@@ -6013,10 +6353,12 @@ function handleShop(){
 }
 
 // ---- CHARACTER SELECT ----
-const CHAR_ORDER = ['soldier', 'scout', 'tank'];
+const CHAR_ORDER = ['soldier', 'scout', 'tank', 'bounty_hunter', 'cyborg'];
 function charCardRect(i){
-  const cw = 130, ch = 160, gap = 10;
-  const totalW = 3 * cw + 2 * gap;
+  // 5 cards on one row in the 480-wide screen: narrower cards + tight gap.
+  const cw = 88, ch = 160, gap = 5;
+  const n = CHAR_ORDER.length;
+  const totalW = n * cw + (n - 1) * gap;
   const xs = Math.floor((W - totalW) / 2);
   return { x: xs + i * (cw + gap), y: 52, w: cw, h: ch };
 }
@@ -6071,10 +6413,13 @@ function scaledStatsFor(charKey, level){
     ch, dmgMult, fireRate, laserScale, maxHp,
     maxFuel:   pool(charKey === 'tank'    ? 12 : 0),
     maxEnergy: pool(charKey === 'soldier' ?  6 : 0),
-    maxPower:  pool(charKey === 'scout'   ? 20 : 0)
+    maxPower:  pool(charKey === 'scout'   ? 20 : 0),
+    maxFury:   pool(charKey === 'bounty_hunter' ? 6  : 0),
+    maxToxin:  pool(charKey === 'cyborg'        ? 12 : 0)
   };
 }
-function paramTabRect(i){ return { x: W/2 - 126 + i * 86, y: 28, w: 80, h: 14 }; }
+// 5 class tabs across the 480 screen (narrower than the old 3-tab layout).
+function paramTabRect(i){ return { x: W/2 - 152 + i * 62, y: 28, w: 56, h: 14 }; }
 
 function drawParameters(){
   ctx.fillStyle = '#0c0c18';
@@ -6094,18 +6439,18 @@ function drawParameters(){
   };
 
   // Per-class basic-attack base values (same constants fireWeapon / the RMB fns use).
-  const lmbBase = key === 'scout' ? 0.85 : key === 'tank' ? 2 : 1;
-  const lmbName = key === 'scout' ? 'LASER DOTS' : key === 'tank' ? 'HEAVY SLUG' : 'PISTOL';
-  const lmbCd   = key === 'scout' ? 0.06 : null;   // scout LMB cadence is FIXED (not fireRate)
-  const lmbRate    = key === 'scout' ? 1 / 0.06 : 1 / cur.fireRate;
-  const lmbRateNxt = key === 'scout' ? 1 / 0.06 : 1 / nxt.fireRate;
+  const lmbBase = { scout:0.85, tank:2, bounty_hunter:1.1, cyborg:3.4 }[key] || 1;
+  const lmbName = { scout:'LASER DOTS', tank:'HEAVY SLUG', bounty_hunter:'SHOTGUN(3)', cyborg:'MAGNUM' }[key] || 'PISTOL';
+  // LMB cadence is FIXED (not player.fireRate) for scout/shotgun/magnum.
+  const FIXED_LMB_CD = { scout:0.06, bounty_hunter:0.5, cyborg:0.34 };
+  const lmbCd = FIXED_LMB_CD[key] || null;
+  const lmbRate    = lmbCd ? 1 / lmbCd : 1 / cur.fireRate;
+  const lmbRateNxt = lmbCd ? 1 / lmbCd : 1 / nxt.fireRate;
   // Attack RANGE in game distance units (px). LMB = projectile reach = bullet speed ×
-  // life (scout 360×1.0, tank 300×1.6, soldier 240×1.8). RMB = the secondary's reach
-  // (blade KATANA_RANGE 32, scout LASER_BEAM_LEN 147, flamethrower range 140) + its scope.
-  const lmbRange = key === 'scout' ? 360 : key === 'tank' ? 480 : 432;
-  const secRange = key === 'soldier' ? '32 px · ~103° arc'
-                 : key === 'scout'   ? '147 px · 3 beams'
-                 :                      '140 px · ~60° cone';
+  // life. RMB = the secondary's reach + its scope.
+  const lmbRange = { scout:360, tank:480, bounty_hunter:153, cyborg:360 }[key] || 432;
+  const secRange = { soldier:'32 px · ~103° arc', scout:'147 px · 3 beams', tank:'140 px · ~60° cone',
+                     bounty_hunter:'38 px · ~103° arc', cyborg:'~208 px · spawns cloud' }[key] || '';
 
   let secName, secBase, secUnit, capLabel, capCur, capNxt, capUnit, regenVal;
   if(key === 'soldier'){
@@ -6116,6 +6461,14 @@ function drawParameters(){
     secName = '3× LASER BEAM'; secBase = 3; secUnit = ' /beam';
     capLabel = 'POWER'; capCur = cur.maxPower; capNxt = nxt.maxPower; capUnit = ' shots';
     regenVal = '0.6 /s';
+  } else if(key === 'bounty_hunter'){
+    secName = 'MACHETE'; secBase = 46; secUnit = ' DPS';
+    capLabel = 'FURY'; capCur = cur.maxFury; capNxt = nxt.maxFury; capUnit = ' s';
+    regenVal = '0.2 /s';
+  } else if(key === 'cyborg'){
+    secName = 'BIO-GUN'; secBase = 6; secUnit = ' DPS cloud';
+    capLabel = 'TOXIN'; capCur = cur.maxToxin; capNxt = nxt.maxToxin; capUnit = ' shots';
+    regenVal = '0.6 /s';
   } else {
     secName = 'FLAMETHROWER'; secBase = 7; secUnit = ' DPS';
     capLabel = 'FUEL'; capCur = cur.maxFuel; capNxt = nxt.maxFuel; capUnit = ' s';
@@ -6125,7 +6478,7 @@ function drawParameters(){
   // profile values, '—' when not equipped) — no longer class-specific.
   const hpRegen = passiveEquipped('hpregen') ? PASSIVES.hpregen.fmt(passiveValue('hpregen')) : '—';
   const secExtra = ['LIFESTEAL', passiveEquipped('lifesteal') ? PASSIVES.lifesteal.fmt(passiveValue('lifesteal')) : '—'];
-  const shieldStr = (key === 'tank' ? 4 : 0) + ' / ' + (key === 'tank' ? 5 : 3);
+  const shieldStr = (ch.startShield || 0) + ' / ' + (key === 'tank' ? 5 : 3);
 
   // Column rows: {h:'HEADER'} or [label, value, deltaTokenOrNull].
   const left = [
@@ -6162,8 +6515,8 @@ function drawParameters(){
   ctx.fillStyle = atCap ? '#f1c40f' : '#bdc3c7';
   ctx.fillText('ACCOUNT LV ' + lvl + (atCap ? '  (MAX)' : ''), W/2, 25);
 
-  // Character tabs
-  ['soldier','scout','tank'].forEach((k, i) => {
+  // Character tabs (5 across — 7px so the longest name fits the 56px tab).
+  CHAR_ORDER.forEach((k, i) => {
     const r = paramTabRect(i);
     const on = k === key;
     const hov = clickedRect(r.x, r.y, r.w, r.h);
@@ -6173,7 +6526,7 @@ function drawParameters(){
     ctx.lineWidth = 1;
     ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
     ctx.fillStyle = on ? '#0c0c18' : '#cdd6df';
-    ctx.font = 'bold 8px monospace';
+    ctx.font = 'bold 7px monospace';
     ctx.textAlign = 'center';
     ctx.fillText(CHARACTERS[k].name, r.x + r.w/2, r.y + 10);
   });
@@ -6250,7 +6603,7 @@ function handleParameters(){
   if(!mouse.clicked) return;
   const bb = backButtonRect();
   if(clickedRect(bb.x, bb.y, bb.w, bb.h)){ state = STATE.MENU; stateTime = 0; return; }
-  ['soldier','scout','tank'].forEach((k, i) => {
+  CHAR_ORDER.forEach((k, i) => {
     const r = paramTabRect(i);
     if(clickedRect(r.x, r.y, r.w, r.h)) paramChar = k;
   });
@@ -6280,41 +6633,43 @@ function drawCharacterSelect(){
     ctx.lineWidth = hov ? 2 : 1;
     ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
 
-    // Class name
+    // Class name (11px so the longest name fits the 88px card)
     ctx.fillStyle = ch.color;
-    ctx.font = 'bold 14px monospace';
-    ctx.fillText(ch.name, r.x + r.w / 2, r.y + 18);
+    ctx.font = 'bold 11px monospace';
+    ctx.fillText(ch.name, r.x + r.w / 2, r.y + 17);
 
     // Sprite preview (each class has its own sprite)
     drawSpriteCentered(playerSprites(key).a, r.x + r.w / 2, r.y + 44);
 
-    // Stats — laid out sequentially so optional rows (DMG/SHIELD/FUEL) never overlap.
-    ctx.font = 'bold 8px monospace';
+    // Stats — laid out sequentially so optional rows (DMG/SHIELD/pool) never overlap.
+    ctx.font = 'bold 7px monospace';
     ctx.textAlign = 'left';
     const stats = [['HP   : ' + (ch.hp + hpBonus), '#bdc3c7'], ['SPEED: ' + ch.speed, '#bdc3c7']];
     if(ch.damageMult > 1) stats.push(['DMG  : x' + ch.damageMult, '#bdc3c7']);
     if(ch.startShield)    stats.push(['SHIELD: ' + ch.startShield, '#bdc3c7']);
-    if(key === 'tank')    stats.push(['FUEL : ' + Math.max(1, Math.round(12 * rmbMul)) + ' (RMB)', '#e67e22']);
-    if(key === 'soldier') stats.push(['ENERGY: ' + Math.max(1, Math.round(6 * rmbMul)) + ' (RMB)', '#2ecc71']);
-    if(key === 'scout')   stats.push(['POWER: ' + Math.max(1, Math.round(20 * rmbMul)) + ' (RMB)', '#19f0ff']);
-    let sy = r.y + 70;
-    for(const st of stats){ ctx.fillStyle = st[1]; ctx.fillText(st[0], r.x + 12, sy); sy += 9; }
+    if(key === 'tank')          stats.push(['FUEL : ' + Math.max(1, Math.round(12 * rmbMul)) + ' RMB', '#e67e22']);
+    if(key === 'soldier')       stats.push(['ENGY : ' + Math.max(1, Math.round(6 * rmbMul)) + ' RMB', '#2ecc71']);
+    if(key === 'scout')         stats.push(['POWER: ' + Math.max(1, Math.round(20 * rmbMul)) + ' RMB', '#19f0ff']);
+    if(key === 'bounty_hunter') stats.push(['FURY : ' + Math.max(1, Math.round(6 * rmbMul)) + ' RMB', '#e74c3c']);
+    if(key === 'cyborg')        stats.push(['TOXIN: ' + Math.max(1, Math.round(12 * rmbMul)) + ' RMB', '#bb8fce']);
+    let sy = r.y + 68;
+    for(const st of stats){ ctx.fillStyle = st[1]; ctx.fillText(st[0], r.x + 6, sy); sy += 9; }
 
     // Class identity: LMB + held-RMB are fixed per class; the active X/C/B/V skills
     // are now chosen in the LOADOUT screen (the old per-class kit is retired).
     sy += 3;
     ctx.fillStyle = '#7f8c8d';
-    ctx.fillText('WEAPONS', r.x + 12, sy); sy += 9;
+    ctx.fillText('WEAPONS', r.x + 6, sy); sy += 9;
     ctx.fillStyle = '#fff';
-    const lmbN = { soldier:'PISTOL', scout:'SMG', tank:'SLUG' }[key] || 'GUN';
-    const rmbN = { soldier:'BLADE', scout:'3x LASER', tank:'FLAME' }[key] || 'RMB';
-    ctx.fillText('LMB ' + lmbN, r.x + 12, sy); sy += 8;
-    ctx.fillText('RMB ' + rmbN, r.x + 12, sy); sy += 8;
+    const lmbN = { soldier:'PISTOL', scout:'SMG', tank:'SLUG', bounty_hunter:'SHOTGUN', cyborg:'MAGNUM' }[key] || 'GUN';
+    const rmbN = { soldier:'BLADE', scout:'3xLASER', tank:'FLAME', bounty_hunter:'MACHETE', cyborg:'BIO-GUN' }[key] || 'RMB';
+    ctx.fillText('LMB ' + lmbN, r.x + 6, sy); sy += 8;
+    ctx.fillText('RMB ' + rmbN, r.x + 6, sy); sy += 8;
     ctx.fillStyle = '#5dade2';
-    ctx.fillText('SKILLS: LOADOUT', r.x + 12, sy); sy += 8;
+    ctx.fillText('SKILLS: LOADOUT', r.x + 6, sy); sy += 8;
     // Passives are universal + account-wide — chosen in the shared bar below the cards.
     ctx.fillStyle = '#2ecc71';
-    ctx.fillText('PASSIVES ↓ BELOW', r.x + 12, sy);
+    ctx.fillText('PASSIVES BELOW', r.x + 6, sy);
 
     ctx.textAlign = 'center';
   }
