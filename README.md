@@ -33,13 +33,15 @@ Run setup is: **pick a level → pick a character → pick 2 of 5 assistants →
 
 ## Characters
 
-Choose one of three classes — each plays completely differently, with its own primary weapon, a held right-mouse secondary, and a five-slot skill kit.
+Choose one of five classes — each plays completely differently, with its own primary weapon and a held right-mouse secondary. (Active X/C/B/V skills come from your account loadout, not a fixed per-class kit.)
 
 | Class | Profile | HP | Primary (LMB) | Secondary (RMB) |
 |---|---|---|---|---|
 | **Dr.Syed** | 21st-century rainforest warrior · +25% damage | 10 | Pistol | **Blade slash** — continuous, very high damage over a wide *obtuse* arc; runs on a ~6 s **energy** bar |
 | **Xu Yihui** | Blue cyberpunk mech · fast & nimble | 9 | Fast SMG | **3× laser beams** — three instant straight-line beams that damage every enemy along each line at once; runs on a ~20-shot **power** bar (refilled by **battery**) |
 | **Benjamin Wu** | U.S.-Army heavy · +20% damage · starts with shield | 12 (+4 shield) | Heavy slug | **Flamethrower** — sustained cone of fire; runs on a 12-unit **fuel** bar |
+| **Leo** | Bounty hunter · +30% damage · tanky brawler | 11 | Shotgun (3-pellet spread, short range) | **Machete** — wide swept-arc melee, longer reach + higher DPS than the blade; runs on a ~6 s **fury** bar (refilled by **protein**) |
+| **Ong** | Cyborg · standard damage · starts with shield | 10 (+2 shield) | Heavy magnum (slow, very high single-shot) | **Bio-gun** — lobs a glob that drops a lingering **poison cloud** (AoE damage-over-time); runs on a ~12-shot **toxin** bar (refilled by **isotope**) |
 
 ### Skills
 
@@ -58,8 +60,10 @@ Every class shares **X / F / B**; **C** and **V** are class-specific.
 All three secondaries draw from a depletable bar shown top-left (no number — the fill is the gauge), and each slowly self-regenerates and is topped up by a class-specific pickup:
 
 - **Dr.Syed** — **energy** for the blade; regenerates **0.2/s** (fast), refilled by a green **beverage**.
-- **Xu Yihui** — **power** for the laser beams (~20 volleys, 1 per shot); regenerates **0.1/s**, refilled by a cyan **battery**.
+- **Xu Yihui** — **power** for the laser beams (~20 volleys, 1 per shot); regenerates **0.6/s**, refilled by a cyan **battery**.
 - **Benjamin Wu** — **fuel** for the flamethrower; regenerates **0.1/s**, refilled by a **fuel** canister.
+- **Leo** — **fury** for the machete; regenerates **0.2/s**, refilled by a red **protein**.
+- **Ong** — **toxin** for the bio-gun (~12 shots, 1 per shot); regenerates **0.6/s**, refilled by a purple **isotope**.
 
 ## Assistants
 
@@ -96,7 +100,7 @@ Each ally has its own **upgrade level (1–10)**. A fresh ally is deliberately w
 
 ## Pickups
 
-Enemies drop attack enhancers, defenses, and buffs. The drop pool is tuned per class (Benjamin Wu can roll **fuel**, Dr.Syed can roll **beverage**).
+Enemies drop attack enhancers, defenses, and buffs. The drop pool swaps in your class's resource canister (e.g. Benjamin Wu rolls **fuel**, Dr.Syed **beverage**, Leo **protein**, Ong **isotope**).
 
 **Attack enhancers** (these only *enhance* your basic attack — they never change its form): Rapid (half cooldown) · Pierce (shots punch through enemies) · Multi (single → parallel double shot) · Damage (2×). All ~8s timed buffs; their gauges show top-left, above your secondary-attack bar.
 
@@ -104,14 +108,14 @@ Enemies drop attack enhancers, defenses, and buffs. The drop pool is tuned per c
 
 **Powerups:** Speed (+50% move) · Slow-Mo (enemies crawl) · Score ×2 · Magnet (pickups fly to you).
 
-**Class resources:** Fuel (Benjamin Wu's flamethrower) · Beverage (Dr.Syed's blade energy) · Battery (Xu Yihui's laser power).
+**Class resources:** Fuel (Benjamin Wu's flamethrower) · Beverage (Dr.Syed's blade energy) · Battery (Xu Yihui's laser power) · Protein (Leo's machete fury) · Isotope (Ong's bio-gun toxin).
 
 ## Features
 
 - 480×270 pixel-perfect canvas, integer-scaled to your window
 - Hand-drawn pixel sprites encoded as in-code arrays
 - Procedural chiptune SFX via the Web Audio API
-- 3 distinct playable classes, each with a primary, a right-mouse secondary, and a 5-slot skill kit
+- 5 distinct playable classes, each with a primary weapon and a held right-mouse secondary (active skills come from your account loadout)
 - Pick-2-of-5 assistant loadout + a summonable sword-knight
 - 40 levels across 8 boss tiers, with growing scrolling arenas
 - Equipment, powerups, and class-specific resource pickups
