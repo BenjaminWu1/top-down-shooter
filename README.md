@@ -37,9 +37,9 @@ Choose one of five classes — each plays completely differently, with its own p
 
 | Class | Profile | HP | Primary (LMB) | Secondary (RMB) |
 |---|---|---|---|---|
-| **Dr.Syed** | 21st-century rainforest warrior · +25% damage | 10 | Pistol | **Blade slash** — continuous, very high damage over a wide *obtuse* arc; runs on a ~6 s **energy** bar |
+| **Dr.Syed** | 21st-century rainforest warrior · +25% damage | 10 | Pistol | **Spear** — swift straight thrusts over a wide *obtuse* arc; runs on a ~6 s **energy** bar |
 | **Xu Yihui** | Blue cyberpunk mech · fast & nimble | 9 | Fast SMG | **3× laser beams** — three instant straight-line beams that damage every enemy along each line at once; runs on a ~20-shot **power** bar (refilled by **battery**) |
-| **Benjamin Wu** | U.S.-Army heavy · +20% damage · starts with shield | 12 (+4 shield) | Heavy slug | **Flamethrower** — sustained cone of fire; runs on a 12-unit **fuel** bar |
+| **Benjamin Wu** | U.S.-Army heavy · +20% damage · starts with shield | 12 (+4 shield) | Heavy slug | **Flamethrower** — sustained cone of fire; runs on a 12-unit **fuel** bar. Below 50% fuel it overheats into a crimson **Dangerous Temperature** (1.5× damage) until it empties and forces a brief lockout |
 | **Leo** | Bounty hunter · +30% damage · tanky brawler | 11 | Shotgun (3-pellet spread, short range) | **Machete** — wide swept-arc melee, longer reach + higher DPS than the blade; runs on a ~6 s **fury** bar (refilled by **protein**) |
 | **Ong** | Cyborg · standard damage · starts with shield | 10 (+2 shield) | Heavy magnum (slow, very high single-shot) | **Bio-gun** — lobs a glob that drops a lingering **poison cloud** (AoE damage-over-time); runs on a ~12-shot **toxin** bar (refilled by **isotope**) |
 
