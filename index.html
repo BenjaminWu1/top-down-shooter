@@ -1594,33 +1594,51 @@ const CHARACTERS = {
     color:'#f1c40f', hp:9, speed:148, damageMult:1.25, startShield:0,
     skills:{ x:'sprint', c:'blink', v:'dash', f:'heal', b:'blast' },
     skillLabels:{ x:'SPRINT', c:'BLINK', v:'DASH', f:'HEAL', b:'BLAST' },
-    // Detailed top-down mech: helmet + multi-optic cyan visor, dark-teal armor,
-    // SMG on the left arm, laser on the right. Sprite is drawn HEAD-UP, so it gets
-    // faceOffset = -PI/2 to align with the engine's east-facing convention. The
-    // `pal` override scopes Xu Yihui's specific palette to this sprite only, so
-    // the shared PALETTE (used by the other 4 classes) stays untouched.
+    // High-resolution 24x27 top-down mech: helmet w/ triple cyan optic + mid-teal
+    // armor plates, SMG on the left arm, laser on the right. Sprite is HEAD-UP, so
+    // faceOffset = -PI/2 rotates it to the engine's east-facing convention. The
+    // sprite is roughly 2x denser than the 12x12 baseline, so `px` (in-game) and
+    // `cardPx` (menu) shrink the cell size to keep visual WIDTH matched to the
+    // other 4 classes (24*0.75 = 18 px in arena; 24*1.5 = 36 px on the card).
+    // `pal` scopes the 5 character-specific colors to this sprite only.
     faceOffset: -Math.PI / 2,
+    px: 0.75,
+    cardPx: 1.5,
     pal: {
       'k': '#000000',  // black outline
-      'd': '#153e50',  // dark teal-blue armor base
-      'c': '#3efafc',  // neon cyan optics / laser / armor highlights
+      'd': '#193f54',  // dark navy/teal base armor
+      'b': '#27748b',  // mid-teal armor highlights
+      'c': '#3efafc',  // neon cyan optics / armor glows / laser bits
       'g': '#7a8288'   // grey SMG
     },
     sprite:[
-      ".....kkkkk.....",
-      "....kdddddk....",
-      "...kdckckckd...",
-      "...kdddddddk...",
-      "...kdcccccdd...",
-      "..kdddddddddk..",
-      ".gkddkdddkddcc.",
-      ".g.kd.ddd.kd.c.",
-      ".g.k..ddd..k.c.",
-      ".g....ddd....c.",
-      "......dkd......",
-      ".....kdddk.....",
-      ".....kdddk.....",
-      ".....kk.kk....."
+      ".........kkkkkk.........",
+      ".......kkddddddkk.......",
+      "......kddbbbbbbddk......",
+      ".....kddbkkbkkbkkdk.....",
+      ".....kdbkcckcckcckk.....",
+      ".....kddbkkbkkbkkdk.....",
+      ".....kddbbbbbbbbbdk.....",
+      "......kddddddddddk......",
+      "......kkddddddddkk......",
+      "....kkk.kkkkkkkk.kkk....",
+      "...kccd.kbbbbbbk.dcck...",
+      "..kccbdkkbbbbbbkkdbcck..",
+      "..kbdddkkbbccbbkkdddbk..",
+      "..kdddk.kbbbbbbbk.kddk..",
+      "..kkkk..kdddddddk..kkk..",
+      ".kggkk..kddbbbddk...kbk.",
+      ".kgggk..kkdddddkk..kcck.",
+      ".kgggk...kkbbbk....kcck.",
+      ".kggkk...kdddddk...kbbk.",
+      ".kgkk....kdddddk...kkkk.",
+      "..kk.....kkdddkk....cc..",
+      ".........kdbbbdk........",
+      ".........kdddddk........",
+      "........kkdbbdkkk.......",
+      ".......kccdkddkcck......",
+      ".......kdddkkddddk......",
+      ".......kkkk..kkkkk......"
     ]
   },
   tank: {
@@ -5552,7 +5570,7 @@ function drawPlayer(p){
   // built into the sprite — no separate gun rectangle). White hit-flash via the tint.
   // The hitbox (player.radius) is unchanged.
   const ch  = CHARACTERS[p.char] || CHARACTERS.soldier;
-  drawPixelSprite(ctx, ch.sprite, p.x, p.y, PLAYER_PX, p.angle,
+  drawPixelSprite(ctx, ch.sprite, p.x, p.y, ch.px || PLAYER_PX, p.angle,
                   p.hitFlash > 0 ? '#fff' : null, ch.pal, ch.faceOffset);
   // Shield ring
   if(p.shieldHp > 0){
@@ -6817,9 +6835,10 @@ function drawCharacterSelect(){
 
     // Pixel-sprite preview: enlarged + rotated to face UP (toward the top of the card).
     // Subtracting `ch.faceOffset` cancels the in-game offset so head-up sprites stay
-    // head-up here and east-facing sprites still rotate -90° to head-up.
+    // head-up here and east-facing sprites still rotate -90° to head-up. `cardPx`
+    // lets a denser sprite shrink its cell size to fit the 88px-wide card slot.
     drawPixelSprite(ctx, ch.sprite, r.x + r.w / 2, r.y + 46,
-                    3, -Math.PI / 2 - (ch.faceOffset || 0), null, ch.pal);
+                    ch.cardPx || 3, -Math.PI / 2 - (ch.faceOffset || 0), null, ch.pal);
 
     // Stats — laid out sequentially so optional rows (DMG/SHIELD/pool) never overlap.
     ctx.font = 'bold 7px monospace';
