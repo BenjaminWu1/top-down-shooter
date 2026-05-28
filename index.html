@@ -1594,35 +1594,26 @@ const CHARACTERS = {
     color:'#f1c40f', hp:9, speed:148, damageMult:1.25, startShield:0,
     skills:{ x:'sprint', c:'blink', v:'dash', f:'heal', b:'blast' },
     skillLabels:{ x:'SPRINT', c:'BLINK', v:'DASH', f:'HEAL', b:'BLAST' },
-    // Compact 17x15 top-down mech: triple cyan-optic visor + shoulder pads + boots,
-    // dark teal/navy armor, SMG on the left arm, laser on the right. Sprite is
-    // HEAD-UP, so faceOffset = -PI/2 aligns it with the engine's east-facing
-    // convention. NO per-character size override - renders at the default
-    // PLAYER_PX (in-game) and card scale 3 (menu), same as the other 4 classes.
-    // `pal` scopes Xu Yihui's 4 colors so the shared PALETTE stays untouched.
+    // Micro 7x8 top-down mech in the game's minimalist assistant style (no black
+    // outlines, just blocky geometric shapes): cyan visor strip on top, dark-teal
+    // torso/legs, grey SMG nub on the left. Sprite is HEAD-UP, so faceOffset =
+    // -PI/2 aligns it with the engine's east-facing convention and it rotates
+    // with the cursor like every other class. NO per-character size override.
     faceOffset: -Math.PI / 2,
     pal: {
-      'k': '#000000',  // black outline
-      'd': '#153e50',  // dark teal/navy armor base
-      'c': '#3efafc',  // neon cyan optics / shoulders / laser / boots
-      'g': '#7a8288'   // grey SMG
+      'c': '#3efafc',  // neon cyan visor
+      'd': '#153e50',  // dark teal/navy armor body + legs
+      'g': '#7a8288'   // grey SMG on the left
     },
     sprite:[
-      "......kkkkk......",
-      ".....kdddddk.....",
-      ".....kdcdcdk.....",
-      ".....kdddddk.....",
-      "....kkdddddkk....",
-      "...kcckdddddkcck.",
-      "..kgckkdddddkkcck",
-      "..kggk.kdddk.kcck",
-      "..kggk.kdddk.kcck",
-      "..kgk..kdddk..cck",
-      "...k...kkdkk..kck",
-      ".......kdkdk...k.",
-      ".......kdkdk.....",
-      ".......kckck.....",
-      ".......kkkkk....."
+      ".......",
+      "..ccc..",
+      "..ddd..",
+      ".ddddd.",
+      "gddddd.",
+      "g.ddd..",
+      "..d.d..",
+      "......."
     ]
   },
   tank: {
@@ -5556,24 +5547,8 @@ function drawPlayer(p){
   // The hitbox (player.radius) is unchanged.
   const ch   = CHARACTERS[p.char] || CHARACTERS.soldier;
   const tint = p.hitFlash > 0 ? '#fff' : null;
-  if(p.char === 'scout'){
-    // Xu Yihui is a STANDING humanoid sprite (head-up, feet-down). Rotating him to
-    // face the cursor would visually lay him on his side, so we lock the rotation
-    // and instead horizontally mirror when the cursor is on his left half. A small
-    // walk-bob (sin oscillation, gated on player.moving) gives him locomotion since
-    // he no longer turns. The card draw at drawCharacterSelect still relies on
-    // ch.faceOffset to render head-up, so we leave that field alone.
-    const flip = Math.abs(p.angle) > Math.PI / 2 ? -1 : 1;
-    const bobY = p.moving ? Math.sin(stateTime * 10) * 0.8 : 0;
-    ctx.save();
-    ctx.translate(Math.floor(p.x), Math.floor(p.y + bobY));
-    if(flip < 0) ctx.scale(-1, 1);
-    drawPixelSprite(ctx, ch.sprite, 0, 0, ch.px || PLAYER_PX, 0, tint, ch.pal, 0);
-    ctx.restore();
-  } else {
-    drawPixelSprite(ctx, ch.sprite, p.x, p.y, ch.px || PLAYER_PX, p.angle,
-                    tint, ch.pal, ch.faceOffset);
-  }
+  drawPixelSprite(ctx, ch.sprite, p.x, p.y, ch.px || PLAYER_PX, p.angle,
+                  tint, ch.pal, ch.faceOffset);
   // Shield ring
   if(p.shieldHp > 0){
     ctx.strokeStyle = '#1abc9c';
