@@ -1596,37 +1596,37 @@ const CHARACTERS = {
     skillLabels:{ x:'SPRINT', c:'BLINK', v:'DASH', f:'HEAL', b:'BLAST' },
     // Futuristic warrior in blue armor — TWICE the size of the assistants so he
     // visually dominates the field. Other classes are 12x12 at PLAYER_PX=1.5 (18
-    // logical px); Xu Yihui is 12x12 at px=3 (36 logical px), exactly 2x. Sprite
-    // is EAST-FACING like every other class (visor strip on the east edge, arms
-    // and weapons extend east) so the standard ctx.rotate(p.angle) path tracks the
-    // cursor naturally — no faceOffset needed. The asymmetric weapons read at a
-    // glance: slim light-grey GUN on the NORTH arm (the warrior's LEFT hand, one
-    // row tall) and chunky dark-steel CANNON on the SOUTH arm (his RIGHT hand,
-    // two rows tall). updatePlaying offsets the LMB muzzle to the left hand and
-    // fireLaserBeams offsets the RMB origin to the right hand, so the LMB SMG
-    // visibly fires from the gun and the RMB laser fan visibly fires from the
-    // cannon.
+    // logical px); Xu Yihui is 12x12 at px=3 (36 logical px), exactly 2x.
+    // Anatomy reads clearly as a humanoid even in top-down: HEAD (east bulge with
+    // a cyan visor strip on its forward face), two ARMS extending east holding
+    // weapons (slim grey GUN on the north arm = left hand, chunky steel CANNON
+    // on the south arm = right hand), and two dark-slate BOOTS at the west end
+    // trailing behind the torso (north-west boot = left foot, south-west = right).
+    // Sprite is east-facing so the standard ctx.rotate(p.angle) path turns the
+    // whole figure with the cursor — no faceOffset. LMB/RMB muzzles are offset
+    // in updatePlaying / fireLaserBeams so each weapon fires from its own hand.
     px: 3,
     pal: {
       'b': '#2e86ab',  // bright blue armor body
       'B': '#0e3556',  // dark blue armor shadow
-      'c': '#3efafc',  // neon cyan visor strip
+      'c': '#3efafc',  // neon cyan visor strip (head, east edge)
       'g': '#bdc3c7',  // light-grey GUN (slim, left hand / north arm)
-      'G': '#34495e'   // dark-steel CANNON (bulky, right hand / south arm)
+      'G': '#34495e',  // dark-steel CANNON (bulky, right hand / south arm)
+      'L': '#2c3e50'   // dark slate BOOTS (legs, trailing west)
     },
     sprite:[
       "............",
-      "............",
-      "...bbgggggg.",
-      "..bbbbbbb...",
-      ".bbBBBBBbb..",
-      ".bBBccccccb.",
-      ".bBBccccccb.",
-      ".bbBBBBBbb..",
-      "..bbbbbbb...",
-      "...bbGGGGGG.",
-      "......GGGGG.",
-      "............"
+      "......bggggg",
+      "LLbbbbbbb...",
+      "LLbbbBBBb...",
+      "..bbBBBBb...",
+      "..bBBBBBbccc",
+      "..bBBBBBbccc",
+      "..bbBBBBb...",
+      "LLbbbBBBb...",
+      "LLbbbbbbb...",
+      "......bGGGGG",
+      "........GGGG"
     ]
   },
   tank: {
@@ -2944,8 +2944,8 @@ function updatePlaying(dt){
     // other class fires from the centerline forward muzzle.
     let mx, my;
     if(player.char === 'scout'){
-      mx = player.x + Math.cos(a) * 12 + Math.sin(a) * 10;
-      my = player.y + Math.sin(a) * 12 - Math.cos(a) * 10;
+      mx = player.x + Math.cos(a) * 14 + Math.sin(a) * 13;
+      my = player.y + Math.sin(a) * 14 - Math.cos(a) * 13;
     } else {
       mx = player.x + Math.cos(a) * 9;
       my = player.y + Math.sin(a) * 9;
@@ -3537,8 +3537,8 @@ function fireLaserBeams(){
   // sprite): forward + right-perpendicular (-sin a, +cos a). Mirrors the LMB
   // left-hand muzzle offset in updatePlaying so each weapon fires from its hand.
   const a = player.angle;
-  const lx = player.x + Math.cos(a) * 12 - Math.sin(a) * 10;
-  const ly = player.y + Math.sin(a) * 12 + Math.cos(a) * 10;
+  const lx = player.x + Math.cos(a) * 14 - Math.sin(a) * 15;
+  const ly = player.y + Math.sin(a) * 14 + Math.cos(a) * 15;
   for(const off of [-LASER_BEAM_SPREAD, 0, LASER_BEAM_SPREAD]){
     const a = player.angle + off;
     const cx = Math.cos(a), cy = Math.sin(a);
