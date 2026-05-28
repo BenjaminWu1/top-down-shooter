@@ -995,18 +995,19 @@ const PALETTE = {
   '9': '#e74c3c'        // red (optic)
 };
 const PLAYER_PX = 1.5;  // logical px per sprite cell (12x12 grid ~= 18px on screen)
-function drawPixelSprite(ctx, map, x, y, size, angle, tint){
+function drawPixelSprite(ctx, map, x, y, size, angle, tint, pal, faceOffset){
   if(!map) return;
   const rows = map.length, cols = map[0].length;
   ctx.save();
   ctx.translate(Math.floor(x), Math.floor(y));
-  ctx.rotate(angle || 0);
+  ctx.rotate((angle || 0) + (faceOffset || 0));
   const ox = -cols * size / 2, oy = -rows * size / 2;   // center the grid on (x,y)
   const cell = Math.ceil(size) + 1;                     // +1 overlap to avoid seams
   for(let r = 0; r < rows; r++){
     const row = map[r];
     for(let c = 0; c < cols; c++){
-      const col = tint || PALETTE[row[c]];
+      const ch  = row[c];
+      const col = tint || (pal && pal[ch]) || PALETTE[ch];
       if(col){ ctx.fillStyle = col; ctx.fillRect(Math.floor(ox + c*size), Math.floor(oy + r*size), cell, cell); }
     }
   }
@@ -1593,20 +1594,33 @@ const CHARACTERS = {
     color:'#f1c40f', hp:9, speed:148, damageMult:1.25, startShield:0,
     skills:{ x:'sprint', c:'blink', v:'dash', f:'heal', b:'blast' },
     skillLabels:{ x:'SPRINT', c:'BLINK', v:'DASH', f:'HEAL', b:'BLAST' },
-    // Sleek black/dark-grey suit with a bright neon-cyan V-visor pointing forward.
+    // Detailed top-down mech: helmet + multi-optic cyan visor, dark-teal armor,
+    // SMG on the left arm, laser on the right. Sprite is drawn HEAD-UP, so it gets
+    // faceOffset = -PI/2 to align with the engine's east-facing convention. The
+    // `pal` override scopes Xu Yihui's specific palette to this sprite only, so
+    // the shared PALETTE (used by the other 4 classes) stays untouched.
+    faceOffset: -Math.PI / 2,
+    pal: {
+      'k': '#000000',  // black outline
+      'd': '#153e50',  // dark teal-blue armor base
+      'c': '#3efafc',  // neon cyan optics / laser / armor highlights
+      'g': '#7a8288'   // grey SMG
+    },
     sprite:[
-      "............",
-      "....dkkd....",
-      "..dkkkkkd...",
-      "..dkkkkkcd..",
-      ".dkkkkkkcc..",
-      ".dkkkkkkccc.",
-      ".dkkkkkkccc.",
-      ".dkkkkkkcc..",
-      "..dkkkkkcd..",
-      "..dkkkkkd...",
-      "....dkkd....",
-      "............"
+      ".....kkkkk.....",
+      "....kdddddk....",
+      "...kdckckckd...",
+      "...kdddddddk...",
+      "...kdcccccdd...",
+      "..kdddddddddk..",
+      ".gkddkdddkddcc.",
+      ".g.kd.ddd.kd.c.",
+      ".g.k..ddd..k.c.",
+      ".g....ddd....c.",
+      "......dkd......",
+      ".....kdddk.....",
+      ".....kdddk.....",
+      ".....kk.kk....."
     ]
   },
   tank: {
@@ -5537,8 +5551,9 @@ function drawPlayer(p){
   // Body: the retro pixel-art sprite, ROTATED to face the cursor (front = the weapon,
   // built into the sprite — no separate gun rectangle). White hit-flash via the tint.
   // The hitbox (player.radius) is unchanged.
-  const map = (CHARACTERS[p.char] || CHARACTERS.soldier).sprite;
-  drawPixelSprite(ctx, map, p.x, p.y, PLAYER_PX, p.angle, p.hitFlash > 0 ? '#fff' : null);
+  const ch  = CHARACTERS[p.char] || CHARACTERS.soldier;
+  drawPixelSprite(ctx, ch.sprite, p.x, p.y, PLAYER_PX, p.angle,
+                  p.hitFlash > 0 ? '#fff' : null, ch.pal, ch.faceOffset);
   // Shield ring
   if(p.shieldHp > 0){
     ctx.strokeStyle = '#1abc9c';
@@ -6801,7 +6816,10 @@ function drawCharacterSelect(){
     ctx.fillText(ch.name, r.x + r.w / 2, r.y + 17);
 
     // Pixel-sprite preview: enlarged + rotated to face UP (toward the top of the card).
-    drawPixelSprite(ctx, ch.sprite, r.x + r.w / 2, r.y + 46, 3, -Math.PI / 2, null);
+    // Subtracting `ch.faceOffset` cancels the in-game offset so head-up sprites stay
+    // head-up here and east-facing sprites still rotate -90° to head-up.
+    drawPixelSprite(ctx, ch.sprite, r.x + r.w / 2, r.y + 46,
+                    3, -Math.PI / 2 - (ch.faceOffset || 0), null, ch.pal);
 
     // Stats — laid out sequentially so optional rows (DMG/SHIELD/pool) never overlap.
     ctx.font = 'bold 7px monospace';
