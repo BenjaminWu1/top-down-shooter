@@ -2884,6 +2884,7 @@ function updatePlaying(dt){
   if(keys['ArrowDown']||keys['KeyS']) dy += 1;
   const mag = Math.hypot(dx, dy);
   if(mag > 0){ dx /= mag; dy /= mag; }
+  player.moving = mag > 0;          // used by drawPlayer's Scout walk-bob
   const speedMult = playerSpeedMult();
   player.x += dx * player.speed * speedMult * dt;
   player.y += dy * player.speed * speedMult * dt;
@@ -5553,9 +5554,26 @@ function drawPlayer(p){
   // Body: the retro pixel-art sprite, ROTATED to face the cursor (front = the weapon,
   // built into the sprite — no separate gun rectangle). White hit-flash via the tint.
   // The hitbox (player.radius) is unchanged.
-  const ch  = CHARACTERS[p.char] || CHARACTERS.soldier;
-  drawPixelSprite(ctx, ch.sprite, p.x, p.y, ch.px || PLAYER_PX, p.angle,
-                  p.hitFlash > 0 ? '#fff' : null, ch.pal, ch.faceOffset);
+  const ch   = CHARACTERS[p.char] || CHARACTERS.soldier;
+  const tint = p.hitFlash > 0 ? '#fff' : null;
+  if(p.char === 'scout'){
+    // Xu Yihui is a STANDING humanoid sprite (head-up, feet-down). Rotating him to
+    // face the cursor would visually lay him on his side, so we lock the rotation
+    // and instead horizontally mirror when the cursor is on his left half. A small
+    // walk-bob (sin oscillation, gated on player.moving) gives him locomotion since
+    // he no longer turns. The card draw at drawCharacterSelect still relies on
+    // ch.faceOffset to render head-up, so we leave that field alone.
+    const flip = Math.abs(p.angle) > Math.PI / 2 ? -1 : 1;
+    const bobY = p.moving ? Math.sin(stateTime * 10) * 0.8 : 0;
+    ctx.save();
+    ctx.translate(Math.floor(p.x), Math.floor(p.y + bobY));
+    if(flip < 0) ctx.scale(-1, 1);
+    drawPixelSprite(ctx, ch.sprite, 0, 0, ch.px || PLAYER_PX, 0, tint, ch.pal, 0);
+    ctx.restore();
+  } else {
+    drawPixelSprite(ctx, ch.sprite, p.x, p.y, ch.px || PLAYER_PX, p.angle,
+                    tint, ch.pal, ch.faceOffset);
+  }
   // Shield ring
   if(p.shieldHp > 0){
     ctx.strokeStyle = '#1abc9c';
