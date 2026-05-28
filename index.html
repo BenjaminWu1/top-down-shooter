@@ -1594,26 +1594,35 @@ const CHARACTERS = {
     color:'#f1c40f', hp:9, speed:148, damageMult:1.25, startShield:0,
     skills:{ x:'sprint', c:'blink', v:'dash', f:'heal', b:'blast' },
     skillLabels:{ x:'SPRINT', c:'BLINK', v:'DASH', f:'HEAL', b:'BLAST' },
-    // Micro 7x8 top-down mech in the game's minimalist assistant style (no black
-    // outlines, just blocky geometric shapes): cyan visor strip on top, dark-teal
-    // torso/legs, grey SMG nub on the left. Sprite is HEAD-UP, so faceOffset =
-    // -PI/2 aligns it with the engine's east-facing convention and it rotates
-    // with the cursor like every other class. NO per-character size override.
+    // Futuristic warrior in blue armor — TWICE the size of the assistants so he
+    // visually dominates the field. Other classes are 12x12 cells at PLAYER_PX=1.5
+    // (18 logical px); Xu Yihui is 12x12 cells at px=3 (36 logical px), exactly 2x
+    // the assistants' 18-px footprint. Asymmetric weapons: a slim light-grey GUN
+    // on the left hand (1-cell barrel) and a chunky dark-steel CANNON on the right
+    // (2-3-cell barrel). Sprite is HEAD-UP so faceOffset = -PI/2 aligns it with
+    // the engine's east-facing convention; standard ctx.rotate path applies.
     faceOffset: -Math.PI / 2,
+    px: 3,
     pal: {
-      'c': '#3efafc',  // neon cyan visor
-      'd': '#153e50',  // dark teal/navy armor body + legs
-      'g': '#7a8288'   // grey SMG on the left
+      'b': '#2e86ab',  // bright blue armor body
+      'B': '#0e3556',  // dark blue armor shadow
+      'c': '#3efafc',  // neon cyan visor strip
+      'g': '#bdc3c7',  // light-grey GUN (slim, on the left)
+      'G': '#34495e'   // dark-steel CANNON (bulky, on the right)
     },
     sprite:[
-      ".......",
-      "..ccc..",
-      "..ddd..",
-      ".ddddd.",
-      "gddddd.",
-      "g.ddd..",
-      "..d.d..",
-      "......."
+      "..g.....GGG.",
+      "..g.....GGG.",
+      "..g.bbbb.GG.",
+      "..gbccccbGG.",
+      "..gbBBBBb.G.",
+      "..bbbbbbbb..",
+      "..bbBBBBbb..",
+      "..bbbbbbbb..",
+      "..bbbbbbbb..",
+      "...bb..bb...",
+      "...bb..bb...",
+      "...BB..BB..."
     ]
   },
   tank: {
