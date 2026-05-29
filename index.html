@@ -5679,7 +5679,7 @@ function drawDrSyed(ctx, x, y, aimAngle, px = 5) {
 // at canvas-fixed offset (7*px, 4*px) from player center (NOT rotated by aim);
 // the barrel tip is then 7.5*px further along aimAngle from that pivot.
 // Shared between the LMB-fire muzzle origin and the muzzle-flash particle.
-const DR_SYED_PX = 2;
+const DR_SYED_PX = 1;
 function drSyedMuzzle(px, x, y, aim){
   return {
     x: x + 7 * px + 7.5 * px * Math.cos(aim),
@@ -7029,11 +7029,10 @@ function drawCharacterSelect(){
     ctx.fillText(ch.name, r.x + r.w / 2, r.y + 17);
 
     if(key === 'soldier'){
-      // Dr. Syed uses his bespoke renderer. The 21-row tall sprite at the in-game
-      // px=3 (63 logical px tall) overlaps the card's name + stats, so use px=2
-      // on the card (42 tall) — purely a preview-fit choice. aimAngle=0 puts the
-      // Uzi to the character's right, a natural "ready" pose.
-      drawDrSyed(ctx, r.x + r.w / 2, r.y + 46, 0, 2);
+      // Dr. Syed uses his bespoke renderer; card preview tracks DR_SYED_PX so it
+      // honestly previews the in-game size. aimAngle=0 puts the Uzi to the
+      // character's right, a natural "ready" pose.
+      drawDrSyed(ctx, r.x + r.w / 2, r.y + 46, 0, DR_SYED_PX);
     } else {
       // Floor-plan preview: same renderer as in-game (drawCharacterFloorPlan), drawn
       // head-up — no rotation needed since the sprite's local frame already has the
