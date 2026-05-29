@@ -1594,9 +1594,10 @@ const CHARACTERS = {
     color:'#f1c40f', hp:9, speed:148, damageMult:1.25, startShield:0,
     skills:{ x:'sprint', c:'blink', v:'dash', f:'heal', b:'blast' },
     skillLabels:{ x:'SPRINT', c:'BLINK', v:'DASH', f:'HEAL', b:'BLAST' },
-    // Futuristic warrior in blue armor — TWICE the size of the assistants so he
-    // visually dominates the field. Other classes are 12x12 at PLAYER_PX=1.5 (18
-    // logical px); Xu Yihui is 12x12 at px=3 (36 logical px), exactly 2x.
+    // Futuristic warrior in blue armor — still the visually dominant class on the
+    // field, but at a 1.5x ratio over the others rather than 2x. Other classes
+    // are 12x12 at PLAYER_PX=1.5 (18 logical px); Xu Yihui is 12x12 at px=2.25
+    // (27 logical px), a clean 3:2 over the rest.
     // Anatomy reads clearly as a humanoid even in top-down: HEAD (east bulge with
     // a cyan visor strip on its forward face), two ARMS extending east holding
     // weapons (slim grey GUN on the north arm = left hand, chunky steel CANNON
@@ -1605,7 +1606,7 @@ const CHARACTERS = {
     // Sprite is east-facing so the standard ctx.rotate(p.angle) path turns the
     // whole figure with the cursor — no faceOffset. LMB/RMB muzzles are offset
     // in updatePlaying / fireLaserBeams so each weapon fires from its own hand.
-    px: 3,
+    px: 2.25,
     pal: {
       'b': '#2e86ab',  // bright blue armor body
       'B': '#0e3556',  // dark blue armor shadow
@@ -2944,8 +2945,8 @@ function updatePlaying(dt){
     // other class fires from the centerline forward muzzle.
     let mx, my;
     if(player.char === 'scout'){
-      mx = player.x + Math.cos(a) * 14 + Math.sin(a) * 13;
-      my = player.y + Math.sin(a) * 14 - Math.cos(a) * 13;
+      mx = player.x + Math.cos(a) * 11 + Math.sin(a) * 10;
+      my = player.y + Math.sin(a) * 11 - Math.cos(a) * 10;
     } else {
       mx = player.x + Math.cos(a) * 9;
       my = player.y + Math.sin(a) * 9;
@@ -3537,8 +3538,8 @@ function fireLaserBeams(){
   // sprite): forward + right-perpendicular (-sin a, +cos a). Mirrors the LMB
   // left-hand muzzle offset in updatePlaying so each weapon fires from its hand.
   const a = player.angle;
-  const lx = player.x + Math.cos(a) * 14 - Math.sin(a) * 15;
-  const ly = player.y + Math.sin(a) * 14 + Math.cos(a) * 15;
+  const lx = player.x + Math.cos(a) * 11 - Math.sin(a) * 11;
+  const ly = player.y + Math.sin(a) * 11 + Math.cos(a) * 11;
   for(const off of [-LASER_BEAM_SPREAD, 0, LASER_BEAM_SPREAD]){
     const a = player.angle + off;
     const cx = Math.cos(a), cy = Math.sin(a);
@@ -6843,7 +6844,7 @@ function drawCharacterSelect(){
     // head-up here and east-facing sprites still rotate -90° to head-up. `cardPx`
     // lets a denser sprite shrink its cell size to fit the 88px-wide card slot.
     drawPixelSprite(ctx, ch.sprite, r.x + r.w / 2, r.y + 46,
-                    ch.cardPx || 3, -Math.PI / 2 - (ch.faceOffset || 0), null, ch.pal);
+                    ch.cardPx || ch.px || 3, -Math.PI / 2 - (ch.faceOffset || 0), null, ch.pal);
 
     // Stats — laid out sequentially so optional rows (DMG/SHIELD/pool) never overlap.
     ctx.font = 'bold 7px monospace';
