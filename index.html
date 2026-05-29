@@ -5883,6 +5883,75 @@ function benjaminWuMuzzle(px, x, y, aim){
   };
 }
 
+// Benjamin Wu CARD-ONLY renderer. Same body MAP + colors as drawBenjaminWu so
+// the silhouette reads as the same character, but the POSE is different:
+// a flamethrower FUEL TANK sits on the back (drawn before the body so the
+// head and torso partially overlap it, signalling "backpack") and a machine
+// gun is held horizontally across the chest (drawn last so it overlays the
+// body). Static pose — no aim parameter, no firing animation. The in-game
+// renderer drawBenjaminWu is NOT touched per the user's request.
+function drawBenjaminWuCard(ctx, x, y, px = 1) {
+  const MAP = [
+    "...HHHHHHHH...","..HHHHHHHHHH..","..HhHHHHHHhH..","..HHVVVVVVHH..",
+    "...HSSSSSSH...","...hSSSSSSh...","...HHHHHHHH...","..AppAAAAppA..",
+    ".AAAAAAAAAAAA.",".ApAAAYAAApA..",".ApAcAAAcApA..",".AAAAAAAAAAAA.",
+    ".AppAAAAAAppA.","GAAAAAAAAAAAAG",".PPPPPPPPPPPP.",".AppAaaaaApA..",
+    ".AppAaAAaApA..",".AAAAaAAaAAAA.",".GGGAaAAaAGGG.","..GGG....GGG..",
+  ];
+  const C = { H:'#3c4a2e', h:'#2a3520', V:'#1a1a1a', S:'#caa078',
+              A:'#566b3b', a:'#3e4f2a', p:'#6e8348', c:'#2f3a22',
+              P:'#2a2418', G:'#15140f', Y:'#e0a83a' };
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.imageSmoothingEnabled = false;
+  const cols = MAP[0].length, rows = MAP.length, w = cols*px, h = rows*px;
+
+  // Shadow under feet (same as the in-game renderer).
+  ctx.fillStyle = 'rgba(0,0,0,.4)';
+  ctx.beginPath();
+  ctx.ellipse(0, h/2 - px, w*0.42, px*1.6, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // FLAMETHROWER FUEL TANK on the back — drawn FIRST so the head/torso overlap
+  // and "cover" the bottom of the tank, giving the read of a backpack peeking
+  // above the head. 6×4 green canister + yellow valve cap on top.
+  ctx.fillStyle = '#3e4f2a';
+  ctx.fillRect(-3*px, -13*px, 6*px, 4*px);   // tank back/shadow
+  ctx.fillStyle = '#566b3b';
+  ctx.fillRect(-3*px, -13*px, 6*px, 3*px);   // tank face (lighter green)
+  ctx.fillStyle = '#e0a83a';
+  ctx.fillRect(-2*px, -13*px, 4*px, 1*px);   // valve/cap (yellow stripe)
+
+  // BODY (the MAP, head-up).
+  const ox = -w/2, oy = -h/2;
+  for (let r = 0; r < rows; r++) {
+    const row = MAP[r];
+    for (let c = 0; c < cols; c++) {
+      const ch = row[c];
+      if (ch === ' ' || ch === '.') continue;
+      ctx.fillStyle = C[ch] || '#f0f';
+      ctx.fillRect(ox + c*px, oy + r*px, px, px);
+    }
+  }
+
+  // MACHINE GUN held across the chest — horizontal weapon overlaying the body.
+  // Drawn LAST so it covers the chest/shoulders. Barrel sticks out to the
+  // character's right, stock sticks left, magazine hangs down from center.
+  ctx.fillStyle = '#15140f';                       // dark outline / base
+  ctx.fillRect(-6*px, 1*px, 12*px, 2*px);
+  ctx.fillStyle = '#3a3f47';                       // upper receiver
+  ctx.fillRect(-5*px, 1*px, 10*px, 1*px);
+  ctx.fillStyle = '#2b2f36';                       // barrel tip (right)
+  ctx.fillRect(4*px, 2*px, 3*px, 1*px);
+  ctx.fillStyle = '#2b2f36';                       // stock (left)
+  ctx.fillRect(-7*px, 2*px, 1*px, 1*px);
+  ctx.fillStyle = '#566b3b';                       // magazine hanging down
+  ctx.fillRect(-1*px, 3*px, 2*px, 2*px);
+
+  ctx.restore();
+}
+
 function drawPlayer(p){
   if(p.invuln > 0 && Math.floor(p.invuln * 18) % 2) return;
   // Syed's SPEAR (RMB): a wooden-handled rainforest spear making swift consecutive
@@ -7259,14 +7328,12 @@ function drawCharacterSelect(){
       // still swivel together via the single-arg call in drawPlayer.
       drawXuYihui(ctx, r.x + r.w / 2, r.y + 46, Math.PI, XU_YIHUI_PX, 0);
     } else if(key === 'tank'){
-      // Benjamin Wu — bespoke renderer. Card-only pose: flamethrower (pivot
-      // left of center) points LEFT and the handgun (pivot right of center)
-      // points RIGHT, so the two weapons fan outward to their respective
-      // sides — same convention as the Xu Yihui card. In-game both still
-      // swivel together via the 5-arg call in drawPlayer. firing=true so
-      // the flame visual at the flamethrower nozzle is visible during
-      // character selection.
-      drawBenjaminWu(ctx, r.x + r.w / 2, r.y + 46, Math.PI, BENJAMIN_WU_PX, true, 0);
+      // Benjamin Wu — card-ONLY renderer with a different pose: backpack
+      // flamethrower TANK on the back + machine gun across the chest.
+      // The in-game drawBenjaminWu (flamethrower in left hand + handgun in
+      // right hand, both swivel with aim) is NOT used here per the user's
+      // "the image of Wu in the game do not change".
+      drawBenjaminWuCard(ctx, r.x + r.w / 2, r.y + 46, BENJAMIN_WU_PX);
     } else {
       // Floor-plan preview: same renderer as in-game (drawCharacterFloorPlan), drawn
       // head-up — no rotation needed since the sprite's local frame already has the
