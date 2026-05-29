@@ -5679,7 +5679,7 @@ function drawDrSyed(ctx, x, y, aimAngle, px = 5) {
 // at canvas-fixed offset (7*px, 4*px) from player center (NOT rotated by aim);
 // the barrel tip is then 7.5*px further along aimAngle from that pivot.
 // Shared between the LMB-fire muzzle origin and the muzzle-flash particle.
-const DR_SYED_PX = 3;
+const DR_SYED_PX = 2;
 function drSyedMuzzle(px, x, y, aim){
   return {
     x: x + 7 * px + 7.5 * px * Math.cos(aim),
