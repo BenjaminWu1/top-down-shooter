@@ -1673,7 +1673,7 @@ const CHARACTERS = {
     ]
   },
   cyborg: {
-    name:'Ong', desc:'CYBORG · MAGNUM · BIO-GUN (RMB) · TOXIN',
+    name:'Ong', desc:'CYBORG · GAS GUN · BIO-GUN (RMB) · TOXIN',
     color:'#8e44ad', hp:10, speed:140, damageMult:1.15, startShield:2,
     skills:{ x:'sprint', c:'overclock', v:'biobomb', f:'heal', b:'blast' },
     skillLabels:{ x:'SPRINT', c:'OVRCLK', v:'BIOBOMB', f:'HEAL', b:'BLAST' },
@@ -2976,6 +2976,10 @@ function updatePlaying(dt){
       // Leo fires from the right-hand shotgun's barrel tip — see leoMuzzle.
       const m = leoMuzzle(LEO_PX, player.x, player.y, a);
       mx = m.x; my = m.y;
+    } else if(player.char === 'cyborg'){
+      // Ong fires from the right-hand gas gun's barrel tip — see ongMuzzle.
+      const m = ongMuzzle(ONG_PX, player.x, player.y, a);
+      mx = m.x; my = m.y;
     } else {
       mx = player.x + Math.cos(a) * 7;
       my = player.y + Math.sin(a) * 7;
@@ -3667,10 +3671,12 @@ function fireWeapon(mx, my){
     opts = { dmg: 1.1 * dmgMult, speed: 340, radius: 2, life: 0.45, spread: [-0.18, 0, 0.18], kind: 'pellet', kinetic: true };
     cd = 0.5; flashN = 5; flashCol = '#e67e22'; flashSpd = 120; flashLife = 0.2; fireSfx = sfx.shotgun;
   } else if(player.char === 'cyborg'){
-    // Large-caliber magnum: slow cadence, single heavy high-damage slug. KINETIC railgun
-    // — a metallic-white slug with a thin sharp air-distortion tracer, no plasma glow.
-    opts = { dmg: 3.4 * dmgMult, radius: 3, speed: 300, life: 1.2, kinetic: true, tracer: true, glow: '#eaf2ff' };
-    cd = 0.34; flashN = 4; flashCol = '#fff'; flashSpd = 120; flashLife = 0.2;
+    // Gas gun: a green poison projectile in the aim direction. Same damage
+    // and cadence as the previous magnum slug (so balance is unchanged),
+    // but the visual switches from kinetic-railgun to a soft-green energy
+    // glow to match the new drawOngGame gas-gun sprite.
+    opts = { dmg: 3.4 * dmgMult, radius: 3, speed: 280, life: 1.0, glow: '#7dff5a' };
+    cd = 0.34; flashN = 4; flashCol = '#7dff5a'; flashSpd = 110; flashLife = 0.2;
   } else {
     // Soldier pistol EVOLVES with weapon tier: a brass KINETIC bullet at Tiers 1-2, then
     // a glowing PLASMA bolt at Tier 3+ (the energy-glow renderer takes over).
@@ -5336,7 +5342,7 @@ function drawStats(){
   if(p.char === 'scout'){ primName = 'LASER DOTS'; primDmg = 0.85 * dm; primCd = 0.06; }
   else if(p.char === 'tank'){ primName = 'HEAVY SLUG'; primDmg = 2 * dm; primCd = p.fireRate; }
   else if(p.char === 'bounty_hunter'){ primName = 'SHOTGUN x3'; primDmg = 1.1 * dm; primCd = 0.5; }
-  else if(p.char === 'cyborg'){ primName = 'MAGNUM'; primDmg = 3.4 * dm; primCd = 0.34; }
+  else if(p.char === 'cyborg'){ primName = 'GAS GUN'; primDmg = 3.4 * dm; primCd = 0.34; }
   else { primName = 'PISTOL'; primDmg = 1 * dm; primCd = p.fireRate; }
   const primRate = primCd > 0 ? 1 / primCd : 0;   // shots/sec
 
@@ -6198,6 +6204,121 @@ function drawBenjaminWuCard(ctx, x, y, px = 3) {
   ctx.restore();
 }
 
+// ============================================================
+//  CHARACTER 5: Ong (evil chemist / gas soldier)
+//  TWO DIFFERENT poses for two different interfaces:
+//    - drawOngCard(ctx,x,y,px)            -> CHOOSE YOUR CHARACTER screen
+//          gas gun slung ACROSS chest, pistol HOLSTERED at waist
+//    - drawOngGame(ctx,x,y,aim,px,gasOn)  -> in-game
+//          gas gun in one hand + pistol in the other, BOTH aim at mouse
+//  Pasted VERBATIM from the user — do not change the draw logic.
+// ============================================================
+
+const ONG_MAP = [
+  "...hhhhhhhh...","..hhhhhhhhhh..","..hMMMMMMMMh..","..MMEEMMEEMM..",
+  "..MMEEMMEEMM..","..MmMMMMMMmM..","..MmFFFFFFmM..","...mFFFFFFm...",
+  "...mmFFFFmm...","..CCLMMMMLCC..",".CCCCcccCCCCC.",".CCvCcccCcvCC.",
+  ".CCLCcccCLCCC.",".CCvCcccCcvCC.","GCCCcccccCCCG",".PPPPQQPPPPPP.",
+  ".CCcCcccCcCC..",".CCCCcccCCCCC.",".CCcCcccCcCC..",".GGGCcccCGGG..","..GGG...GGG...",
+];
+const ONG_C = { h:'#2a1840', M:'#d8d2c0', m:'#a8a294', E:'#7dff5a', F:'#b8c0c8',
+                C:'#6a2f9e', c:'#4a1f72', v:'#7dff5a', L:'#9a5fd0', P:'#241830', Q:'#3a2a16', G:'#15121a' };
+
+function _ongTime() { return (typeof performance !== 'undefined' ? performance.now() : Date.now()) * 0.06; }
+
+function _ongBody(ctx, px) {
+  const t = _ongTime();
+  const cols = ONG_MAP[0].length, rows = ONG_MAP.length, w = cols*px, h = rows*px, ox = -w/2, oy = -h/2;
+  ctx.fillStyle = 'rgba(0,0,0,.4)';
+  ctx.beginPath(); ctx.ellipse(0, h/2 - px, w*0.42, px*1.6, 0, 0, Math.PI*2); ctx.fill();
+  const aura = 0.10 + 0.06*Math.sin(t*0.12);
+  ctx.fillStyle = 'rgba(125,255,90,' + aura + ')';
+  ctx.beginPath(); ctx.arc(0, -3*px, 7*px, 0, Math.PI*2); ctx.fill();
+  for (let r = 0; r < rows; r++) { const row = ONG_MAP[r];
+    for (let c = 0; c < cols; c++) { const ch = row[c]; if (ch === ' ' || ch === '.') continue;
+      ctx.fillStyle = ONG_C[ch] || '#f0f'; ctx.fillRect(ox + c*px, oy + r*px, px, px); } }
+  const eg = 0.5 + 0.5*Math.sin(t*0.16);
+  ctx.fillStyle = 'rgba(180,255,140,' + eg + ')';
+  ctx.fillRect(ox + 4*px, oy + 3*px, 2*px, 2*px); ctx.fillRect(ox + 8*px, oy + 3*px, 2*px, 2*px);
+}
+
+// ---------- CARD weapons ----------
+function _ongGasGunAcross(ctx, px) {
+  ctx.save(); ctx.translate(-7*px, 4*px); ctx.rotate(-0.30);
+  ctx.fillStyle='#15121a'; ctx.fillRect(0,-1.3*px,3*px,2.6*px);
+  ctx.fillStyle='#6a2f9e'; ctx.fillRect(3*px,-1.5*px,6*px,3*px);
+  ctx.fillStyle='#4a1f72'; ctx.fillRect(3*px,-1.5*px,6*px,0.9*px);
+  ctx.fillStyle='#3a2a16'; ctx.fillRect(9*px,-1.6*px,4*px,3.2*px);
+  ctx.fillStyle='#1a1d15'; ctx.fillRect(12.6*px,-1.3*px,0.9*px,2.6*px);
+  ctx.fillStyle='#7dff5a'; ctx.fillRect(4.5*px,1.5*px,2.6*px,2.6*px);
+  ctx.fillStyle='#c8ffb0'; ctx.fillRect(4.5*px,1.5*px,0.9*px,2.6*px);
+  ctx.restore();
+}
+function _ongHolsterPistol(ctx, px) {
+  ctx.save(); ctx.translate(5*px, 5*px); ctx.rotate(0.35);
+  ctx.fillStyle='#3a2a16'; ctx.fillRect(-1*px,-1*px,4*px,4.5*px);
+  ctx.fillStyle='#222';    ctx.fillRect(0,-3*px,2.2*px,3*px);
+  ctx.fillStyle='#3a3f47'; ctx.fillRect(-0.4*px,-3.4*px,3.2*px,1.4*px);
+  ctx.fillStyle='#1a1d22'; ctx.fillRect(2.4*px,-3*px,1*px,1*px);
+  ctx.restore();
+}
+
+// ---------- in-game weapons ----------
+function _ongGasGunHand(ctx, px, gasOn) {
+  ctx.fillStyle='#15121a'; ctx.fillRect(-0.4*px,-1*px,2*px,2.6*px);
+  ctx.fillStyle='#6a2f9e'; ctx.fillRect(1.4*px,-1.4*px,5*px,2.8*px);
+  ctx.fillStyle='#4a1f72'; ctx.fillRect(1.4*px,-1.4*px,5*px,0.9*px);
+  ctx.fillStyle='#3a2a16'; ctx.fillRect(6.4*px,-1.6*px,3.5*px,3.2*px);
+  ctx.fillStyle='#1a1d15'; ctx.fillRect(9.5*px,-1.3*px,0.9*px,2.6*px);
+  ctx.fillStyle='#7dff5a'; ctx.fillRect(2.5*px,1.4*px,2.4*px,2.4*px);
+  ctx.fillStyle='#c8ffb0'; ctx.fillRect(2.5*px,1.4*px,0.8*px,2.4*px);
+  if (gasOn) {
+    const t = _ongTime();
+    const a = 0.28 + 0.16*Math.sin(t*0.35);
+    ctx.fillStyle = 'rgba(125,255,90,' + a + ')';
+    for (let i = 0; i < 3; i++) { const dx = (11+i*4)*px + Math.sin(t*0.2+i)*px;
+      ctx.beginPath(); ctx.arc(dx, Math.sin(t*0.26+i)*2*px, (2.2+i)*px, 0, Math.PI*2); ctx.fill(); }
+  }
+}
+function _ongPistolHand(ctx, px) {
+  ctx.fillStyle='#15121a'; ctx.fillRect(-0.4*px,-1*px,2*px,2.4*px);
+  ctx.fillStyle='#3a3f47'; ctx.fillRect(1.4*px,-1*px,3.5*px,2*px);
+  ctx.fillStyle='#2b2f36'; ctx.fillRect(1.4*px,-1*px,3.5*px,0.6*px);
+  ctx.fillStyle='#1a1d22'; ctx.fillRect(4.9*px,-0.5*px,2*px,1*px);
+}
+
+// ===== CARD POSE (character select) =====
+function drawOngCard(ctx, x, y, px = 3) {
+  ctx.save(); ctx.translate(x, y); ctx.imageSmoothingEnabled = false;
+  _ongBody(ctx, px);
+  _ongHolsterPistol(ctx, px);   // pistol holstered at waist
+  _ongGasGunAcross(ctx, px);    // gas gun slung across chest (on top)
+  ctx.restore();
+}
+
+// ===== IN-GAME POSE =====
+function drawOngGame(ctx, x, y, aimAngle, px = 3, gasOn = true) {
+  ctx.save(); ctx.translate(x, y); ctx.imageSmoothingEnabled = false;
+  _ongBody(ctx, px);
+  // LEFT hand: pistol (aims)
+  ctx.save(); ctx.translate(-7*px, 3*px); ctx.rotate(aimAngle); _ongPistolHand(ctx, px); ctx.restore();
+  // RIGHT hand: gas gun (aims)
+  ctx.save(); ctx.translate(7*px, 2*px); ctx.rotate(aimAngle); _ongGasGunHand(ctx, px, gasOn); ctx.restore();
+  ctx.restore();
+}
+
+// Gas-gun barrel-tip world position for Ong. drawOngGame's gas gun (right hand)
+// pivots at canvas-fixed offset (7*px, 2*px) from player center; the dark muzzle
+// rect extends out to ~10.4*px (9.5*px + 0.9*px) along aim from that pivot.
+// Same px as the other bespoke renderers.
+const ONG_PX = DR_SYED_PX;
+function ongMuzzle(px, x, y, aim){
+  return {
+    x: x + 7 * px + 10.4 * px * Math.cos(aim),
+    y: y + 2 * px + 10.4 * px * Math.sin(aim),
+  };
+}
+
 function drawPlayer(p){
   if(p.invuln > 0 && Math.floor(p.invuln * 18) % 2) return;
   // Syed's SPEAR (RMB): a wooden-handled rainforest spear making swift consecutive
@@ -6271,6 +6392,12 @@ function drawPlayer(p){
     } else {
       drawLeoGame(ctx, p.x, p.y, p.angle, LEO_PX, 'shotgun', 0);
     }
+  } else if(p.char === 'cyborg'){
+    // Ong — bespoke renderer. Both weapons (pistol LEFT, gas gun RIGHT)
+    // swivel with aim; `gasOn` toggles the green gas-puff visual at the gas
+    // gun's muzzle. Tied to mouse.down so the puff shows while the player
+    // is firing the LMB gas gun.
+    drawOngGame(ctx, p.x, p.y, p.angle, ONG_PX, mouse.down);
   } else {
     ctx.save();
     ctx.translate(p.x, p.y);
@@ -7355,7 +7482,7 @@ function drawParameters(){
 
   // Per-class basic-attack base values (same constants fireWeapon / the RMB fns use).
   const lmbBase = { scout:0.85, tank:2, bounty_hunter:1.1, cyborg:3.4 }[key] || 1;
-  const lmbName = { scout:'LASER DOTS', tank:'HEAVY SLUG', bounty_hunter:'SHOTGUN(3)', cyborg:'MAGNUM' }[key] || 'PISTOL';
+  const lmbName = { scout:'LASER DOTS', tank:'HEAVY SLUG', bounty_hunter:'SHOTGUN(3)', cyborg:'GAS GUN' }[key] || 'PISTOL';
   // LMB cadence is FIXED (not player.fireRate) for scout/shotgun/magnum.
   const FIXED_LMB_CD = { scout:0.06, bounty_hunter:0.5, cyborg:0.34 };
   const lmbCd = FIXED_LMB_CD[key] || null;
@@ -7577,6 +7704,11 @@ function drawCharacterSelect(){
       // back. In-game uses drawLeoGame (different pose: shotgun right hand,
       // machete left hand + cleaver chop on RMB).
       drawLeoCard(ctx, r.x + r.w / 2, r.y + 46, LEO_PX);
+    } else if(key === 'cyborg'){
+      // Ong — bespoke card pose: gas gun slung across chest + pistol
+      // holstered at waist. In-game uses drawOngGame (both weapons in
+      // hand, both swivel with aim, gas puff at muzzle while firing).
+      drawOngCard(ctx, r.x + r.w / 2, r.y + 46, ONG_PX);
     } else {
       // Floor-plan preview: same renderer as in-game (drawCharacterFloorPlan), drawn
       // head-up — no rotation needed since the sprite's local frame already has the
@@ -7610,7 +7742,7 @@ function drawCharacterSelect(){
     ctx.fillStyle = '#7f8c8d';
     ctx.fillText('WEAPONS', r.x + 6, sy); sy += 9;
     ctx.fillStyle = '#fff';
-    const lmbN = { soldier:'PISTOL', scout:'SMG', tank:'SLUG', bounty_hunter:'SHOTGUN', cyborg:'MAGNUM' }[key] || 'GUN';
+    const lmbN = { soldier:'PISTOL', scout:'SMG', tank:'SLUG', bounty_hunter:'SHOTGUN', cyborg:'GAS GUN' }[key] || 'GUN';
     const rmbN = { soldier:'SPEAR', scout:'3xLASER', tank:'FLAME', bounty_hunter:'MACHETE', cyborg:'BIO-GUN' }[key] || 'RMB';
     ctx.fillText('LMB ' + lmbN, r.x + 6, sy); sy += 8;
     ctx.fillText('RMB ' + rmbN, r.x + 6, sy); sy += 8;
