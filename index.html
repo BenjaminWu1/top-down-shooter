@@ -994,7 +994,7 @@ const PALETTE = {
   'w': '#e8eef2',       // white highlight (spearhead)
   '9': '#e74c3c'        // red (optic)
 };
-const PLAYER_PX = 1.25;  // logical px per sprite cell (12x12 grid ~= 15px on screen)
+const PLAYER_PX = 1.125;  // logical px per sprite cell (12x12 grid ~= 13.5px on screen)
 function drawPixelSprite(ctx, map, x, y, size, angle, tint, pal, faceOffset){
   if(!map) return;
   const rows = map.length, cols = map[0].length;
@@ -1596,7 +1596,7 @@ const CHARACTERS = {
     skillLabels:{ x:'SPRINT', c:'BLINK', v:'DASH', f:'HEAL', b:'BLAST' },
     // Futuristic warrior in blue armor — still the visually dominant class on the
     // field, at a 1.5x ratio over the others. Other classes are 12x12 at
-    // PLAYER_PX=1.25 (15 logical px); Xu Yihui is 12x12 at px=1.875 (22.5
+    // PLAYER_PX=1.125 (13.5 logical px); Xu Yihui is 12x12 at px=1.6875 (~20.25
     // logical px), a clean 3:2 over the rest.
     // Anatomy reads clearly as a humanoid even in top-down: HEAD (east bulge with
     // a cyan visor strip on its forward face), two ARMS extending east holding
@@ -1606,7 +1606,7 @@ const CHARACTERS = {
     // Sprite is east-facing so the standard ctx.rotate(p.angle) path turns the
     // whole figure with the cursor — no faceOffset. LMB/RMB muzzles are offset
     // in updatePlaying / fireLaserBeams so each weapon fires from its own hand.
-    px: 1.875,
+    px: 1.6875,
     pal: {
       'b': '#2e86ab',  // bright blue armor body
       'B': '#0e3556',  // dark blue armor shadow
@@ -2558,7 +2558,7 @@ function triggerSkill(name, dx, dy, mag){
     const mid = (n - 1) / 2;
     for(let i = 0; i < n; i++){
       const a = player.angle + (i - mid) * (1.4 / Math.max(1, n - 1));
-      entities.push(createBullet(player.x + Math.cos(a) * 8, player.y + Math.sin(a) * 8, a, 'player', { dmg: gd, speed: 340, radius: 2, life: 0.5 }));
+      entities.push(createBullet(player.x + Math.cos(a) * 7, player.y + Math.sin(a) * 7, a, 'player', { dmg: gd, speed: 340, radius: 2, life: 0.5 }));
     }
     emit(player.x, player.y, 16, '#e67e22', 50, 170, 0.4);
     sfx.rocket();
@@ -2945,11 +2945,11 @@ function updatePlaying(dt){
     // other class fires from the centerline forward muzzle.
     let mx, my;
     if(player.char === 'scout'){
-      mx = player.x + Math.cos(a) * 9 + Math.sin(a) * 8;
-      my = player.y + Math.sin(a) * 9 - Math.cos(a) * 8;
+      mx = player.x + Math.cos(a) * 8 + Math.sin(a) * 7;
+      my = player.y + Math.sin(a) * 8 - Math.cos(a) * 7;
     } else {
-      mx = player.x + Math.cos(a) * 8;
-      my = player.y + Math.sin(a) * 8;
+      mx = player.x + Math.cos(a) * 7;
+      my = player.y + Math.sin(a) * 7;
     }
     fireWeapon(mx, my);
   }
@@ -3309,8 +3309,8 @@ function tickFlameburst(dt){
 }
 
 function fireFlamethrower(dt){
-  const baseX = player.x + Math.cos(player.angle) * 8;   // emit from the sprite's nozzle/front
-  const baseY = player.y + Math.sin(player.angle) * 8;
+  const baseX = player.x + Math.cos(player.angle) * 7;   // emit from the sprite's nozzle/front
+  const baseY = player.y + Math.sin(player.angle) * 7;
   const range = 140;       // SHORTER reach — a close-quarters flamethrower now
   const halfAngle = 0.52;  // ~60° cone (tighter than before)
   // HEAT / OVERCHARGE: once the fuel pool falls below 50% of max ("Dangerous
@@ -3474,7 +3474,7 @@ function fireMachete(dt){
 function fireBiogun(){
   const a = player.angle;
   const tMul = player.weaponMult || 1;   // 5-tier evolution: scales glob dmg/speed + cloud dps
-  const mx = player.x + Math.cos(a) * 8, my = player.y + Math.sin(a) * 8;
+  const mx = player.x + Math.cos(a) * 7, my = player.y + Math.sin(a) * 7;
   const b = createBullet(mx, my, a, 'player', { dmg: 1 * (player.damageMult || 1) * tMul, speed: 260 * tMul, radius: 3, life: 0.8, sprite: SPR.bullet_bio, glow: '#2ecc71', tier: player.weaponTier || 1, sourceClass: 'cyborg' });
   b.spawnsCloud = true; b.cloudRadius = 24; b.cloudLife = 2; b.cloudDps = 6 * tMul; b.cloudSlow = 0;
   entities.push(b);
@@ -3538,8 +3538,8 @@ function fireLaserBeams(){
   // sprite): forward + right-perpendicular (-sin a, +cos a). Mirrors the LMB
   // left-hand muzzle offset in updatePlaying so each weapon fires from its hand.
   const a = player.angle;
-  const lx = player.x + Math.cos(a) * 9 - Math.sin(a) * 9;
-  const ly = player.y + Math.sin(a) * 9 + Math.cos(a) * 9;
+  const lx = player.x + Math.cos(a) * 8 - Math.sin(a) * 8;
+  const ly = player.y + Math.sin(a) * 8 + Math.cos(a) * 8;
   for(const off of [-LASER_BEAM_SPREAD, 0, LASER_BEAM_SPREAD]){
     const a = player.angle + off;
     const cx = Math.cos(a), cy = Math.sin(a);
