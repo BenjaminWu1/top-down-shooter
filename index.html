@@ -2000,6 +2000,12 @@ function createPlayer(charKey){
     // (energy/fuel) is drained to empty. Blocks the secondary while > 0; recovery of
     // the pool itself is unaffected.
     rmbLockT:0,
+    // Tank only: how long the CURRENT RMB press has been firing the flamethrower.
+    // Drives the "Dangerous Temperature" state (deeper-red flame + 1.5x damage +
+    // FUEL-bar lights up) — triggers at > 2s of continuous fire. Reset on RMB
+    // release, on lockout, and when fuel empties — so the player has to hold a
+    // fresh press for 2s+ each time to re-enter danger.
+    flameHeldT:0,
     // Syed's katana energy: ~6 s of continuous slashing. Drained by dt while RMB
     // held (float-precise); slowly self-regens 0.1/s and is topped up by the
     // 'beverage' pickup (+1 s each). Mirrors Tank fuel (which also regens 0.1/s).
@@ -2994,12 +3000,18 @@ function updatePlaying(dt){
     const firing = mouse.rdown && player.rmbLockT <= 0 && player.fuel >= dt;
     if(firing){
       player.fuel -= dt;
+      player.flameHeldT += dt;   // accumulate continuous-press time -> drives danger state
       fireFlamethrower(dt);
       // 100% heat: the instant fuel empties, fire the mechanical beep + pressure-relief
-      // hiss, kill the flame loop, and arm the 1s no-fire lockout.
-      if(player.fuel < dt){ player.rmbLockT = 1; sfx.flameLockout(); flameAudioStop(); }
-    } else if(player.maxFuel > 0){
-      flameAudioStop();   // not firing (released / locked) -> stop the sustained roar
+      // hiss, kill the flame loop, arm the 1s no-fire lockout, and reset the heat timer
+      // so the next press starts fresh from 0.
+      if(player.fuel < dt){
+        player.rmbLockT = 1; player.flameHeldT = 0;
+        sfx.flameLockout(); flameAudioStop();
+      }
+    } else {
+      player.flameHeldT = 0;   // RMB released or locked out -> heat resets to 0
+      if(player.maxFuel > 0) flameAudioStop();   // stop the sustained roar
     }
   }
   // ---- Syed's secondary: continuous katana slash (right mouse) ----
@@ -3324,10 +3336,12 @@ function fireFlamethrower(dt){
   const baseY = player.y + Math.sin(player.angle) * 7;
   const range = 140;       // SHORTER reach — a close-quarters flamethrower now
   const halfAngle = 0.52;  // ~60° cone (tighter than before)
-  // HEAT / OVERCHARGE: once the fuel pool falls below 50% of max ("Dangerous
-  // Temperature", ~3 s of continuous use), the flame runs hotter — deep crimson +
-  // a 1.5x damage boost — until it hits 0 and forces the lockout (see the dispatch).
-  const danger = player.maxFuel > 0 && player.fuel < player.maxFuel * 0.5;
+  // HEAT / OVERCHARGE: once the CURRENT RMB press has been firing for more than 2
+  // seconds (see player.flameHeldT, accumulated by the RMB dispatch and reset on
+  // release/lockout/empty), the flame enters "Dangerous Temperature" — deep crimson
+  // particles + 1.5x damage + FUEL bar lights up — until fuel empties and forces
+  // the lockout. Heat is per-press, not fuel-based: tap-firing never enters danger.
+  const danger = player.flameHeldT > 2;
   // DPS stacks MULTIPLICATIVELY: base 7 x damageMult x DAMAGE-pickup(2) x heat(1.5).
   // (The 1.5 never overrides the others; a future tier mult slots in the same way.)
   const dps = 7 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1) * (danger ? 1.5 : 1) * (player.weaponMult || 1);
@@ -6303,7 +6317,11 @@ function drawHUD(){
   // The secondary simply can't fire while the pool is too low; it resumes as the pool
   // regenerates (no lockout), so the bar just shows the current fill.
   let rmbBar = null;
-  if(player.maxFuel > 0)        rmbBar = { cur:player.fuel,   max:player.maxFuel,   label:'FUEL',   back:'#3a1a08', fill:'#e67e22' };
+  // Tank only: when flameHeldT > 2 (Dangerous Temperature), light up the FUEL bar —
+  // bright-red fill + pulsing crimson border + pulsing label — to signal the player
+  // that their flamethrower is overheating into the +50% damage state.
+  const fuelDanger = player.maxFuel > 0 && player.flameHeldT > 2;
+  if(player.maxFuel > 0)        rmbBar = { cur:player.fuel,   max:player.maxFuel,   label:'FUEL',   back: fuelDanger ? '#5a0a08' : '#3a1a08', fill: fuelDanger ? '#ff3030' : '#e67e22', danger: fuelDanger };
   else if(player.maxEnergy > 0) rmbBar = { cur:player.energy, max:player.maxEnergy, label:'ENERGY', back:'#0b2e1a', fill:'#2ecc71' };
   else if(player.maxPower > 0)  rmbBar = { cur:player.power,  max:player.maxPower,  label:'POWER',  back:'#082a33', fill:'#19f0ff' };
   else if(player.maxFury > 0)   rmbBar = { cur:player.fury,   max:player.maxFury,   label:'FURY',   back:'#3a0a0a', fill:'#c0392b' };
@@ -6316,9 +6334,19 @@ function drawHUD(){
     ctx.fillStyle = rmbBar.fill;
     ctx.fillRect(7, hudY + 1, Math.floor(64 * (rmbBar.cur / rmbBar.max)), 4);
     ctx.font = 'bold 6px monospace';
-    ctx.fillStyle = '#fff';
+    // Pulse the label when at Dangerous Temperature so the "skill icon lights up"
+    // reads instantly: white -> bright red flashes at ~5 Hz with stateTime.
+    ctx.fillStyle = rmbBar.danger && Math.floor(stateTime * 10) % 2 ? '#ffd040' : '#fff';
     ctx.textAlign = 'left';
     ctx.fillText(rmbBar.label, 8, hudY + 5);
+    // Danger glow border around the bar so it visibly "lights up" beyond the fill swap.
+    if(rmbBar.danger){
+      ctx.strokeStyle = '#ff5530';
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.6 + 0.4 * Math.sin(stateTime * 12);
+      ctx.strokeRect(6.5, hudY + 0.5, 65, 5);
+      ctx.globalAlpha = 1;
+    }
   }
 
   // Score & level (top-right)
