@@ -3446,10 +3446,16 @@ const KATANA_HALF  = 0.9;    // ~51.6° half-arc => ~103° total slash — still
                              // and 3/4 of the prior 1.2-rad arc (scope cut to 3/4)
 function fireKatana(dt){
   const dps = 40 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1) * (player.weaponMult || 1);
+  // The spear is held in Dr. Syed's left hand (drawn at offset (-7*px, +2*px)
+  // in drawDrSyed, with DR_SYED_PX=1), so the thrust originates from there
+  // instead of player center. The damage scan and the afterimage particle
+  // origin both pivot around (sx, sy) per user request: "the attack should
+  // begin on the side with the spear".
+  const sx = player.x - 7, sy = player.y + 2;
   let hitAny = false, hx = 0, hy = 0;
   for(const en of entities){
     if(en.type !== 'enemy' || en.dead) continue;
-    const dx = en.x - player.x, dy = en.y - player.y;
+    const dx = en.x - sx, dy = en.y - sy;
     const d = Math.hypot(dx, dy);
     if(d > KATANA_RANGE + en.radius) continue;
     let diff = Math.atan2(dy, dx) - player.angle;
@@ -3459,13 +3465,14 @@ function fireKatana(dt){
     damageEnemy(en, dps * dt, true);
     if(!hitAny){ hitAny = true; hx = en.x; hy = en.y; }
   }
-  // Thrust afterimage streaks: fast white/silver lines along the front arc.
+  // Thrust afterimage streaks: fast white/silver lines along the front arc,
+  // emanating from the spear-hand origin (sx, sy).
   for(let i = 0; i < 3; i++){
     if(particles.length >= 300) break;
     const a = player.angle + (Math.random() - 0.5) * KATANA_HALF * 2;
     const rr = KATANA_RANGE * (0.5 + Math.random() * 0.5);
     particles.push({
-      x: player.x + Math.cos(a) * rr, y: player.y + Math.sin(a) * rr,
+      x: sx + Math.cos(a) * rr, y: sy + Math.sin(a) * rr,
       vx: Math.cos(player.angle) * 60, vy: Math.sin(player.angle) * 60,   // streak forward (thrust)
       life: 0.08 + Math.random() * 0.05, maxLife: 0.14,
       color: i % 2 ? '#ffffff' : '#e8eef2', size: 1 + Math.floor(Math.random() * 2)
@@ -6399,10 +6406,16 @@ function drawPlayer(p){
   // (Damage still uses the KATANA_RANGE/KATANA_HALF fan in fireKatana — kept in sync.)
   if(p.char === 'soldier' && mouse.rdown && p.energy > 0){
     ctx.save();
+    // The spear is in Dr. Syed's left hand (drawn in drawDrSyed at offset
+    // (-7*px, +2*px); DR_SYED_PX=1), so the thrust telegraph + afterimages +
+    // live spear all originate from (sx, sy) — the spear-hand position —
+    // not the player center. Damage in fireKatana pivots around the same
+    // point so the gameplay arc and the visual arc stay in lock-step.
+    const sx = p.x - 7, sy = p.y + 2;
     // Faint thrust zone (flat low-alpha fan — telegraph only).
     ctx.fillStyle = 'rgba(207,216,220,0.08)';
-    ctx.beginPath(); ctx.moveTo(p.x, p.y);
-    ctx.arc(p.x, p.y, KATANA_RANGE, p.angle - KATANA_HALF, p.angle + KATANA_HALF);
+    ctx.beginPath(); ctx.moveTo(sx, sy);
+    ctx.arc(sx, sy, KATANA_RANGE, p.angle - KATANA_HALF, p.angle + KATANA_HALF);
     ctx.closePath(); ctx.fill();
     const reachAt = t => KATANA_RANGE * (0.45 + 0.55 * Math.abs(Math.sin(t * 22)));
     const angAt   = t => p.angle + Math.sin(t * 9) * KATANA_HALF;
@@ -6411,17 +6424,17 @@ function drawPlayer(p){
     for(let k = 3; k >= 1; k--){
       const an = angAt(stateTime - k * 0.03), rr = reachAt(stateTime - k * 0.03);
       ctx.beginPath();
-      ctx.moveTo(Math.floor(p.x + Math.cos(an)*6), Math.floor(p.y + Math.sin(an)*6));
-      ctx.lineTo(Math.floor(p.x + Math.cos(an)*rr), Math.floor(p.y + Math.sin(an)*rr));
+      ctx.moveTo(Math.floor(sx + Math.cos(an)*6), Math.floor(sy + Math.sin(an)*6));
+      ctx.lineTo(Math.floor(sx + Math.cos(an)*rr), Math.floor(sy + Math.sin(an)*rr));
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
     // Live wooden spear: brown shaft + crisp grey spearhead triangle.
     const ang = angAt(stateTime), reach = reachAt(stateTime);
     const ca = Math.cos(ang), sa = Math.sin(ang);
-    const bx = p.x + ca * 3, by = p.y + sa * 3;
-    const tx = p.x + ca * reach, ty = p.y + sa * reach;
-    const hx = p.x + ca * (reach - 5), hy = p.y + sa * (reach - 5);
+    const bx = sx + ca * 3, by = sy + sa * 3;
+    const tx = sx + ca * reach, ty = sy + sa * reach;
+    const hx = sx + ca * (reach - 5), hy = sy + sa * (reach - 5);
     ctx.strokeStyle = '#6b4a2a'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(hx, hy); ctx.stroke();
     const px = -sa, py = ca;
