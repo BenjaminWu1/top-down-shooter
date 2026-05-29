@@ -3048,22 +3048,26 @@ function updatePlaying(dt){
     player.laserCd = 0.22 * (player.laserScale || 1);
     if(player.power < 1) player.rmbLockT = 1;   // drained this volley -> 1s no-fire lockout
   }
-  // ---- Leo's secondary: per-press CLEAVER SLASH (right mouse) ----
-  // A discrete tap-attack: each RMB press starts a ~6-frame cleaver chop. While
-  // the slash is in progress (leoSlashRem > 0) we damage every enemy inside the
-  // arc, with leoSlashHits guaranteeing each enemy is hit at most once per slash.
-  // drawPlayer keys off leoSlashRem to swap drawLeoGame into 'sword' mode for the
-  // chop animation. Replaces the old continuous fireMachete + fury-drain attack
-  // (fireMachete + fury + the 1s lockout are now dead-code but left in place).
+  // ---- Leo's secondary: COMBO cleaver slash (right mouse, hold to chain) ----
+  // Holding RMB auto-fires back-to-back ~6-frame cleaver chops with no gap, so
+  // a held button produces a continuous slash chain (combo). Each slash damages
+  // every enemy inside the arc; leoSlashHits guarantees each enemy is hit at
+  // most once per slash, so an enemy in the arc takes a hit every ~0.1s while
+  // the player keeps holding. drawPlayer swaps drawLeoGame into 'sword' mode
+  // while leoSlashRem > 0. Replaces the old continuous fireMachete + fury-drain
+  // attack (fireMachete + fury + the 1s lockout are now dead-code, left in place).
   if(player.char === 'bounty_hunter'){
-    if(mouse.rclicked && player.leoSlashRem <= 0){
+    if(mouse.rdown && player.leoSlashRem <= 0){
       player.leoSlashRem = player.leoSlashTotal;
       player.leoSlashHits = new Set();
       if(sfx.macheteSwing) sfx.macheteSwing();
     }
     if(player.leoSlashRem > 0){
       // Damage scan: enemies inside an arc in the player.angle direction.
-      const reach = 22;                                        // logical-px range (matches the 22*px arc in drawLeoGame at LEO_PX=1)
+      // Range DOUBLED from the original 22 -> 44 per user request. The visual
+      // arc indicator in drawLeoGame still draws at 22*px (cosmetic only);
+      // gameplay reach is the value here.
+      const reach = 44;
       const halfArc = 0.9;                                     // ~103° wedge, similar feel to the old MACHETE_HALF
       const dmg = 5 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
       for(const en of entities){
