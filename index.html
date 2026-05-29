@@ -1842,7 +1842,7 @@ let selectedAssistants = ['drone']; // run's equipped assistants (0..2); seeded 
 // INPUT
 // ============================================================
 const keys = {};
-const mouse = { x: W/2, y: H/2, down:false, rdown:false, clicked:false };
+const mouse = { x: W/2, y: H/2, down:false, rdown:false, clicked:false, rclicked:false };
 // Gameplay keys must preventDefault so the browser does not handle them
 // (focus shifts, page scroll, find-on-page shortcuts, etc.). Without this,
 // pressing X / WASD on some browsers can scroll the page and push the HUD
@@ -1898,7 +1898,7 @@ canvas.addEventListener('mousedown', e => {
   if(state === STATE.PLAYING && paused){ paused = false; return; }
   // Likewise a click while the stats window is open just closes it (no shot).
   if(state === STATE.PLAYING && showStats){ showStats = false; return; }
-  if(e.button === 2){ mouse.rdown = true; }
+  if(e.button === 2){ mouse.rdown = true; mouse.rclicked = true; }
   else { mouse.down = true; mouse.clicked = true; }
 });
 window.addEventListener('mouseup', e => {
@@ -2006,6 +2006,13 @@ function createPlayer(charKey){
     // release, on lockout, and when fuel empties — so the player has to hold a
     // fresh press for 2s+ each time to re-enter danger.
     flameHeldT:0,
+    // Bounty Hunter (Leo) only: per-press cleaver-slash animation timer.
+    // leoSlashRem > 0 means a slash is in progress; while > 0 the drawLeoGame
+    // 'sword' mode renders the chop animation and the dispatch deals melee
+    // damage to enemies inside the arc (each at most once per slash, tracked
+    // via leoSlashHits). RMB leading-edge starts a new slash if not already in
+    // one. leoSlashTotal = ~0.1s (~6 frames at 60fps).
+    leoSlashRem:0, leoSlashTotal:0.1, leoSlashHits:null,
     // Syed's katana energy: ~6 s of continuous slashing. Drained by dt while RMB
     // held (float-precise); slowly self-regens 0.1/s and is topped up by the
     // 'beverage' pickup (+1 s each). Mirrors Tank fuel (which also regens 0.1/s).
@@ -2871,6 +2878,7 @@ function update(dt){
   // active play (pause, Tab-stats, death/menu, level transitions) so it can't drone.
   if(state !== STATE.PLAYING || paused || showStats) flameAudioStop();
   mouse.clicked = false;
+  mouse.rclicked = false;
 }
 
 function updatePlaying(dt){
@@ -2964,6 +2972,10 @@ function updatePlaying(dt){
       // user's "bullets fire toward aim (handgun direction)" spec.
       const m = benjaminWuMuzzle(BENJAMIN_WU_PX, player.x, player.y, a);
       mx = m.x; my = m.y;
+    } else if(player.char === 'bounty_hunter'){
+      // Leo fires from the right-hand shotgun's barrel tip — see leoMuzzle.
+      const m = leoMuzzle(LEO_PX, player.x, player.y, a);
+      mx = m.x; my = m.y;
     } else {
       mx = player.x + Math.cos(a) * 7;
       my = player.y + Math.sin(a) * 7;
@@ -3036,12 +3048,41 @@ function updatePlaying(dt){
     player.laserCd = 0.22 * (player.laserScale || 1);
     if(player.power < 1) player.rmbLockT = 1;   // drained this volley -> 1s no-fire lockout
   }
-  // ---- Leo's secondary: continuous machete slash (right mouse) ----
-  // Mirrors Syed's blade: drains `fury` by dt while held + the same 1s empty-lockout.
-  if(player.char === 'bounty_hunter' && mouse.rdown && player.rmbLockT <= 0 && player.fury >= dt){
-    player.fury -= dt;
-    fireMachete(dt);
-    if(player.fury < dt) player.rmbLockT = 1;   // ran out this frame -> 1s no-fire lockout
+  // ---- Leo's secondary: per-press CLEAVER SLASH (right mouse) ----
+  // A discrete tap-attack: each RMB press starts a ~6-frame cleaver chop. While
+  // the slash is in progress (leoSlashRem > 0) we damage every enemy inside the
+  // arc, with leoSlashHits guaranteeing each enemy is hit at most once per slash.
+  // drawPlayer keys off leoSlashRem to swap drawLeoGame into 'sword' mode for the
+  // chop animation. Replaces the old continuous fireMachete + fury-drain attack
+  // (fireMachete + fury + the 1s lockout are now dead-code but left in place).
+  if(player.char === 'bounty_hunter'){
+    if(mouse.rclicked && player.leoSlashRem <= 0){
+      player.leoSlashRem = player.leoSlashTotal;
+      player.leoSlashHits = new Set();
+      if(sfx.macheteSwing) sfx.macheteSwing();
+    }
+    if(player.leoSlashRem > 0){
+      // Damage scan: enemies inside an arc in the player.angle direction.
+      const reach = 22;                                        // logical-px range (matches the 22*px arc in drawLeoGame at LEO_PX=1)
+      const halfArc = 0.9;                                     // ~103° wedge, similar feel to the old MACHETE_HALF
+      const dmg = 5 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1);
+      for(const en of entities){
+        if(en.type !== 'enemy' || en.dead) continue;
+        if(player.leoSlashHits.has(en)) continue;
+        const dx = en.x - player.x, dy = en.y - player.y;
+        const rr = reach + en.radius;
+        if(dx*dx + dy*dy > rr*rr) continue;
+        let diff = Math.atan2(dy, dx) - player.angle;
+        while(diff >  Math.PI) diff -= 2 * Math.PI;
+        while(diff < -Math.PI) diff += 2 * Math.PI;
+        if(Math.abs(diff) > halfArc) continue;
+        damageEnemy(en, dmg, true);
+        player.leoSlashHits.add(en);
+        if(sfx.macheteHit) sfx.macheteHit();
+      }
+      player.leoSlashRem -= dt;
+      if(player.leoSlashRem <= 0){ player.leoSlashRem = 0; player.leoSlashHits = null; }
+    }
   }
   // ---- Ong's secondary: bio-gun glob (right mouse) ----
   // Per-shot like the Scout's volley: gated by bioCd (cadence) + `toxin` (1 per shot)
@@ -5883,6 +5924,119 @@ function benjaminWuMuzzle(px, x, y, aim){
   };
 }
 
+// ============================================================
+//  CHARACTER 4: Leo (bounty hunter)
+//  Two contexts:
+//   - drawLeoCard(ctx,x,y,px)            -> CHOOSE YOUR CHARACTER screen
+//                                           (shotgun across chest, machete on back)
+//   - drawLeoGame(ctx,x,y,aim,px,mode,slashT) -> in-game
+//       mode 'shotgun': shotgun in right hand + machete in left (both aim)
+//       mode 'sword'  : fast UNIDIRECTIONAL cleaver chop; slashT 0..1 = swing progress
+//  Pasted VERBATIM from the user — do not change the draw logic.
+// ============================================================
+
+const LEO_MAP = [
+  "...HHHHHHHH...","..HHHHHHHHHH..",".HHHHHHHHHHHH.","...BBBBBBBB...",
+  "...HSSSSSSH...","...SeSSSSeS...","...SSSSSSSS...","...RRSSSSRR...",
+  "..CCcVVVVcCC..",".CCCVVVVVVCCC.",".CCcVVYVVcCCC.",".CCCVVVVVVCCC.",
+  ".CCcVVVVVVcCC.","GCCCVVVVVVCCCG",".PPPPPPPPPPPP.",".CCcCccccCcCC.",
+  ".CCCCcccCCCCC.",".CCcCcccCCcCC.",".GGGCcccCGGG..","..GGG...GGG...",
+];
+const LEO_C = { H:'#6e4a26', h:'#4f3417', B:'#2a1c0e', S:'#c79a6b', e:'#7a5230', R:'#5a3c20',
+                C:'#9c7a4a', c:'#7a5d36', V:'#2f2a22', P:'#241b10', G:'#15120c', Y:'#e0b23a' };
+
+function _leoBody(ctx, px) {
+  const cols = LEO_MAP[0].length, rows = LEO_MAP.length, w = cols*px, h = rows*px, ox = -w/2, oy = -h/2;
+  ctx.fillStyle = 'rgba(0,0,0,.4)';
+  ctx.beginPath(); ctx.ellipse(0, h/2 - px, w*0.42, px*1.6, 0, 0, Math.PI*2); ctx.fill();
+  for (let r = 0; r < rows; r++) { const row = LEO_MAP[r];
+    for (let c = 0; c < cols; c++) { const ch = row[c]; if (ch === ' ' || ch === '.') continue;
+      ctx.fillStyle = LEO_C[ch] || '#f0f'; ctx.fillRect(ox + c*px, oy + r*px, px, px); } }
+}
+function _leoShotgunAcross(ctx, px) {
+  ctx.save(); ctx.translate(-7*px, 3*px); ctx.rotate(-0.28);
+  ctx.fillStyle='#3a2a18'; ctx.fillRect(0,-1.4*px,4*px,2.8*px);
+  ctx.fillStyle='#1d1f24'; ctx.fillRect(4*px,-1.4*px,3*px,2.8*px);
+  ctx.fillStyle='#5a616b'; ctx.fillRect(7*px,-1.2*px,9*px,2.4*px);
+  ctx.fillStyle='#3a3f47'; ctx.fillRect(7*px,-1.2*px,9*px,0.9*px);
+  ctx.fillStyle='#15171b'; ctx.fillRect(15.6*px,-0.9*px,1.2*px,1.8*px);
+  ctx.restore();
+}
+function _leoMacheteBack(ctx, px) {
+  ctx.save(); ctx.translate(0,1*px); ctx.rotate(0.7);
+  ctx.fillStyle='#3a2a18'; ctx.fillRect(-1*px,7*px,2*px,4*px);
+  ctx.fillStyle='#c7ccd4'; ctx.fillRect(-1.4*px,-11*px,2.8*px,18*px);
+  ctx.fillStyle='#9aa0a8'; ctx.fillRect(-1.4*px,-11*px,1*px,18*px);
+  ctx.restore();
+}
+function _leoShotgunHand(ctx, px) {
+  ctx.fillStyle='#15120c'; ctx.fillRect(-0.4*px,-1*px,2*px,2.4*px);
+  ctx.fillStyle='#3a2a18'; ctx.fillRect(1.4*px,-1*px,2*px,2*px);
+  ctx.fillStyle='#4a4f57'; ctx.fillRect(3.4*px,-0.8*px,5*px,1.6*px);
+  ctx.fillStyle='#2b2f36'; ctx.fillRect(3.4*px,-0.8*px,5*px,0.6*px);
+}
+function _leoMacheteHand(ctx, px) {
+  ctx.fillStyle='#3a2a18'; ctx.fillRect(-0.4*px,-1*px,2*px,2*px);
+  ctx.fillStyle='#c7ccd4'; ctx.fillRect(1.4*px,-0.9*px,9*px,1.8*px);
+  ctx.fillStyle='#9aa0a8'; ctx.fillRect(1.4*px,-0.9*px,9*px,0.7*px);
+  ctx.fillStyle='#eef2f7'; ctx.fillRect(9*px,-0.4*px,1.4*px,0.8*px);
+}
+function _leoCleaver(ctx, px) {
+  ctx.fillStyle='#2a1c0e'; ctx.fillRect(-4*px,-1*px,4*px,2*px);
+  ctx.fillStyle='#1a1208'; ctx.fillRect(-5*px,-1*px,1*px,2*px);
+  ctx.fillStyle='#6a6f78'; ctx.fillRect(0,-1.6*px,1.5*px,3.2*px);
+  ctx.fillStyle='#c4ccd6'; ctx.fillRect(1.5*px,-3.4*px,13*px,6.6*px);
+  ctx.fillStyle='#9aa0a8'; ctx.fillRect(1.5*px,-3.4*px,13*px,1.6*px);
+  ctx.fillStyle='#eef4fb'; ctx.fillRect(1.5*px,2.2*px,13*px,1*px);
+  ctx.fillStyle='#c4ccd6';
+  ctx.beginPath(); ctx.moveTo(14.5*px,-3.4*px); ctx.lineTo(16*px,-1.5*px);
+  ctx.lineTo(16*px,3.2*px); ctx.lineTo(14.5*px,3.2*px); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#7a8088'; ctx.beginPath(); ctx.arc(3.5*px,-2*px,0.9*px,0,Math.PI*2); ctx.fill();
+}
+
+// ----- CARD POSE (character select) -----
+function drawLeoCard(ctx, x, y, px = 3) {
+  ctx.save(); ctx.translate(x, y); ctx.imageSmoothingEnabled = false;
+  _leoMacheteBack(ctx, px);
+  _leoBody(ctx, px);
+  _leoShotgunAcross(ctx, px);
+  ctx.restore();
+}
+
+// ----- IN-GAME POSE -----
+// mode: 'shotgun' (default) or 'sword'
+// slashT: 0..1 progress of the cleaver swing (only used when mode==='sword')
+function drawLeoGame(ctx, x, y, aimAngle, px = 3, mode = 'shotgun', slashT = 0) {
+  ctx.save(); ctx.translate(x, y); ctx.imageSmoothingEnabled = false;
+  _leoBody(ctx, px);
+  if (mode === 'sword') {
+    // fast UNIDIRECTIONAL chop: from +1.1rad down to -0.5rad relative to aim
+    const ease = 1 - Math.pow(1 - slashT, 3);
+    const swing = 1.1 - 1.6*ease;
+    ctx.save(); ctx.rotate(aimAngle);
+    ctx.fillStyle = 'rgba(230,240,255,0.22)';
+    ctx.beginPath(); ctx.arc(2*px, 0, 22*px, swing-0.2, swing+0.7); ctx.lineTo(2*px, 0); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    ctx.save(); ctx.translate(4*px, 1*px); ctx.rotate(aimAngle + swing); _leoCleaver(ctx, px); ctx.restore();
+  } else {
+    ctx.save(); ctx.translate(-7*px, 2*px); ctx.rotate(aimAngle); _leoMacheteHand(ctx, px); ctx.restore();
+    ctx.save(); ctx.translate(7*px, 2*px); ctx.rotate(aimAngle); _leoShotgunHand(ctx, px); ctx.restore();
+  }
+  ctx.restore();
+}
+
+// Shotgun barrel-tip world position for Leo. drawLeoGame's shotgun pivot is at
+// canvas-fixed offset (7*px, 2*px) from player center; the barrel extends to
+// 8.4*px (3.4*px receiver-front + 5*px body) along aim from that pivot.
+// Same px as the other bespoke renderers so all four characters stay matched.
+const LEO_PX = DR_SYED_PX;
+function leoMuzzle(px, x, y, aim){
+  return {
+    x: x + 7 * px + 8.4 * px * Math.cos(aim),
+    y: y + 2 * px + 8.4 * px * Math.sin(aim),
+  };
+}
+
 // Benjamin Wu CARD-ONLY renderer. Same body MAP + colors as drawBenjaminWu so
 // the silhouette reads as the same character, but the POSE is different:
 // a flamethrower FUEL TANK sits on the back (drawn before the body so the
@@ -5990,28 +6144,9 @@ function drawPlayer(p){
     ctx.restore();
     ctx.globalAlpha = 1;
   }
-  // Leo's MACHETE (RMB): an explosive diagonal slash — a bold orange-red FILLED wedge
-  // sweeping the fan with a bright yellow outline, trailed by fading afterimage wedges.
-  // Locked to MACHETE_RANGE/MACHETE_HALF (matches the damage check in fireMachete).
-  if(p.char === 'bounty_hunter' && mouse.rdown && p.fury > 0){
-    ctx.save();
-    // Solid orange-red slash wedge + crisp yellow outline (no gradient/glow).
-    const drawWedge = (ang, alpha) => {
-      const w = 0.5;
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = '#e74c3c';
-      ctx.beginPath();
-      ctx.moveTo(p.x, p.y);
-      ctx.arc(p.x, p.y, MACHETE_RANGE, ang - w, ang + w);
-      ctx.closePath(); ctx.fill();
-      ctx.strokeStyle = '#ffe04d'; ctx.lineWidth = 1.5; ctx.stroke();
-    };
-    const swing = t => p.angle + Math.cos(t * 26) * MACHETE_HALF;
-    for(let k = 3; k >= 1; k--) drawWedge(swing(stateTime - k * 0.04), 0.12 * (4 - k));
-    drawWedge(swing(stateTime), 0.9);
-    ctx.restore();
-    ctx.globalAlpha = 1;
-  }
+  // (Leo's old machete wedge visual lived here; the new bespoke drawLeoGame
+  //  renderer draws its own slash arc when leoSlashRem > 0, so the wedge is
+  //  no longer needed — see the bounty_hunter branch in the renderer chain.)
   // Body: stacked-fillRect "floor plan" view. Each class is hand-laid as a top-down
   // silhouette of head + shoulders + weapons in its OWN local frame (body north of
   // origin, weapons extending south = local +y axis). We rotate by p.angle - PI/2 so
@@ -6033,6 +6168,17 @@ function drawPlayer(p){
     // damage (RMB held + has fuel + not in the post-empty lockout).
     const firing = mouse.rdown && p.fuel > 0 && p.rmbLockT <= 0;
     drawBenjaminWu(ctx, p.x, p.y, p.angle, BENJAMIN_WU_PX, firing);
+  } else if(p.char === 'bounty_hunter'){
+    // Leo — bespoke renderer. Default mode is 'shotgun' (shotgun in right
+    // hand + machete in left, both swivel with aim). When a cleaver slash
+    // is in progress (leoSlashRem > 0), swap to 'sword' mode and feed it
+    // the slash progress 0..1 so the chop animation plays out.
+    if(p.leoSlashRem > 0){
+      const slashT = 1 - p.leoSlashRem / p.leoSlashTotal;
+      drawLeoGame(ctx, p.x, p.y, p.angle, LEO_PX, 'sword', slashT);
+    } else {
+      drawLeoGame(ctx, p.x, p.y, p.angle, LEO_PX, 'shotgun', 0);
+    }
   } else {
     ctx.save();
     ctx.translate(p.x, p.y);
@@ -7334,6 +7480,11 @@ function drawCharacterSelect(){
       // right hand, both swivel with aim) is NOT used here per the user's
       // "the image of Wu in the game do not change".
       drawBenjaminWuCard(ctx, r.x + r.w / 2, r.y + 46, BENJAMIN_WU_PX);
+    } else if(key === 'bounty_hunter'){
+      // Leo — bespoke card pose: shotgun across the chest + machete on the
+      // back. In-game uses drawLeoGame (different pose: shotgun right hand,
+      // machete left hand + cleaver chop on RMB).
+      drawLeoCard(ctx, r.x + r.w / 2, r.y + 46, LEO_PX);
     } else {
       // Floor-plan preview: same renderer as in-game (drawCharacterFloorPlan), drawn
       // head-up — no rotation needed since the sprite's local frame already has the
