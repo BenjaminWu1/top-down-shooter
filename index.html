@@ -6039,12 +6039,12 @@ function leoMuzzle(px, x, y, aim){
 
 // Benjamin Wu CARD-ONLY renderer. Same body MAP + colors as drawBenjaminWu so
 // the silhouette reads as the same character, but the POSE is different:
-// a flamethrower FUEL TANK sits on the back (drawn before the body so the
-// head and torso partially overlap it, signalling "backpack") and a machine
-// gun is held horizontally across the chest (drawn last so it overlays the
-// body). Static pose — no aim parameter, no firing animation. The in-game
-// renderer drawBenjaminWu is NOT touched per the user's request.
-function drawBenjaminWuCard(ctx, x, y, px = 1) {
+// the flamethrower (with twin tanks + pilot-light flame at the nozzle) is
+// slung diagonally across the BACK (drawn FIRST so head/torso overlap it),
+// and a machine gun is slung diagonally across the CHEST in the opposite
+// direction (drawn LAST so it overlays the body). The in-game renderer
+// drawBenjaminWu is NOT touched per the user's request — pasted verbatim.
+function drawBenjaminWuCard(ctx, x, y, px = 3) {
   const MAP = [
     "...HHHHHHHH...","..HHHHHHHHHH..","..HhHHHHHHhH..","..HHVVVVVVHH..",
     "...HSSSSSSH...","...hSSSSSSh...","...HHHHHHHH...","..AppAAAAppA..",
@@ -6053,31 +6053,50 @@ function drawBenjaminWuCard(ctx, x, y, px = 1) {
     ".AppAaAAaApA..",".AAAAaAAaAAAA.",".GGGAaAAaAGGG.","..GGG....GGG..",
   ];
   const C = { H:'#3c4a2e', h:'#2a3520', V:'#1a1a1a', S:'#caa078',
-              A:'#566b3b', a:'#3e4f2a', p:'#6e8348', c:'#2f3a22',
-              P:'#2a2418', G:'#15140f', Y:'#e0a83a' };
+              A:'#566b3b', a:'#3e4f2a', p:'#6e8348', c:'#2f3a22', P:'#2a2418', G:'#15140f', Y:'#e0a83a' };
 
   ctx.save();
   ctx.translate(x, y);
   ctx.imageSmoothingEnabled = false;
   const cols = MAP[0].length, rows = MAP.length, w = cols*px, h = rows*px;
 
-  // Shadow under feet (same as the in-game renderer).
   ctx.fillStyle = 'rgba(0,0,0,.4)';
   ctx.beginPath();
   ctx.ellipse(0, h/2 - px, w*0.42, px*1.6, 0, 0, Math.PI*2);
   ctx.fill();
 
-  // FLAMETHROWER FUEL TANK on the back — drawn FIRST so the head/torso overlap
-  // and "cover" the bottom of the tank, giving the read of a backpack peeking
-  // above the head. 6×4 green canister + yellow valve cap on top.
-  ctx.fillStyle = '#3e4f2a';
-  ctx.fillRect(-3*px, -13*px, 6*px, 4*px);   // tank back/shadow
-  ctx.fillStyle = '#566b3b';
-  ctx.fillRect(-3*px, -13*px, 6*px, 3*px);   // tank face (lighter green)
-  ctx.fillStyle = '#e0a83a';
-  ctx.fillRect(-2*px, -13*px, 4*px, 1*px);   // valve/cap (yellow stripe)
+  // ----- flamethrower slung across BACK (behind body) -----
+  ctx.save();
+  ctx.translate(1*px, 1*px); ctx.rotate(0.6);
+  ctx.fillStyle='#2b3520'; ctx.fillRect(-2.6*px,-9*px,2.4*px,12*px);
+  ctx.fillStyle='#3e4f2a'; ctx.fillRect(-2.6*px,-9*px,1*px,12*px);
+  ctx.fillStyle='#2b3520'; ctx.fillRect(0.2*px,-9*px,2.4*px,12*px);
+  ctx.fillStyle='#3e4f2a'; ctx.fillRect(0.2*px,-9*px,1*px,12*px);
+  ctx.fillStyle='#6a6f78'; ctx.fillRect(-2.6*px,-9.6*px,2.4*px,1*px);
+  ctx.fillStyle='#6a6f78'; ctx.fillRect(0.2*px,-9.6*px,2.4*px,1*px);
+  ctx.fillStyle='#c0392b'; ctx.fillRect(-2.6*px,-3*px,5.2*px,1.2*px);
+  ctx.fillStyle='#1a1a1a'; ctx.beginPath(); ctx.arc(-1.2*px,-6*px,1.1*px,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#7fe0ff'; ctx.beginPath(); ctx.arc(-1.2*px,-6*px,0.6*px,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#1d1f24'; ctx.lineWidth=1.3*px; ctx.lineCap='round';
+  ctx.beginPath();
+  ctx.moveTo(2.4*px,2*px);
+  ctx.quadraticCurveTo(6*px,1*px,5*px,-4*px);
+  ctx.quadraticCurveTo(4.2*px,-8*px,1.4*px,-10*px);
+  ctx.stroke();
+  ctx.fillStyle='#3a3f47'; ctx.fillRect(-0.4*px,-14*px,2.2*px,4.5*px);
+  ctx.fillStyle='#2b2f36'; ctx.fillRect(-0.4*px,-14*px,2.2*px,1.4*px);
+  const flick = Math.sin(Date.now()*0.02)*0.4*px;
+  const grd = ctx.createRadialGradient(0.7*px,-15*px,0,0.7*px,-15*px,3*px);
+  grd.addColorStop(0,'#fff3b0'); grd.addColorStop(0.5,'#ff9b2e'); grd.addColorStop(1,'rgba(214,42,0,0)');
+  ctx.fillStyle=grd;
+  ctx.beginPath();
+  ctx.moveTo(-0.4*px,-14*px);
+  ctx.quadraticCurveTo(0.7*px,-18*px-flick,1.8*px,-14*px);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#fff7d6'; ctx.beginPath(); ctx.arc(0.7*px,-14.6*px,0.7*px,0,Math.PI*2); ctx.fill();
+  ctx.restore();
 
-  // BODY (the MAP, head-up).
+  // ----- body -----
   const ox = -w/2, oy = -h/2;
   for (let r = 0; r < rows; r++) {
     const row = MAP[r];
@@ -6089,19 +6108,16 @@ function drawBenjaminWuCard(ctx, x, y, px = 1) {
     }
   }
 
-  // MACHINE GUN held across the chest — horizontal weapon overlaying the body.
-  // Drawn LAST so it covers the chest/shoulders. Barrel sticks out to the
-  // character's right, stock sticks left, magazine hangs down from center.
-  ctx.fillStyle = '#15140f';                       // dark outline / base
-  ctx.fillRect(-6*px, 1*px, 12*px, 2*px);
-  ctx.fillStyle = '#3a3f47';                       // upper receiver
-  ctx.fillRect(-5*px, 1*px, 10*px, 1*px);
-  ctx.fillStyle = '#2b2f36';                       // barrel tip (right)
-  ctx.fillRect(4*px, 2*px, 3*px, 1*px);
-  ctx.fillStyle = '#2b2f36';                       // stock (left)
-  ctx.fillRect(-7*px, 2*px, 1*px, 1*px);
-  ctx.fillStyle = '#566b3b';                       // magazine hanging down
-  ctx.fillRect(-1*px, 3*px, 2*px, 2*px);
+  // ----- machine gun slung across CHEST (front, opposite diagonal) -----
+  ctx.save();
+  ctx.translate(-7*px, 3*px); ctx.rotate(-0.32);
+  ctx.fillStyle='#1d1f24'; ctx.fillRect(0,-1.3*px,3*px,2.6*px);
+  ctx.fillStyle='#3a3f47'; ctx.fillRect(3*px,-1.5*px,6*px,3*px);
+  ctx.fillStyle='#2b2f36'; ctx.fillRect(9*px,-1*px,8*px,2*px);
+  ctx.fillStyle='#4a4f57'; ctx.fillRect(9*px,-1*px,8*px,0.7*px);
+  ctx.fillStyle='#23231f'; ctx.fillRect(4.5*px,1.5*px,2*px,3.5*px);
+  ctx.fillStyle='#15171b'; ctx.fillRect(16.6*px,-0.7*px,1.4*px,1.4*px);
+  ctx.restore();
 
   ctx.restore();
 }
