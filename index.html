@@ -5776,12 +5776,17 @@ function xuYihuiMuzzle(px, x, y, aim){
   };
 }
 
-// Benjamin Wu character renderer — kept verbatim from the user-supplied
-// drawBenjaminWu.js. Body is head-up via MAP; both LEFT-hand flamethrower
-// (pivot -4*px, 3*px) and RIGHT-hand handgun (pivot 7*px, 1*px) rotate by
-// aimAngle. `firing` toggles the flame visual at the flamethrower nozzle
-// (in-game: wired to mouse.rdown && fuel > 0 && rmbLockT <= 0; card: true).
-function drawBenjaminWu(ctx, x, y, aimAngle, px = 3, firing = true) {
+// Benjamin Wu character renderer — body+flamethrower kept verbatim from the
+// user-supplied drawBenjaminWu.js. The LEFT-hand flamethrower (pivot
+// -4*px, 3*px) always rotates by `aimAngle`; the RIGHT-hand handgun
+// (pivot 7*px, 1*px) rotates by `handgunAngle`, which defaults to
+// `aimAngle` so all in-game calls behave EXACTLY as the original
+// function (both weapons swivel together). The character-select card
+// passes a different `handgunAngle` so the two weapons point to opposite
+// sides on the card while staying locked-together in-game (user request).
+// `firing` toggles the flame visual at the flamethrower nozzle (in-game:
+// wired to mouse.rdown && fuel > 0 && rmbLockT <= 0; card: true).
+function drawBenjaminWu(ctx, x, y, aimAngle, px = 3, firing = true, handgunAngle = aimAngle) {
   const MAP = [
     "...HHHHHHHH...","..HHHHHHHHHH..","..HhHHHHHHhH..","..HHVVVVVVHH..",
     "...HSSSSSSH...","...hSSSSSSh...","...HHHHHHHH...","..AppAAAAppA..",
@@ -5843,7 +5848,7 @@ function drawBenjaminWu(ctx, x, y, aimAngle, px = 3, firing = true) {
 
   // RIGHT hand: handgun (aims)
   ctx.save();
-  ctx.translate(7*px, 1*px); ctx.rotate(aimAngle);
+  ctx.translate(7*px, 1*px); ctx.rotate(handgunAngle);
   ctx.fillStyle = '#15140f'; ctx.fillRect(-0.4*px, -1*px, 2*px, 2.4*px);
   ctx.fillStyle = '#3a3f47'; ctx.fillRect(1.4*px, -1*px, 3.5*px, 2*px);
   ctx.fillStyle = '#2b2f36'; ctx.fillRect(4.9*px, -0.5*px, 2*px, 1*px);
@@ -7226,10 +7231,14 @@ function drawCharacterSelect(){
       // still swivel together via the single-arg call in drawPlayer.
       drawXuYihui(ctx, r.x + r.w / 2, r.y + 46, Math.PI, XU_YIHUI_PX, 0);
     } else if(key === 'tank'){
-      // Benjamin Wu — bespoke renderer. firing=true so the flame visual at
-      // the flamethrower nozzle is visible during character selection.
-      // aimAngle=0 puts both weapons to the right, matching Dr. Syed's card.
-      drawBenjaminWu(ctx, r.x + r.w / 2, r.y + 46, 0, BENJAMIN_WU_PX, true);
+      // Benjamin Wu — bespoke renderer. Card-only pose: flamethrower (pivot
+      // left of center) points LEFT and the handgun (pivot right of center)
+      // points RIGHT, so the two weapons fan outward to their respective
+      // sides — same convention as the Xu Yihui card. In-game both still
+      // swivel together via the 5-arg call in drawPlayer. firing=true so
+      // the flame visual at the flamethrower nozzle is visible during
+      // character selection.
+      drawBenjaminWu(ctx, r.x + r.w / 2, r.y + 46, Math.PI, BENJAMIN_WU_PX, true, 0);
     } else {
       // Floor-plan preview: same renderer as in-game (drawCharacterFloorPlan), drawn
       // head-up — no rotation needed since the sprite's local frame already has the
