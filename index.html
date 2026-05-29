@@ -5511,6 +5511,100 @@ function drawGame(){
   ctx.globalAlpha = 1;
 }
 
+// Stacked-fillRect "floor plan" character body. Caller is responsible for the
+// surrounding ctx.save/translate/rotate/scale — this function only draws rects
+// in the character's LOCAL frame (origin at sprite center, +y axis = forward).
+// Used by drawPlayer (with rotation tracking the cursor) AND drawCharacterSelect
+// (head-up, no rotation). Keep the two render paths in sync via this one body.
+function drawCharacterFloorPlan(ctx, charKey){
+  // *** Dr. Syed (The Soldier) ***
+  if (charKey === 'soldier') {
+    ctx.fillStyle = '#0d2b0d'; // Dark Green Fatigues
+    ctx.fillRect(-12, -25, 24, 20); // Main Body
+    ctx.fillRect(-18, -15, 6, 10);  // Left Shoulder
+    ctx.fillRect(12, -15, 6, 10);   // Right Shoulder
+    ctx.fillStyle = '#4a2b16'; // Brown Wood Spear
+    ctx.fillRect(13, -15, 4, 50);   // Spear Shaft
+    ctx.fillStyle = '#808080'; // Grey Metal Tip
+    ctx.fillRect(12, 35, 6, 10);    // Spear Tip
+    ctx.fillStyle = '#0d2b0d'; // Dark Green Helmet
+    ctx.fillRect(-10, -10, 20, 20); // Head
+    ctx.fillStyle = '#8a6347'; // Skin Tone
+    ctx.fillRect(-6, 6, 12, 4);     // Face visible from above
+  }
+  // *** Xu Yihui (The Scout) ***
+  else if (charKey === 'scout') {
+    ctx.fillStyle = '#2a2a2a'; // Dark Grey Suit
+    ctx.fillRect(-15, -30, 30, 20); // Body
+    ctx.fillStyle = '#ffcc99'; // Skin Tone (Hands)
+    ctx.fillRect(-18, -18, 6, 6);   // Left Hand
+    ctx.fillRect(12, -18, 6, 6);    // Right Hand
+    ctx.fillStyle = '#808080'; // Gunmetal Grey SMG
+    ctx.fillRect(13, -18, 5, 25);   // SMG body
+    ctx.fillRect(11, 7, 9, 3);      // SMG Stock
+    ctx.fillStyle = '#1a1a1a'; // Black Helmet
+    ctx.fillRect(-10, -10, 20, 20); // Head
+    ctx.fillStyle = '#00ffff'; // Neon Cyan
+    ctx.fillRect(-6, 4, 12, 6);     // Visor
+  }
+  // *** Benjamin Wu (The Tank) ***
+  else if (charKey === 'tank') {
+    ctx.fillStyle = '#2a2a2a'; // Dark Bluish Gray
+    ctx.fillRect(-25, -45, 50, 40); // Wide Body
+    ctx.fillStyle = '#ff4500'; // Orange Vents
+    ctx.fillRect(-22, -42, 6, 6);   // Left Vent
+    ctx.fillRect(16, -42, 6, 6);    // Right Vent
+    ctx.fillStyle = '#1a1a1a'; // Dark Grey Helmet
+    ctx.fillRect(-15, -15, 30, 30); // Large Head
+    ctx.fillStyle = '#ff0000'; // Red Visor
+    ctx.fillRect(-10, 8, 20, 5);
+    ctx.fillStyle = '#4f4f4f'; // Medium Grey Flamethrower
+    ctx.fillRect(20, -20, 10, 60);
+  }
+  // *** Leo (The Bounty Hunter) ***
+  else if (charKey === 'bounty_hunter') {
+    ctx.fillStyle = '#4a2b16'; // Reddish Brown Coat
+    ctx.fillRect(-20, -35, 40, 25); // Broad Shoulders
+    ctx.fillRect(-25, -25, 5, 10);  // Left side flare
+    ctx.fillRect(20, -25, 5, 10);   // Right side flare
+    ctx.fillStyle = '#3a3a3a'; // Dark Grey Gloves
+    ctx.fillRect(-18, -18, 6, 6);
+    ctx.fillRect(12, -18, 6, 6);
+    ctx.fillStyle = '#808080'; // Silver Shotgun
+    ctx.fillRect(12, -18, 4, 35);   // Left Barrel
+    ctx.fillRect(16, -18, 4, 35);   // Right Barrel
+    ctx.fillStyle = '#3f3f3f'; // Hat Brim
+    ctx.fillRect(-16, -16, 32, 32);
+    ctx.fillStyle = '#2e2e2e'; // Hat Crown
+    ctx.fillRect(-10, -10, 20, 20);
+  }
+  // *** Ong (The Cyborg) ***
+  else if (charKey === 'cyborg') {
+    ctx.fillStyle = '#ffcc99'; // Skin Tone (Left Body)
+    ctx.fillRect(-15, -30, 15, 20);
+    ctx.fillStyle = '#c0c0c0'; // Silver Chrome (Right Body)
+    ctx.fillRect(0, -30, 15, 20);
+    ctx.fillStyle = '#39ff14'; // Toxic Green Tank
+    ctx.fillRect(-12, -40, 8, 8);
+    ctx.fillStyle = '#ff4500'; // Red dot detail
+    ctx.fillRect(-10, -38, 4, 4);
+    ctx.fillStyle = '#ffcc99'; // Left Arm (Skin)
+    ctx.fillRect(-18, -18, 6, 6);
+    ctx.fillStyle = '#c0c0c0'; // Right Arm (Silver)
+    ctx.fillRect(12, -18, 6, 6);
+    ctx.fillStyle = '#808080'; // Grey Pistol
+    ctx.fillRect(12, -18, 6, 25);
+    ctx.fillStyle = '#ffcc99'; // Left Head (Skin)
+    ctx.fillRect(-10, -10, 10, 20);
+    ctx.fillStyle = '#c0c0c0'; // Right Head (Silver)
+    ctx.fillRect(0, -10, 10, 20);
+    ctx.fillStyle = '#000000'; // Left Eye
+    ctx.fillRect(-5, 6, 3, 3);
+    ctx.fillStyle = '#ff0000'; // Right Cyber-Eye
+    ctx.fillRect(2, 6, 6, 3);
+  }
+}
+
 function drawPlayer(p){
   if(p.invuln > 0 && Math.floor(p.invuln * 18) % 2) return;
   // Syed's SPEAR (RMB): a wooden-handled rainforest spear making swift consecutive
@@ -5584,92 +5678,7 @@ function drawPlayer(p){
   ctx.translate(p.x, p.y);
   ctx.rotate(p.angle - Math.PI / 2);
   ctx.scale(0.4, 0.4);
-  // *** Dr. Syed (The Soldier) ***
-  if (p.char === 'soldier') {
-    ctx.fillStyle = '#0d2b0d'; // Dark Green Fatigues
-    ctx.fillRect(-12, -25, 24, 20); // Main Body
-    ctx.fillRect(-18, -15, 6, 10);  // Left Shoulder
-    ctx.fillRect(12, -15, 6, 10);   // Right Shoulder
-    ctx.fillStyle = '#4a2b16'; // Brown Wood Spear
-    ctx.fillRect(13, -15, 4, 50);   // Spear Shaft
-    ctx.fillStyle = '#808080'; // Grey Metal Tip
-    ctx.fillRect(12, 35, 6, 10);    // Spear Tip
-    ctx.fillStyle = '#0d2b0d'; // Dark Green Helmet
-    ctx.fillRect(-10, -10, 20, 20); // Head
-    ctx.fillStyle = '#8a6347'; // Skin Tone
-    ctx.fillRect(-6, 6, 12, 4);     // Face visible from above
-  }
-  // *** Xu Yihui (The Scout) ***
-  else if (p.char === 'scout') {
-    ctx.fillStyle = '#2a2a2a'; // Dark Grey Suit
-    ctx.fillRect(-15, -30, 30, 20); // Body
-    ctx.fillStyle = '#ffcc99'; // Skin Tone (Hands)
-    ctx.fillRect(-18, -18, 6, 6);   // Left Hand
-    ctx.fillRect(12, -18, 6, 6);    // Right Hand
-    ctx.fillStyle = '#808080'; // Gunmetal Grey SMG
-    ctx.fillRect(13, -18, 5, 25);   // SMG body
-    ctx.fillRect(11, 7, 9, 3);      // SMG Stock
-    ctx.fillStyle = '#1a1a1a'; // Black Helmet
-    ctx.fillRect(-10, -10, 20, 20); // Head
-    ctx.fillStyle = '#00ffff'; // Neon Cyan
-    ctx.fillRect(-6, 4, 12, 6);     // Visor
-  }
-  // *** Benjamin Wu (The Tank) ***
-  else if (p.char === 'tank') {
-    ctx.fillStyle = '#2a2a2a'; // Dark Bluish Gray
-    ctx.fillRect(-25, -45, 50, 40); // Wide Body
-    ctx.fillStyle = '#ff4500'; // Orange Vents
-    ctx.fillRect(-22, -42, 6, 6);   // Left Vent
-    ctx.fillRect(16, -42, 6, 6);    // Right Vent
-    ctx.fillStyle = '#1a1a1a'; // Dark Grey Helmet
-    ctx.fillRect(-15, -15, 30, 30); // Large Head
-    ctx.fillStyle = '#ff0000'; // Red Visor
-    ctx.fillRect(-10, 8, 20, 5);
-    ctx.fillStyle = '#4f4f4f'; // Medium Grey Flamethrower
-    ctx.fillRect(20, -20, 10, 60);
-  }
-  // *** Leo (The Bounty Hunter) ***
-  else if (p.char === 'bounty_hunter') {
-    ctx.fillStyle = '#4a2b16'; // Reddish Brown Coat
-    ctx.fillRect(-20, -35, 40, 25); // Broad Shoulders
-    ctx.fillRect(-25, -25, 5, 10);  // Left side flare
-    ctx.fillRect(20, -25, 5, 10);   // Right side flare
-    ctx.fillStyle = '#3a3a3a'; // Dark Grey Gloves
-    ctx.fillRect(-18, -18, 6, 6);
-    ctx.fillRect(12, -18, 6, 6);
-    ctx.fillStyle = '#808080'; // Silver Shotgun
-    ctx.fillRect(12, -18, 4, 35);   // Left Barrel
-    ctx.fillRect(16, -18, 4, 35);   // Right Barrel
-    ctx.fillStyle = '#3f3f3f'; // Hat Brim
-    ctx.fillRect(-16, -16, 32, 32);
-    ctx.fillStyle = '#2e2e2e'; // Hat Crown
-    ctx.fillRect(-10, -10, 20, 20);
-  }
-  // *** Ong (The Cyborg) ***
-  else if (p.char === 'cyborg') {
-    ctx.fillStyle = '#ffcc99'; // Skin Tone (Left Body)
-    ctx.fillRect(-15, -30, 15, 20);
-    ctx.fillStyle = '#c0c0c0'; // Silver Chrome (Right Body)
-    ctx.fillRect(0, -30, 15, 20);
-    ctx.fillStyle = '#39ff14'; // Toxic Green Tank
-    ctx.fillRect(-12, -40, 8, 8);
-    ctx.fillStyle = '#ff4500'; // Red dot detail
-    ctx.fillRect(-10, -38, 4, 4);
-    ctx.fillStyle = '#ffcc99'; // Left Arm (Skin)
-    ctx.fillRect(-18, -18, 6, 6);
-    ctx.fillStyle = '#c0c0c0'; // Right Arm (Silver)
-    ctx.fillRect(12, -18, 6, 6);
-    ctx.fillStyle = '#808080'; // Grey Pistol
-    ctx.fillRect(12, -18, 6, 25);
-    ctx.fillStyle = '#ffcc99'; // Left Head (Skin)
-    ctx.fillRect(-10, -10, 10, 20);
-    ctx.fillStyle = '#c0c0c0'; // Right Head (Silver)
-    ctx.fillRect(0, -10, 10, 20);
-    ctx.fillStyle = '#000000'; // Left Eye
-    ctx.fillRect(-5, 6, 3, 3);
-    ctx.fillStyle = '#ff0000'; // Right Cyber-Eye
-    ctx.fillRect(2, 6, 6, 3);
-  }
+  drawCharacterFloorPlan(ctx, p.char);
   ctx.restore();
   // Shield ring
   if(p.shieldHp > 0){
@@ -6932,12 +6941,15 @@ function drawCharacterSelect(){
     ctx.font = 'bold 11px monospace';
     ctx.fillText(ch.name, r.x + r.w / 2, r.y + 17);
 
-    // Pixel-sprite preview: enlarged + rotated to face UP (toward the top of the card).
-    // Subtracting `ch.faceOffset` cancels the in-game offset so head-up sprites stay
-    // head-up here and east-facing sprites still rotate -90° to head-up. `cardPx`
-    // lets a denser sprite shrink its cell size to fit the 88px-wide card slot.
-    drawPixelSprite(ctx, ch.sprite, r.x + r.w / 2, r.y + 46,
-                    ch.cardPx || ch.px || 3, -Math.PI / 2 - (ch.faceOffset || 0), null, ch.pal);
+    // Floor-plan preview: same renderer as in-game (drawCharacterFloorPlan), drawn
+    // head-up — no rotation needed since the sprite's local frame already has the
+    // body north of origin / weapons extending south. Scale matches the in-game 0.4
+    // so the card preview reads at the same size the character will play at.
+    ctx.save();
+    ctx.translate(r.x + r.w / 2, r.y + 46);
+    ctx.scale(0.4, 0.4);
+    drawCharacterFloorPlan(ctx, key);
+    ctx.restore();
 
     // Stats — laid out sequentially so optional rows (DMG/SHIELD/pool) never overlap.
     ctx.font = 'bold 7px monospace';
