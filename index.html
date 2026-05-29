@@ -5689,11 +5689,14 @@ function drSyedMuzzle(px, x, y, aim){
   };
 }
 
-// Xu Yihui character renderer — kept verbatim from the user-supplied
-// drawXuYihui.js. Body is drawn head-up via the MAP; the larger laser cannon
-// (pivot -3*px, 2*px) AND the smaller pistol (pivot 7*px, -1*px) both rotate
-// by aimAngle. Body never rotates — same convention as drawDrSyed.
-function drawXuYihui(ctx, x, y, aimAngle, px = 3) {
+// Xu Yihui character renderer — body+cannon kept verbatim from the user-supplied
+// drawXuYihui.js. The big laser cannon (pivot -3*px, 2*px) always rotates by
+// `aimAngle`; the smaller pistol (pivot 7*px, -1*px) rotates by `pistolAngle`,
+// which defaults to `aimAngle` so all in-game calls behave EXACTLY as the
+// original function (both weapons swivel together). The character-select card
+// passes a different `pistolAngle` so the two weapons point to opposite sides
+// on the card while staying locked-together in-game (user request).
+function drawXuYihui(ctx, x, y, aimAngle, px = 3, pistolAngle = aimAngle) {
   const MAP = [
     "...AAAAAAAA...","..AaAAAAAAaA..","..AAVVVVVVAA..","..AVvvvvvvVA..",
     "..AVvvvvvvVA..","..AAVVVVVVAA..","...AaSSSSaA...","..AAaAAAAaAA..",
@@ -5743,7 +5746,7 @@ function drawXuYihui(ctx, x, y, aimAngle, px = 3) {
   ctx.restore();
 
   ctx.save();
-  ctx.translate(7*px, -1*px); ctx.rotate(aimAngle);
+  ctx.translate(7*px, -1*px); ctx.rotate(pistolAngle);
   ctx.fillStyle = '#0e1622'; ctx.fillRect(-0.4*px, -1*px, 2*px, 2.4*px);
   ctx.fillStyle = '#1f6fe0'; ctx.fillRect(1.4*px, -1*px, 4.5*px, 2*px);
   ctx.fillStyle = '#7fd4ff'; ctx.fillRect(2*px, -0.4*px, 3.5*px, 0.8*px);
@@ -7118,8 +7121,11 @@ function drawCharacterSelect(){
       // character's right, a natural "ready" pose.
       drawDrSyed(ctx, r.x + r.w / 2, r.y + 46, 0, DR_SYED_PX);
     } else if(key === 'scout'){
-      // Xu Yihui — bespoke renderer; same convention as Dr. Syed.
-      drawXuYihui(ctx, r.x + r.w / 2, r.y + 46, 0, XU_YIHUI_PX);
+      // Xu Yihui — bespoke renderer. Card-only pose: cannon (pivot left of
+      // center) points LEFT, pistol (pivot right of center) points RIGHT, so
+      // the two weapons fan outward to their respective sides. In-game both
+      // still swivel together via the single-arg call in drawPlayer.
+      drawXuYihui(ctx, r.x + r.w / 2, r.y + 46, Math.PI, XU_YIHUI_PX, 0);
     } else {
       // Floor-plan preview: same renderer as in-game (drawCharacterFloorPlan), drawn
       // head-up — no rotation needed since the sprite's local frame already has the
