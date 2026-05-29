@@ -5707,11 +5707,19 @@ function drawDrSyed(ctx, x, y, aimAngle, px = 5) {
   ctx.ellipse(0, h/2 - px, w*0.42, px*1.6, 0, 0, Math.PI*2);
   ctx.fill();
 
+  // Slung AK-47 across the chest — diagonally rotated -0.9 rad. Same pivot
+  // and rotation as the original small slung rifle, but redrawn with a
+  // proper AK silhouette (wooden stock + grey receiver + long barrel +
+  // banana mag + muzzle device) so the in-game Dr. Syed visibly carries
+  // an AK-47, matching the AK in his CHOOSE-YOUR-CHARACTER card pose.
   ctx.save();
   ctx.translate(0, 2*px); ctx.rotate(-0.9);
-  ctx.fillStyle = '#a8823f'; ctx.fillRect(-2*px, -1*px, 4*px, 2*px);
-  ctx.fillStyle = '#8f9aa6'; ctx.fillRect(2*px, -0.9*px, 7*px, 1.8*px);
-  ctx.fillStyle = '#5e6772'; ctx.fillRect(3*px, 0.9*px, 1.8*px, 2.6*px);
+  ctx.fillStyle = '#4a3520'; ctx.fillRect(-5*px,   -1*px,   2.5*px, 2*px);    // wooden stock (rear)
+  ctx.fillStyle = '#8f9aa6'; ctx.fillRect(-2.5*px, -1*px,   5*px,   2*px);    // receiver body (grey)
+  ctx.fillStyle = '#6e7884'; ctx.fillRect(-2.5*px, -1*px,   5*px,   0.6*px);  // top stripe
+  ctx.fillStyle = '#5e6772'; ctx.fillRect( 2.5*px, -0.7*px, 4.5*px, 1.4*px);  // barrel
+  ctx.fillStyle = '#3a2c18'; ctx.fillRect(-1*px,    1*px,   1.8*px, 2.8*px);  // banana magazine
+  ctx.fillStyle = '#15171b'; ctx.fillRect( 7*px,   -0.5*px, 1*px,   1*px);    // muzzle device
   ctx.restore();
 
   const ox = -w/2, oy = -h/2;
