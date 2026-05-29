@@ -2945,8 +2945,10 @@ function updatePlaying(dt){
     // other class fires from the centerline forward muzzle.
     let mx, my;
     if(player.char === 'scout'){
-      mx = player.x + Math.cos(a) * 8 + Math.sin(a) * 7;
-      my = player.y + Math.sin(a) * 8 - Math.cos(a) * 7;
+      // Xu Yihui fires from the smaller pistol's barrel tip per the user's
+      // "fire from the pistol direction" spec — see xuYihuiMuzzle / drawXuYihui.
+      const m = xuYihuiMuzzle(XU_YIHUI_PX, player.x, player.y, a);
+      mx = m.x; my = m.y;
     } else if(player.char === 'soldier'){
       // Dr. Syed fires from the Uzi barrel tip — see drSyedMuzzle / drawDrSyed.
       const m = drSyedMuzzle(DR_SYED_PX, player.x, player.y, a);
@@ -5687,6 +5689,85 @@ function drSyedMuzzle(px, x, y, aim){
   };
 }
 
+// Xu Yihui character renderer — kept verbatim from the user-supplied
+// drawXuYihui.js. Body is drawn head-up via the MAP; the larger laser cannon
+// (pivot -3*px, 2*px) AND the smaller pistol (pivot 7*px, -1*px) both rotate
+// by aimAngle. Body never rotates — same convention as drawDrSyed.
+function drawXuYihui(ctx, x, y, aimAngle, px = 3) {
+  const MAP = [
+    "...AAAAAAAA...","..AaAAAAAAaA..","..AAVVVVVVAA..","..AVvvvvvvVA..",
+    "..AVvvvvvvVA..","..AAVVVVVVAA..","...AaSSSSaA...","..AAaAAAAaAA..",
+    ".AcAAAAAAAAcA.",".AAAaccccaAAA.",".AAaccNNccaAA.",".AAaccNNccaAA.",
+    ".AAAaccccaAAA.",".AAcAAAAAAcAA.","GAAAaaaaaaAAAG",".AALLaaaaLLAA.",
+    ".AALLaAAaLLAA.",".AcLLaAAaLLcA.",".AALLaaaaLLAA.","..GGc....cGG..","..GGG....GGG..",
+  ];
+  const C = { V:'#173a5c', v:'#6fe0ff', A:'#2a63c8', a:'#163a82',
+              c:'#36d6ff', N:'#cffaff', S:'#caa078', G:'#0c1420', L:'#3a78d8', l:'#1d4690' };
+  const tt = (typeof performance !== 'undefined' ? performance.now() : Date.now()) * 0.005;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.imageSmoothingEnabled = false;
+  const cols = MAP[0].length, rows = MAP.length, w = cols*px, h = rows*px;
+
+  ctx.fillStyle = 'rgba(0,0,0,.4)';
+  ctx.beginPath();
+  ctx.ellipse(0, h/2 - px, w*0.40, px*1.6, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  const pulse = 0.35 + 0.22*Math.sin(tt);
+  ctx.fillStyle = 'rgba(54,214,255,' + pulse + ')';
+  ctx.beginPath();
+  ctx.arc(0, -0.5*px, 3.2*px, 0, Math.PI*2);
+  ctx.fill();
+
+  const ox = -w/2, oy = -h/2;
+  for (let r = 0; r < rows; r++) {
+    const row = MAP[r];
+    for (let c = 0; c < cols; c++) {
+      const ch = row[c];
+      if (ch === ' ' || ch === '.') continue;
+      ctx.fillStyle = C[ch] || '#f0f';
+      ctx.fillRect(ox + c*px, oy + r*px, px, px);
+    }
+  }
+
+  ctx.save();
+  ctx.translate(-3*px, 2*px); ctx.rotate(aimAngle);
+  ctx.fillStyle = '#1f6fe0'; ctx.fillRect(-2*px, -2.6*px, 12*px, 5.2*px);
+  ctx.fillStyle = '#3a9bff'; ctx.fillRect(0, -1.8*px, 8*px, 3.6*px);
+  ctx.fillStyle = '#0d3a8a'; ctx.fillRect(10*px, -1.8*px, 4*px, 3.6*px);
+  ctx.fillStyle = '#7fd4ff'; ctx.fillRect(2*px, -0.7*px, 6*px, 1.4*px);
+  ctx.fillStyle = '#36d6ff'; ctx.fillRect(1*px, 2*px, 2*px, 1*px); ctx.fillRect(4*px, 2*px, 2*px, 1*px);
+  ctx.fillStyle = '#d6f4ff'; ctx.fillRect(13*px, -0.9*px, 1.8*px, 1.8*px);
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(7*px, -1*px); ctx.rotate(aimAngle);
+  ctx.fillStyle = '#0e1622'; ctx.fillRect(-0.4*px, -1*px, 2*px, 2.4*px);
+  ctx.fillStyle = '#1f6fe0'; ctx.fillRect(1.4*px, -1*px, 4.5*px, 2*px);
+  ctx.fillStyle = '#7fd4ff'; ctx.fillRect(2*px, -0.4*px, 3.5*px, 0.8*px);
+  ctx.fillStyle = '#0d3a8a'; ctx.fillRect(5.9*px, -0.6*px, 2.5*px, 1.2*px);
+  ctx.fillStyle = '#d6f4ff'; ctx.fillRect(8.1*px, -0.5*px, 1*px, 1*px);
+  ctx.restore();
+
+  ctx.restore();
+}
+
+// Pistol-tip world position for Xu Yihui. drawXuYihui's pistol (the SMALL,
+// second weapon) sits at canvas-fixed offset (7*px, -1*px) from player
+// center and extends 9.1*px further along aimAngle from that pivot
+// (8.1*px + the 1*px muzzle-dot to the front edge). LMB fires from here per
+// the user's "fire from the pistol direction" spec. Same px as Dr. Syed so
+// the two playable visuals stay matched in scale.
+const XU_YIHUI_PX = DR_SYED_PX;
+function xuYihuiMuzzle(px, x, y, aim){
+  return {
+    x: x + 7 * px + 9.1 * px * Math.cos(aim),
+    y: y - 1 * px + 9.1 * px * Math.sin(aim),
+  };
+}
+
 function drawPlayer(p){
   if(p.invuln > 0 && Math.floor(p.invuln * 18) % 2) return;
   // Syed's SPEAR (RMB): a wooden-handled rainforest spear making swift consecutive
@@ -5759,6 +5840,9 @@ function drawPlayer(p){
   if(p.char === 'soldier'){
     // Dr. Syed has his own renderer — body always head-up, only the Uzi rotates by aim.
     drawDrSyed(ctx, p.x, p.y, p.angle, DR_SYED_PX);
+  } else if(p.char === 'scout'){
+    // Xu Yihui — same convention: body head-up, weapons rotate by aim.
+    drawXuYihui(ctx, p.x, p.y, p.angle, XU_YIHUI_PX);
   } else {
     ctx.save();
     ctx.translate(p.x, p.y);
@@ -7033,6 +7117,9 @@ function drawCharacterSelect(){
       // honestly previews the in-game size. aimAngle=0 puts the Uzi to the
       // character's right, a natural "ready" pose.
       drawDrSyed(ctx, r.x + r.w / 2, r.y + 46, 0, DR_SYED_PX);
+    } else if(key === 'scout'){
+      // Xu Yihui — bespoke renderer; same convention as Dr. Syed.
+      drawXuYihui(ctx, r.x + r.w / 2, r.y + 46, 0, XU_YIHUI_PX);
     } else {
       // Floor-plan preview: same renderer as in-game (drawCharacterFloorPlan), drawn
       // head-up — no rotation needed since the sprite's local frame already has the
