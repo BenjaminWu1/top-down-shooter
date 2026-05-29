@@ -5676,7 +5676,7 @@ function drawPlayer(p){
   // by the character-select card preview, so don't delete them.
   ctx.save();
   ctx.translate(p.x, p.y);
-  ctx.rotate(p.angle - Math.PI / 2);
+  ctx.rotate(p.angle + Math.PI / 2);   // was p.angle - PI/2; +PI rotates the whole sprite 180°
   ctx.scale(0.4, 0.4);
   drawCharacterFloorPlan(ctx, p.char);
   ctx.restore();
@@ -6947,6 +6947,7 @@ function drawCharacterSelect(){
     // so the card preview reads at the same size the character will play at.
     ctx.save();
     ctx.translate(r.x + r.w / 2, r.y + 46);
+    ctx.rotate(Math.PI);   // mirror the in-game 180° rotation so card matches gameplay
     ctx.scale(0.4, 0.4);
     drawCharacterFloorPlan(ctx, key);
     ctx.restore();
