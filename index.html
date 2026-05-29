@@ -1568,7 +1568,7 @@ function assistantEvoBlurb(key, level){
 // class-unique slot (slowmo / wall); the optional V slot is Tank-only. ----
 const CHARACTERS = {
   soldier: {
-    name:'Dr.Syed', desc:'RAINFOREST WARRIOR · SPEAR (RMB) · ENERGY POOL',
+    name:'Dr. Syed', desc:'RAINFOREST WARRIOR · SPEAR (RMB) · ENERGY POOL',
     color:'#3498db', hp:10, speed:156, damageMult:1.25, startShield:0,
     skills:{ x:'sprint', c:'flameburst', v:'barrage', f:'heal', b:'invuln' },
     skillLabels:{ x:'SPRINT', c:'NAPALM', v:'BARRAGE', f:'HEAL', b:'INVINC' },
@@ -2947,6 +2947,10 @@ function updatePlaying(dt){
     if(player.char === 'scout'){
       mx = player.x + Math.cos(a) * 8 + Math.sin(a) * 7;
       my = player.y + Math.sin(a) * 8 - Math.cos(a) * 7;
+    } else if(player.char === 'soldier'){
+      // Dr. Syed fires from the Uzi barrel tip — see drSyedMuzzle / drawDrSyed.
+      const m = drSyedMuzzle(DR_SYED_PX, player.x, player.y, a);
+      mx = m.x; my = m.y;
     } else {
       mx = player.x + Math.cos(a) * 7;
       my = player.y + Math.sin(a) * 7;
@@ -5605,6 +5609,84 @@ function drawCharacterFloorPlan(ctx, charKey){
   }
 }
 
+// Dr. Syed character renderer — kept verbatim from the user-supplied
+// drawDrSyed.js. Body is drawn head-up via the MAP; only the Uzi rotates by
+// aimAngle. drawPlayer (for soldier) and the soldier card both call this
+// directly with absolute (x, y); they bypass the drawCharacterFloorPlan
+// transform path used by the other four classes.
+function drawDrSyed(ctx, x, y, aimAngle, px = 5) {
+  const MAP = [
+    "....HHHHHH....","...HHHHHHHH...","..HSSSSSSSSH..","..SSSSSSSSSS..",
+    "..sSSSSSSSSs..","..SSEESSEESS..","..SSSSSSSSSS..","..sSSSMMSSSs..",
+    "...SSSSSSSS...","....SSSSSS....","..1122112211..",".11K211221122.",
+    ".22K122112211.",".12K112211221.",".221K22112211.",".221K22112211.",
+    "..PPKPPPPPPP..","..1221221221..","..2112112112..","..G11221122G..","..GG......GG..",
+  ];
+  const C = { H:'#1a120c', S:'#7a4a2b', s:'#5f3a20', E:'#0d0d0d', M:'#3a2113',
+              1:'#3a4a26', 2:'#5a6b34', 3:'#7d8c4e', P:'#2a2018', K:'#3b2c1a', G:'#1c1c1c' };
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.imageSmoothingEnabled = false;
+  const cols = MAP[0].length, rows = MAP.length, w = cols*px, h = rows*px;
+
+  ctx.fillStyle = 'rgba(0,0,0,.35)';
+  ctx.beginPath();
+  ctx.ellipse(0, h/2 - px, w*0.42, px*1.6, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  ctx.save();
+  ctx.translate(0, 2*px); ctx.rotate(-0.9);
+  ctx.fillStyle = '#a8823f'; ctx.fillRect(-2*px, -1*px, 4*px, 2*px);
+  ctx.fillStyle = '#8f9aa6'; ctx.fillRect(2*px, -0.9*px, 7*px, 1.8*px);
+  ctx.fillStyle = '#5e6772'; ctx.fillRect(3*px, 0.9*px, 1.8*px, 2.6*px);
+  ctx.restore();
+
+  const ox = -w/2, oy = -h/2;
+  for (let r = 0; r < rows; r++) {
+    const row = MAP[r];
+    for (let c = 0; c < cols; c++) {
+      const ch = row[c];
+      if (ch === ' ' || ch === '.') continue;
+      ctx.fillStyle = C[ch] || '#f0f';
+      ctx.fillRect(ox + c*px, oy + r*px, px, px);
+    }
+  }
+
+  ctx.save();
+  ctx.translate(-7*px, 2*px); ctx.rotate(-0.35);
+  ctx.strokeStyle = '#a8823f'; ctx.lineWidth = 1.8*px; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(0, 7*px); ctx.lineTo(0, -9*px); ctx.stroke();
+  ctx.fillStyle = '#7d8893';
+  ctx.beginPath();
+  ctx.moveTo(0, -12.5*px); ctx.lineTo(2*px, -8.5*px); ctx.lineTo(-2*px, -8.5*px);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(7*px, 4*px); ctx.rotate(aimAngle);
+  ctx.fillStyle = '#3a2516'; ctx.fillRect(-0.5*px, -1*px, 2*px, 2.4*px);
+  ctx.fillStyle = '#4a525c'; ctx.fillRect(1.5*px, -1*px, 3.5*px, 2*px);
+  ctx.fillStyle = '#3a4048'; ctx.fillRect(5*px, -0.5*px, 2.5*px, 1*px);
+  ctx.fillStyle = '#2e333a'; ctx.fillRect(2*px, 1.4*px, 1.2*px, 2*px);
+  ctx.fillStyle = '#6b7580'; ctx.fillRect(1.5*px, -1*px, 3.5*px, 0.4*px);
+  ctx.restore();
+
+  ctx.restore();
+}
+
+// Uzi muzzle world position for Dr. Syed. The drawDrSyed pivot for the Uzi is
+// at canvas-fixed offset (7*px, 4*px) from player center (NOT rotated by aim);
+// the barrel tip is then 7.5*px further along aimAngle from that pivot.
+// Shared between the LMB-fire muzzle origin and the muzzle-flash particle.
+const DR_SYED_PX = 3;
+function drSyedMuzzle(px, x, y, aim){
+  return {
+    x: x + 7 * px + 7.5 * px * Math.cos(aim),
+    y: y + 4 * px + 7.5 * px * Math.sin(aim),
+  };
+}
+
 function drawPlayer(p){
   if(p.invuln > 0 && Math.floor(p.invuln * 18) % 2) return;
   // Syed's SPEAR (RMB): a wooden-handled rainforest spear making swift consecutive
@@ -5674,12 +5756,17 @@ function drawPlayer(p){
   // rects crisp. Hit-flash tint dropped (the post-hit invuln blink above still
   // signals damage). drawPixelSprite + CHARACTERS[*].sprite/pal/px are still used
   // by the character-select card preview, so don't delete them.
-  ctx.save();
-  ctx.translate(p.x, p.y);
-  ctx.rotate(p.angle + Math.PI / 2);   // was p.angle - PI/2; +PI rotates the whole sprite 180°
-  ctx.scale(0.4, 0.4);
-  drawCharacterFloorPlan(ctx, p.char);
-  ctx.restore();
+  if(p.char === 'soldier'){
+    // Dr. Syed has his own renderer — body always head-up, only the Uzi rotates by aim.
+    drawDrSyed(ctx, p.x, p.y, p.angle, DR_SYED_PX);
+  } else {
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.angle + Math.PI / 2);   // was p.angle - PI/2; +PI rotates the whole sprite 180°
+    ctx.scale(0.4, 0.4);
+    drawCharacterFloorPlan(ctx, p.char);
+    ctx.restore();
+  }
   // Shield ring
   if(p.shieldHp > 0){
     ctx.strokeStyle = '#1abc9c';
@@ -6941,16 +7028,24 @@ function drawCharacterSelect(){
     ctx.font = 'bold 11px monospace';
     ctx.fillText(ch.name, r.x + r.w / 2, r.y + 17);
 
-    // Floor-plan preview: same renderer as in-game (drawCharacterFloorPlan), drawn
-    // head-up — no rotation needed since the sprite's local frame already has the
-    // body north of origin / weapons extending south. Scale matches the in-game 0.4
-    // so the card preview reads at the same size the character will play at.
-    ctx.save();
-    ctx.translate(r.x + r.w / 2, r.y + 46);
-    ctx.rotate(Math.PI);   // mirror the in-game 180° rotation so card matches gameplay
-    ctx.scale(0.4, 0.4);
-    drawCharacterFloorPlan(ctx, key);
-    ctx.restore();
+    if(key === 'soldier'){
+      // Dr. Syed uses his bespoke renderer. The 21-row tall sprite at the in-game
+      // px=3 (63 logical px tall) overlaps the card's name + stats, so use px=2
+      // on the card (42 tall) — purely a preview-fit choice. aimAngle=0 puts the
+      // Uzi to the character's right, a natural "ready" pose.
+      drawDrSyed(ctx, r.x + r.w / 2, r.y + 46, 0, 2);
+    } else {
+      // Floor-plan preview: same renderer as in-game (drawCharacterFloorPlan), drawn
+      // head-up — no rotation needed since the sprite's local frame already has the
+      // body north of origin / weapons extending south. Scale matches the in-game 0.4
+      // so the card preview reads at the same size the character will play at.
+      ctx.save();
+      ctx.translate(r.x + r.w / 2, r.y + 46);
+      ctx.rotate(Math.PI);   // mirror the in-game 180° rotation so card matches gameplay
+      ctx.scale(0.4, 0.4);
+      drawCharacterFloorPlan(ctx, key);
+      ctx.restore();
+    }
 
     // Stats — laid out sequentially so optional rows (DMG/SHIELD/pool) never overlap.
     ctx.font = 'bold 7px monospace';
