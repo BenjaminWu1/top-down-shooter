@@ -2882,7 +2882,8 @@ function update(dt){
   else if(state === STATE.CHARACTER_SELECT) handleCharacterSelect();
   else if(state === STATE.ASSISTANT_SELECT) handleAssistantSelect();
   else if(state === STATE.LEVEL_COMPLETE) handleLevelComplete();
-  else if(state === STATE.GAME_OVER || state === STATE.VICTORY) handleEndScreen();
+  else if(state === STATE.GAME_OVER) handleEndScreen();
+  else if(state === STATE.VICTORY) handleVictory();
   else if(state === STATE.PLAYING){
     // Hit-stop: a brief freeze on heavy impacts. We still decrement it (real time) and
     // keep draw() running, so the frozen frame reads as a punch of impact.
@@ -5172,6 +5173,22 @@ function handleLevelComplete(){
 }
 function handleEndScreen(){
   if(mouse.clicked && stateTime > 0.7){ state = STATE.MENU; stateTime = 0; }
+}
+// VICTORY screen: MENU returns to the menu; CONTINUE = New Game+ — a fully fresh run
+// (same character, Level 1) via startSelectedRun, which rebuilds the player with
+// createPlayer + applyLevelScaling, so NO run/combat state (HP, secondary pool, shields,
+// skill cooldowns, powerup/buff timers, allies) carries over from the finished run. The
+// persistent account PROFILE (level/xp/gold/owned skills+assistants/loadout) is untouched.
+function handleVictory(){
+  if(!mouse.clicked || stateTime < 0.7) return;
+  const btns = victoryButtons();
+  if(clickedRect(btns.menu.x, btns.menu.y, btns.menu.w, btns.menu.h)){
+    state = STATE.MENU; stateTime = 0; return;
+  }
+  if(clickedRect(btns.cont.x, btns.cont.y, btns.cont.w, btns.cont.h)){
+    selectedLevel = 0;            // restart from Level 1
+    startSelectedRun();           // fresh player; profile progression preserved
+  }
 }
 
 // ============================================================
@@ -8425,6 +8442,15 @@ function drawGameOver(){
   }
 }
 
+function victoryButtons(){
+  const bw = 96, bh = 22, gap = 10;
+  const y = H / 2 + 52;
+  const xs = Math.floor((W - (bw * 2 + gap)) / 2);
+  return {
+    menu: { x: xs, y, w: bw, h: bh },
+    cont: { x: xs + bw + gap, y, w: bw, h: bh }
+  };
+}
 function drawVictory(){
   ctx.fillStyle = 'rgba(0,0,0,0.7)';
   ctx.fillRect(0, 0, W, H);
@@ -8432,20 +8458,35 @@ function drawVictory(){
   ctx.font = 'bold 24px monospace';
   const hue = (stateTime * 60) % 360;
   ctx.fillStyle = 'hsl(' + hue + ', 75%, 60%)';
-  ctx.fillText('VICTORY!', W/2, H/2 - 18);
+  ctx.fillText('VICTORY!', W/2, H/2 - 26);
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 10px monospace';
-  ctx.fillText('All ' + LEVELS.length + ' bosses fell. The arena is yours.', W/2, H/2 + 4);
-  ctx.fillText('FINAL SCORE: ' + score, W/2, H/2 + 22);
+  ctx.fillText('All ' + LEVELS.length + ' bosses fell. The arena is yours.', W/2, H/2 - 6);
+  ctx.fillText('FINAL SCORE: ' + score, W/2, H/2 + 10);
   if(score === highScore && score > 0){
     ctx.fillStyle = '#f1c40f';
-    ctx.fillText('* NEW HIGH SCORE *', W/2, H/2 + 38);
+    ctx.fillText('* NEW HIGH SCORE *', W/2, H/2 + 26);
   }
-  if(stateTime > 0.8 && Math.floor(stateTime * 3) % 2 === 0){
-    ctx.fillStyle = '#bdc3c7';
-    ctx.font = 'bold 8px monospace';
-    ctx.fillText('< CLICK TO RETURN TO MENU >', W/2, H/2 + 60);
-  }
+  // Two buttons: MENU + CONTINUE (New Game+). Gated like handleVictory (stateTime>0.7).
+  const btns = victoryButtons();
+  const hovM = clickedRect(btns.menu.x, btns.menu.y, btns.menu.w, btns.menu.h);
+  const hovC = clickedRect(btns.cont.x, btns.cont.y, btns.cont.w, btns.cont.h);
+  ctx.fillStyle = hovM ? '#7f8c8d' : '#34495e';
+  ctx.fillRect(btns.menu.x, btns.menu.y, btns.menu.w, btns.menu.h);
+  ctx.strokeStyle = '#bdc3c7'; ctx.lineWidth = 1;
+  ctx.strokeRect(btns.menu.x + 0.5, btns.menu.y + 0.5, btns.menu.w - 1, btns.menu.h - 1);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 10px monospace';
+  ctx.fillText('MENU', btns.menu.x + btns.menu.w / 2, btns.menu.y + 15);
+
+  ctx.fillStyle = hovC ? '#27ae60' : '#1e6840';
+  ctx.fillRect(btns.cont.x, btns.cont.y, btns.cont.w, btns.cont.h);
+  ctx.strokeStyle = '#52be80';
+  ctx.strokeRect(btns.cont.x + 0.5, btns.cont.y + 0.5, btns.cont.w - 1, btns.cont.h - 1);
+  ctx.fillStyle = '#fff';
+  ctx.fillText('CONTINUE', btns.cont.x + btns.cont.w / 2, btns.cont.y + 15);
+  ctx.font = 'bold 7px monospace';
+  ctx.fillStyle = '#95a5a6';
+  ctx.fillText('CONTINUE = fresh run from Level 1 (your account level/gold/skills are kept)', W/2, btns.cont.y + btns.cont.h + 11);
 }
 
 // ============================================================
