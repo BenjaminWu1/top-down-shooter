@@ -2681,6 +2681,21 @@ function spawnBoss(kind){
   b.hp = Math.ceil(b.hp * bossHpScale(levelIdx));
   b.maxHp = b.hp;
   b.speed = b.speed * bossSpdScale(levelIdx);
+  // Size by ROLE so the silhouette reads the hierarchy at a glance:
+  // end boss > transitional = medium > regular, with a hard CAP so even the final
+  // boss still fits/scrolls in the viewport. Per-kind base radii vary a lot (phantom
+  // r9 vs warden r12), so role FLOORS — not a flat multiplier — guarantee the order.
+  // (trans and medium share the same size band, so role-detection ambiguity between
+  // them is harmless.) drawScaleRole keeps the rendered sprite proportional.
+  const baseR = b.radius;
+  const role = (kind === levelData.boss) ? 'end'
+             : (kind === levelData.transBoss) ? 'trans' : 'medium';
+  b.bossRole = role;
+  const RS = { end:{ floor:18, mul:1.45, cap:24 },
+               trans:{ floor:14, mul:1.3, cap:19 },
+               medium:{ floor:14, mul:1.3, cap:19 } }[role];
+  b.radius = Math.min(RS.cap, Math.max(RS.floor, Math.round(baseR * RS.mul)));
+  b.drawScaleRole = b.radius / baseR;
   entities.push(b);
   // Flash the name of the boss that just arrived. The end boss uses the level's
   // bossName override; a mid-boss (different kind) uses its own BOSS_NAMES entry.
@@ -6594,7 +6609,7 @@ function drawEnemy(e){
   // Elites draw ~1.5x bigger so the sprite roughly matches the enlarged hitbox.
   // Elites draw ~1.5x bigger; bosses gently "breathe" (subtle scale pulse) so they
   // feel alive without needing a second hand-drawn frame.
-  const drawScale = e.elite ? 1.5 : (e.isBoss ? 1 + 0.05 * Math.sin(stateTime * 3) : 1);
+  const drawScale = e.elite ? 1.5 : (e.isBoss ? (e.drawScaleRole || 1) * (1 + 0.05 * Math.sin(stateTime * 3)) : 1);
   if(drawScale !== 1){ ctx.save(); ctx.translate(e.x, e.y); ctx.scale(drawScale, drawScale); ctx.translate(-e.x, -e.y); }
   if(e.invulnT > 0 && Math.floor(stateTime * 20) % 2){
     // Brief-invincibility shield: flash the boss blue (it's absorbing all damage).
