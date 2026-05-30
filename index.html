@@ -1305,6 +1305,9 @@ let score = 0;
 let highScore = parseInt(localStorage.getItem('shooter_high') || '0', 10);
 // Screen shake fully removed — the camera/UI stay perfectly stable at all times.
 let hitStopTime = 0;       // brief global freeze (skip updatePlaying, keep drawing) on heavy impacts
+let hitStopCd = 0;         // refractory between freezes — stops rapid-fire weapons (laser/slug)
+                           // stacking a 40ms freeze every volley into a slow boss (= perceived lag)
+const HIT_STOP_REFRACTORY = 0.3;
 let stateTime = 0;
 let bossSpawnPulse = 0;
 let bossSpawnName = '';   // name shown in the boss-arrival flash (mid-boss or end boss)
@@ -2342,7 +2345,14 @@ function createPickup(x,y,kind){
 // ============================================================
 // Combat-juice helpers. hitStop briefly freezes updatePlaying while draw keeps running
 // (a time pause, NOT a camera move). spawnDecal drops a visual-only ground mark.
-function hitStop(ms){ hitStopTime = Math.max(hitStopTime, ms / 1000); }
+// Rate-limited: a freeze can't re-trigger until HIT_STOP_REFRACTORY has elapsed, so a
+// fast weapon (Scout laser @0.22s, Tank slug) poured into a tanky/slow boss punches
+// occasionally instead of freezing the sim every volley (which read as sustained lag).
+function hitStop(ms){
+  if(hitStopCd > 0) return;
+  hitStopTime = Math.max(hitStopTime, ms / 1000);
+  hitStopCd = HIT_STOP_REFRACTORY;
+}
 function spawnDecal(x, y, r, kind){
   if(decals.length >= DECAL_CAP) decals.shift();
   const life = 10;
@@ -2665,15 +2675,19 @@ function triggerSkill(name, dx, dy, mag){
 // damage never heals — the `fromPlayer`/`fromAlly` threading still gates it), and
 // the kill. Routing every hit through here makes boss brief-invincibility + the
 // lifesteal passive work at every damage source.
-function damageEnemy(en, dmg, fromPlayer){
+// `heavy` (default true) marks a DISCRETE heavy hit eligible for hit-stop. Continuous /
+// rapid-auto secondaries pass false (the held Scout laser) so they never freeze the sim
+// — same exclusion the spear/flame/machete already get for free via the dmg<3 threshold.
+function damageEnemy(en, dmg, fromPlayer, heavy = true){
   if(!en || en.dead || en._killed) return true;
   if(en.invulnT > 0){ en.hitFlash = 0.06; return true; }   // invuln boss absorbs it
   en.hp -= dmg;
   en.hitFlash = 0.09;   // brief pure-white pop (drawEnemy white-tints while > 0)
   // Hit-stop on a heavy DISCRETE hit to a boss (dmg threshold excludes the tiny
-  // per-frame ticks of continuous weapons like the spear/flame/machete, so they
-  // don't stutter the game — only shots / skills / big blasts freeze it).
-  if(en.isBoss && fromPlayer && dmg >= 3) hitStop(40);
+  // per-frame ticks of continuous weapons like the spear/flame/machete; the refractory
+  // in hitStop() stops a fast gun from stacking freezes — only spaced-out shots / skills
+  // / big blasts actually freeze it).
+  if(heavy && en.isBoss && fromPlayer && dmg >= 3) hitStop(40);
   if(fromPlayer && dmg > 0 && player.hp > 0){
     const ls = passiveValue('lifesteal');
     if(ls > 0) player.hp = Math.min(player.maxHp, player.hp + dmg * ls);
@@ -2959,7 +2973,9 @@ function update(dt){
   else if(state === STATE.VICTORY) handleVictory();
   else if(state === STATE.PLAYING){
     // Hit-stop: a brief freeze on heavy impacts. We still decrement it (real time) and
-    // keep draw() running, so the frozen frame reads as a punch of impact.
+    // keep draw() running, so the frozen frame reads as a punch of impact. The refractory
+    // ticks in real time too (even while frozen) so it gates by wall-clock, not sim time.
+    if(hitStopCd > 0) hitStopCd -= dt;
     if(hitStopTime > 0) hitStopTime -= dt;
     else if(!paused && !showStats) updatePlaying(dt);
   }
@@ -3756,7 +3772,7 @@ function fireLaserBeams(){
       const dx = en.x - px, dy = en.y - py;
       const reach = LASER_BEAM_HALF + en.radius;
       if(dx*dx + dy*dy <= reach*reach){
-        damageEnemy(en, dmg, true);
+        damageEnemy(en, dmg, true, false);   // held auto-fire beam → never hit-stops
       }
     }
     // Beam visual: a straight line from muzzle along the beam, flashing then fading.
