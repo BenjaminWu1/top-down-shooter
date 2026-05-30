@@ -1673,7 +1673,7 @@ const CHARACTERS = {
     ]
   },
   cyborg: {
-    name:'Ong', desc:'CYBORG · GAS GUN · BIO-GUN (RMB) · TOXIN',
+    name:'Ong', desc:'CYBORG · BIO-GUN · GAS GUN (RMB) · TOXIN',
     color:'#8e44ad', hp:10, speed:140, damageMult:1.15, startShield:2,
     skills:{ x:'sprint', c:'overclock', v:'biobomb', f:'heal', b:'blast' },
     skillLabels:{ x:'SPRINT', c:'OVRCLK', v:'BIOBOMB', f:'HEAL', b:'BLAST' },
@@ -2968,38 +2968,36 @@ function updatePlaying(dt){
 
   if(mouse.down && player.fireCooldown <= 0){
     const a = player.angle;
-    // Scout (Xu Yihui) fires LMB from his LEFT hand — the slim gun on the north
-    // arm of his east-facing sprite. We add a perpendicular offset (sin a, -cos a)
-    // so the muzzle visibly tracks the gun barrel as the body rotates. Every
-    // other class fires from the centerline forward muzzle.
-    let mx, my;
-    if(player.char === 'scout'){
-      // Xu Yihui fires from the smaller pistol's barrel tip per the user's
-      // "fire from the pistol direction" spec — see xuYihuiMuzzle / drawXuYihui.
-      const m = xuYihuiMuzzle(XU_YIHUI_PX, player.x, player.y, a);
-      mx = m.x; my = m.y;
-    } else if(player.char === 'soldier'){
-      // Dr. Syed fires from the Uzi barrel tip — see drSyedMuzzle / drawDrSyed.
-      const m = drSyedMuzzle(DR_SYED_PX, player.x, player.y, a);
-      mx = m.x; my = m.y;
-    } else if(player.char === 'tank'){
-      // Benjamin Wu fires from the right-hand handgun's barrel tip per the
-      // user's "bullets fire toward aim (handgun direction)" spec.
-      const m = benjaminWuMuzzle(BENJAMIN_WU_PX, player.x, player.y, a);
-      mx = m.x; my = m.y;
-    } else if(player.char === 'bounty_hunter'){
-      // Leo fires from the right-hand shotgun's barrel tip — see leoMuzzle.
-      const m = leoMuzzle(LEO_PX, player.x, player.y, a);
-      mx = m.x; my = m.y;
-    } else if(player.char === 'cyborg'){
-      // Ong fires from the right-hand gas gun's barrel tip — see ongMuzzle.
-      const m = ongMuzzle(ONG_PX, player.x, player.y, a);
-      mx = m.x; my = m.y;
+    if(player.char === 'cyborg'){
+      // Ong PRIMARY (swapped to LMB): bio-gun — lobs a glob that bursts into a
+      // lingering poison cloud (the toxic DoT). Infinite ammo, NORMAL cadence; the
+      // toxin-draining FAST gas-bolt is now the RMB secondary (see the RMB block).
+      fireBiogun();
+      player.fireCooldown = 0.4 * (player.rapidTime > 0 ? 0.5 : 1);
     } else {
-      mx = player.x + Math.cos(a) * 7;
-      my = player.y + Math.sin(a) * 7;
+      // Scout (Xu Yihui) fires LMB from his LEFT hand — the slim gun on the north
+      // arm of his east-facing sprite. We add a perpendicular offset so the muzzle
+      // visibly tracks the gun barrel as the body rotates. Every other class fires
+      // from the centerline forward muzzle.
+      let mx, my;
+      if(player.char === 'scout'){
+        const m = xuYihuiMuzzle(XU_YIHUI_PX, player.x, player.y, a);
+        mx = m.x; my = m.y;
+      } else if(player.char === 'soldier'){
+        const m = drSyedMuzzle(DR_SYED_PX, player.x, player.y, a);
+        mx = m.x; my = m.y;
+      } else if(player.char === 'tank'){
+        const m = benjaminWuMuzzle(BENJAMIN_WU_PX, player.x, player.y, a);
+        mx = m.x; my = m.y;
+      } else if(player.char === 'bounty_hunter'){
+        const m = leoMuzzle(LEO_PX, player.x, player.y, a);
+        mx = m.x; my = m.y;
+      } else {
+        mx = player.x + Math.cos(a) * 7;
+        my = player.y + Math.sin(a) * 7;
+      }
+      fireWeapon(mx, my);
     }
-    fireWeapon(mx, my);
   }
 
   // Class RMB resources slowly self-regen (capped at max) so none is fully dependent
@@ -3107,13 +3105,13 @@ function updatePlaying(dt){
       if(player.leoSlashRem <= 0){ player.leoSlashRem = 0; player.leoSlashHits = null; }
     }
   }
-  // ---- Ong's secondary: bio-gun glob (right mouse) ----
-  // Per-shot like the Scout's volley: gated by bioCd (cadence) + `toxin` (1 per shot)
-  // + the same 1s empty-lockout. Each shot lobs a glob that drops a poison cloud.
+  // ---- Ong's secondary (swapped to RMB): FAST gas-bolt, drains toxin ----
+  // Per-shot like the Scout's volley: gated by bioCd (FAST cadence) + `toxin` (1 per
+  // shot) + the same 1s empty-lockout. The cloud-lobbing bio-gun is now the LMB primary.
   if(player.char === 'cyborg' && mouse.rdown && player.rmbLockT <= 0 && player.bioCd <= 0 && player.toxin >= 1){
-    fireBiogun();
+    fireGasBolt();
     player.toxin = Math.max(0, player.toxin - 1);
-    player.bioCd = 0.5;
+    player.bioCd = 0.2;   // fast cadence (was 0.5 for the slow bio-glob)
     if(player.toxin < 1) player.rmbLockT = 1;   // drained this shot -> 1s no-fire lockout
   }
 
@@ -3572,9 +3570,27 @@ function fireBiogun(){
   const tMul = player.weaponMult || 1;   // 5-tier evolution: scales glob dmg/speed + cloud dps
   const mx = player.x + Math.cos(a) * 7, my = player.y + Math.sin(a) * 7;
   const b = createBullet(mx, my, a, 'player', { dmg: 1 * (player.damageMult || 1) * tMul, speed: 260 * tMul, radius: 3, life: 0.8, sprite: SPR.bullet_bio, glow: '#2ecc71', tier: player.weaponTier || 1, sourceClass: 'cyborg' });
-  b.spawnsCloud = true; b.cloudRadius = 24; b.cloudLife = 2; b.cloudDps = 6 * tMul; b.cloudSlow = 0;
+  // Cloud is a touch weaker than its old RMB form since the bio-gun is now Ong's
+  // INFINITE primary (LMB) — spammable, so each cloud is smaller/shorter/less DPS.
+  b.spawnsCloud = true; b.cloudRadius = 20; b.cloudLife = 1.6; b.cloudDps = 4 * tMul; b.cloudSlow = 0;
   entities.push(b);
   emit(mx, my, 4, '#27ae60', 30, 90, 0.2, true);
+  sfx.shoot();
+}
+
+// Ong's SECONDARY (swapped to RMB): a fast, direct gas-bolt that drains `toxin`.
+// Mirrors the old LMB gas-gun shot (dmg 3.4, soft-green energy glow) but on a fast
+// cadence + the toxin pool + the 1s empty-lockout (gated in updatePlaying).
+function fireGasBolt(){
+  const a = player.angle;
+  const tMul = player.weaponMult || 1;
+  const dmgMult = (player.damageTime > 0 ? 2 : 1) * (player.damageMult || 1) * tMul;
+  const m = ongMuzzle(ONG_PX, player.x, player.y, a);
+  entities.push(createBullet(m.x, m.y, a, 'player', {
+    dmg: 3.4 * dmgMult, radius: 3, speed: 280 * tMul, life: 1.0,
+    glow: '#7dff5a', tier: player.weaponTier || 1, sourceClass: 'cyborg'
+  }));
+  emit(m.x, m.y, 4, '#7dff5a', 28, 100, 0.18, true);
   sfx.shoot();
 }
 
@@ -3693,10 +3709,10 @@ function fireWeapon(mx, my){
     opts = { dmg: 1.1 * dmgMult, speed: 340, radius: 2, life: 0.45, spread: [-0.18, 0, 0.18], kind: 'pellet', kinetic: true };
     cd = 0.5; flashN = 5; flashCol = '#e67e22'; flashSpd = 120; flashLife = 0.2; fireSfx = sfx.shotgun;
   } else if(player.char === 'cyborg'){
-    // Gas gun: a green poison projectile in the aim direction. Same damage
-    // and cadence as the previous magnum slug (so balance is unchanged),
-    // but the visual switches from kinetic-railgun to a soft-green energy
-    // glow to match the new drawOngGame gas-gun sprite.
+    // FALLBACK ONLY: Ong's LMB now lobs the bio-gun glob (handled before fireWeapon is
+    // called — see the LMB dispatch), and the gas-bolt is the RMB secondary (fireGasBolt).
+    // This branch is unreachable in normal play but kept so fireWeapon never mis-fires
+    // a cyborg as a soldier; it mirrors the gas-bolt spec.
     opts = { dmg: 3.4 * dmgMult, radius: 3, speed: 280, life: 1.0, glow: '#7dff5a' };
     cd = 0.34; flashN = 4; flashCol = '#7dff5a'; flashSpd = 110; flashLife = 0.2;
   } else {
@@ -5385,7 +5401,7 @@ function drawStats(){
   if(p.char === 'scout'){ primName = 'LASER DOTS'; primDmg = 0.85 * dm; primCd = 0.06; }
   else if(p.char === 'tank'){ primName = 'HEAVY SLUG'; primDmg = 2 * dm; primCd = p.fireRate; }
   else if(p.char === 'bounty_hunter'){ primName = 'SHOTGUN x3'; primDmg = 1.1 * dm; primCd = 0.5; }
-  else if(p.char === 'cyborg'){ primName = 'GAS GUN'; primDmg = 3.4 * dm; primCd = 0.34; }
+  else if(p.char === 'cyborg'){ primName = 'BIO-GUN'; primDmg = 1 * dm; primCd = 0.4; }
   else { primName = 'PISTOL'; primDmg = 1 * dm; primCd = p.fireRate; }
   const primRate = primCd > 0 ? 1 / primCd : 0;   // shots/sec
 
@@ -5407,10 +5423,10 @@ function drawStats(){
     capLabel = 'FURY';    capVal = fmt(p.fury) + ' / ' + fmt(p.maxFury) + ' s';
     regenVal = '0.2 /s';  rmbExtra = '~103° arc · melee';
   } else if(p.char === 'cyborg'){
-    secName = 'BIO-GUN';
-    secDmg  = fmt(6 * dm) + ' DPS cloud';
+    secName = 'GAS GUN';
+    secDmg  = fmt(3.4 * dm) + ' /shot';
     capLabel = 'TOXIN';   capVal = fmt(p.toxin) + ' / ' + fmt(p.maxToxin) + ' shots';
-    regenVal = '0.6 /s';  rmbExtra = 'spawns toxic cloud';
+    regenVal = '0.6 /s';  rmbExtra = fmt(1 / 0.2) + ' shots/s · fast';
   } else {
     secName = 'FLAMETHROWER';
     secDmg  = fmt(7 * dm) + ' DPS';
@@ -7603,18 +7619,18 @@ function drawParameters(){
   };
 
   // Per-class basic-attack base values (same constants fireWeapon / the RMB fns use).
-  const lmbBase = { scout:0.85, tank:2, bounty_hunter:1.1, cyborg:3.4 }[key] || 1;
-  const lmbName = { scout:'LASER DOTS', tank:'HEAVY SLUG', bounty_hunter:'SHOTGUN(3)', cyborg:'GAS GUN' }[key] || 'PISTOL';
-  // LMB cadence is FIXED (not player.fireRate) for scout/shotgun/magnum.
-  const FIXED_LMB_CD = { scout:0.06, bounty_hunter:0.5, cyborg:0.34 };
+  const lmbBase = { scout:0.85, tank:2, bounty_hunter:1.1, cyborg:1 }[key] || 1;
+  const lmbName = { scout:'LASER DOTS', tank:'HEAVY SLUG', bounty_hunter:'SHOTGUN(3)', cyborg:'BIO-GUN' }[key] || 'PISTOL';
+  // LMB cadence is FIXED (not player.fireRate) for scout/shotgun/bio-gun.
+  const FIXED_LMB_CD = { scout:0.06, bounty_hunter:0.5, cyborg:0.4 };
   const lmbCd = FIXED_LMB_CD[key] || null;
   const lmbRate    = lmbCd ? 1 / lmbCd : 1 / cur.fireRate;
   const lmbRateNxt = lmbCd ? 1 / lmbCd : 1 / nxt.fireRate;
   // Attack RANGE in game distance units (px). LMB = projectile reach = bullet speed ×
   // life. RMB = the secondary's reach + its scope.
-  const lmbRange = { scout:360, tank:480, bounty_hunter:153, cyborg:360 }[key] || 432;
+  const lmbRange = { scout:360, tank:480, bounty_hunter:153, cyborg:208 }[key] || 432;
   const secRange = { soldier:'32 px · ~103° arc', scout:'147 px · 3 beams', tank:'140 px · ~60° cone',
-                     bounty_hunter:'38 px · ~103° arc', cyborg:'~208 px · spawns cloud' }[key] || '';
+                     bounty_hunter:'38 px · ~103° arc', cyborg:'280 px · fast bolt' }[key] || '';
 
   let secName, secBase, secUnit, capLabel, capCur, capNxt, capUnit, regenVal;
   if(key === 'soldier'){
@@ -7630,7 +7646,7 @@ function drawParameters(){
     capLabel = 'FURY'; capCur = cur.maxFury; capNxt = nxt.maxFury; capUnit = ' s';
     regenVal = '0.2 /s';
   } else if(key === 'cyborg'){
-    secName = 'BIO-GUN'; secBase = 6; secUnit = ' DPS cloud';
+    secName = 'GAS GUN'; secBase = 3.4; secUnit = ' /shot';
     capLabel = 'TOXIN'; capCur = cur.maxToxin; capNxt = nxt.maxToxin; capUnit = ' shots';
     regenVal = '0.6 /s';
   } else {
@@ -7865,8 +7881,8 @@ function drawCharacterSelect(){
     ctx.fillStyle = '#7f8c8d';
     ctx.fillText('WEAPONS', r.x + 6, sy); sy += 9;
     ctx.fillStyle = '#fff';
-    const lmbN = { soldier:'PISTOL', scout:'SMG', tank:'SLUG', bounty_hunter:'SHOTGUN', cyborg:'GAS GUN' }[key] || 'GUN';
-    const rmbN = { soldier:'SPEAR', scout:'3xLASER', tank:'FLAME', bounty_hunter:'MACHETE', cyborg:'BIO-GUN' }[key] || 'RMB';
+    const lmbN = { soldier:'PISTOL', scout:'SMG', tank:'SLUG', bounty_hunter:'SHOTGUN', cyborg:'BIO-GUN' }[key] || 'GUN';
+    const rmbN = { soldier:'SPEAR', scout:'3xLASER', tank:'FLAME', bounty_hunter:'MACHETE', cyborg:'GAS GUN' }[key] || 'RMB';
     ctx.fillText('LMB ' + lmbN, r.x + 6, sy); sy += 8;
     ctx.fillText('RMB ' + rmbN, r.x + 6, sy); sy += 8;
     ctx.fillStyle = '#5dade2';
