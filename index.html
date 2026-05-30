@@ -4338,21 +4338,36 @@ function killEnemy(en){
 // ============================================================
 // ENEMY AI
 // ============================================================
+// Keep bosses engaged: bound how far ANY boss may sit from the player. After the
+// per-kind AI moves the boss, if it has drifted/teleported beyond BOSS_LEASH we hard-
+// clamp it back onto the leash circle, so late-game fights never become multi-second
+// cross-arena chases. The AIs still strafe/flee freely WITHIN the leash radius.
+const BOSS_LEASH = 300;
+function bossLeash(e){
+  if(!e || !e.isBoss) return;
+  const dx = e.x - player.x, dy = e.y - player.y;
+  const d = Math.hypot(dx, dy);
+  if(d > BOSS_LEASH){
+    const f = BOSS_LEASH / d;
+    e.x = player.x + dx * f;
+    e.y = player.y + dy * f;
+  }
+}
 function updateEnemy(e, dt){
   if(e.invulnT > 0) e.invulnT -= dt;   // tick down any brief-invincibility shield
-  if(e.kind === 'bruiser')  return updateBruiser(e, dt);
-  if(e.kind === 'sniper')   return updateSniper(e, dt);
-  if(e.kind === 'splitter' || e.kind === 'splitter_mid') return updateSplitter(e, dt);
+  if(e.kind === 'bruiser')  { updateBruiser(e, dt); return bossLeash(e); }
+  if(e.kind === 'sniper')   { updateSniper(e, dt); return bossLeash(e); }
+  if(e.kind === 'splitter' || e.kind === 'splitter_mid') { updateSplitter(e, dt); return bossLeash(e); }
   if(e.kind === 'splitter_mini') return updateSeek(e, dt);
-  if(e.kind === 'summoner') return updateSummoner(e, dt);
-  if(e.kind === 'overlord') return updateOverlord(e, dt);
-  if(e.kind === 'twin')     return updateTwin(e, dt);
-  if(e.kind === 'reaper')   return updateReaper(e, dt);
-  if(e.kind === 'bomber')   return updateBomber(e, dt);
-  if(e.kind === 'phantom')  return updatePhantom(e, dt);
-  if(e.kind === 'nemesis')  return updateNemesis(e, dt);
-  if(e.kind === 'warden')   return updateWarden(e, dt);
-  if(e.kind === 'harrier')  return updateHarrier(e, dt);
+  if(e.kind === 'summoner') { updateSummoner(e, dt); return bossLeash(e); }
+  if(e.kind === 'overlord') { updateOverlord(e, dt); return bossLeash(e); }
+  if(e.kind === 'twin')     { updateTwin(e, dt); return bossLeash(e); }
+  if(e.kind === 'reaper')   { updateReaper(e, dt); return bossLeash(e); }
+  if(e.kind === 'bomber')   { updateBomber(e, dt); return bossLeash(e); }
+  if(e.kind === 'phantom')  { updatePhantom(e, dt); return bossLeash(e); }
+  if(e.kind === 'nemesis')  { updateNemesis(e, dt); return bossLeash(e); }
+  if(e.kind === 'warden')   { updateWarden(e, dt); return bossLeash(e); }
+  if(e.kind === 'harrier')  { updateHarrier(e, dt); return bossLeash(e); }
   if(e.kind === 'shooter')  return updateShooter(e, dt);
   if(e.kind === 'charger')  return updateCharger(e, dt);
   if(e.kind === 'exploder') return updateExploder(e, dt);
@@ -4554,7 +4569,7 @@ function updateSniper(e, dt){
   const dx = player.x - e.x, dy = player.y - e.y;
   const d = Math.hypot(dx, dy);
   const a = Math.atan2(dy, dx);
-  const ideal = 140;
+  const ideal = 110;
   if(d < ideal - 20){
     e.vx = -Math.cos(a) * e.speed * 1.2;
     e.vy = -Math.sin(a) * e.speed * 1.2;
@@ -4580,11 +4595,14 @@ function updateSniper(e, dt){
       e.fireCooldown = 1.4;
     }
   }
-  // Teleport every ~4.5s
+  // Teleport every ~4.5s — but reappear NEAR the player (random angle, mid-range)
+  // instead of a random arena cell, so it can't blink off across a 3x/4x map.
   if(e.phaseT > 4.5){
     e.phaseT = 0;
     emit(e.x, e.y, 18, '#8e44ad', 30, 120, 0.5);
-    e.x = rand(40, worldW-40); e.y = rand(40, worldH-40);
+    const ta = rand(0, TAU), tr = rand(120, 200);
+    e.x = clamp(player.x + Math.cos(ta) * tr, 40, worldW-40);
+    e.y = clamp(player.y + Math.sin(ta) * tr, 40, worldH-40);
     emit(e.x, e.y, 18, '#8e44ad', 30, 120, 0.5);
     e.telegraphActive = false;
     sfx.teleport();
@@ -4622,13 +4640,14 @@ function updateSummoner(e, dt){
   const dx = player.x - e.x, dy = player.y - e.y;
   const d = Math.hypot(dx, dy);
   const a = Math.atan2(dy, dx);
-  const ideal = 120;
+  const ideal = 100;
   if(d < ideal){
     e.vx = -Math.cos(a) * e.speed;
     e.vy = -Math.sin(a) * e.speed;
   } else {
-    e.vx = -Math.sin(a) * e.speed * 0.7;
-    e.vy = Math.cos(a) * e.speed * 0.7;
+    // Strafe with a slight inward bias so it re-approaches rather than orbiting away.
+    e.vx = -Math.sin(a) * e.speed * 0.7 + Math.cos(a) * e.speed * 0.25;
+    e.vy = Math.cos(a) * e.speed * 0.7 + Math.sin(a) * e.speed * 0.25;
   }
   e.fireCooldown -= dt;
   if(e.fireCooldown <= 0){
@@ -4786,11 +4805,10 @@ function updateBomber(e, dt){
   const dx = player.x - e.x, dy = player.y - e.y;
   const d = Math.hypot(dx, dy);
   const a = Math.atan2(dy, dx);
-  // Drift slowly toward center; back off if player gets close
-  const cx = worldW/2, cy = worldH/2;
-  const ax = Math.atan2(cy - e.y, cx - e.x);
+  // Back off only when point-blank; otherwise advance TOWARD the player (slowly) so the
+  // slow turret stays engaged instead of drifting to the (now huge) arena center.
   if(d < 70){ e.vx = -Math.cos(a) * e.speed; e.vy = -Math.sin(a) * e.speed; }
-  else      { e.vx = Math.cos(ax) * e.speed * 0.5; e.vy = Math.sin(ax) * e.speed * 0.5; }
+  else      { e.vx = Math.cos(a) * e.speed * 0.5; e.vy = Math.sin(a) * e.speed * 0.5; }
   e.fireCooldown -= dt;
   if(e.fireCooldown <= 0){
     if(e.firePhase % 3 === 2){
@@ -4826,9 +4844,9 @@ function updatePhantom(e, dt){
   const dx = player.x - e.x, dy = player.y - e.y;
   const d = Math.hypot(dx, dy);
   const a = Math.atan2(dy, dx);
-  // Keep distance and strafe
-  if(d < 90){ e.vx = -Math.cos(a) * e.speed; e.vy = -Math.sin(a) * e.speed; }
-  else { e.vx = -Math.sin(a) * e.speed * 0.7; e.vy = Math.cos(a) * e.speed * 0.7; }
+  // Keep distance and strafe (tighter than before, with an inward bias so it presses in)
+  if(d < 75){ e.vx = -Math.cos(a) * e.speed; e.vy = -Math.sin(a) * e.speed; }
+  else { e.vx = -Math.sin(a) * e.speed * 0.7 + Math.cos(a) * e.speed * 0.3; e.vy = Math.cos(a) * e.speed * 0.7 + Math.sin(a) * e.speed * 0.3; }
   e.fireCooldown -= dt;
   if(e.fireCooldown <= 0){
     // Spiral spray
@@ -4839,11 +4857,14 @@ function updatePhantom(e, dt){
     }
     e.fireCooldown = 1.2;
   }
-  // Teleport every ~3.8s, summon a pair of runner adds on arrival
+  // Teleport every ~3.8s, summon a pair of runner adds on arrival — reappear NEAR the
+  // player (random angle, mid-range) so the phantom can't blink across the 4x arena.
   if(e.phaseT > 3.8){
     e.phaseT = 0;
     emit(e.x, e.y, 22, '#8e44ad', 30, 130, 0.5);
-    e.x = rand(40, worldW - 40); e.y = rand(40, worldH - 40);
+    const ta = rand(0, TAU), tr = rand(110, 190);
+    e.x = clamp(player.x + Math.cos(ta) * tr, 40, worldW - 40);
+    e.y = clamp(player.y + Math.sin(ta) * tr, 40, worldH - 40);
     emit(e.x, e.y, 22, '#aed6f1', 30, 130, 0.5);
     sfx.teleport();
     for(let i=0;i<2;i++) spawnEnemyAtEdge('runner');
@@ -4926,7 +4947,7 @@ function updateWarden(e, dt){
   if(levelIdx >= 20) bossGasBomb(e, dt);
   const dx = player.x - e.x, dy = player.y - e.y;
   const d = Math.hypot(dx, dy), a = Math.atan2(dy, dx);
-  const ideal = 130;
+  const ideal = 110;
   if(d < ideal - 20){ e.vx = -Math.cos(a) * e.speed; e.vy = -Math.sin(a) * e.speed; }
   else if(d > ideal + 20){ e.vx = Math.cos(a) * e.speed; e.vy = Math.sin(a) * e.speed; }
   else { e.vx = -Math.sin(a) * e.speed * 0.7; e.vy = Math.cos(a) * e.speed * 0.7; }
