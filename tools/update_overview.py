@@ -38,12 +38,14 @@ DOCX = os.path.normpath(os.path.join(HERE, "..", "Game-Overview.docx"))
 # the new text (so a second run is a no-op).
 # ---------------------------------------------------------------------------
 REPLACEMENTS = [
-    # 1. The big picture - refresh the line count.
-    ("index.html (~5,963 lines)",
-     "The entire game is one file: index.html (~6,224 lines). One <script> block, "
+    # 1. The big picture - refresh the line count (re-keyed off the now-current
+    # "(~6,224 lines)" text) and note the 5-class roster.
+    ("(~6,224 lines)",
+     "The entire game is one file: index.html (~8,111 lines). One <script> block, "
      "vanilla JS, no build, no dependencies, no external assets. Sprites are inline "
      "ASCII-art arrays; all SFX are synthesized via Web Audio. It deploys by pushing "
-     "to main (GitHub Pages serves the raw file)."),
+     "to main (GitHub Pages serves the raw file). FIVE playable classes now ship "
+     "(Dr. Syed / Xu Yihui / Benjamin Wu / Leo / Ong)."),
 
     # 2. Canvas/world/camera - 4 tiers + MAP_EXPAND, camera now on every tier.
     ("Three world-size tiers",
@@ -247,6 +249,52 @@ REPLACEMENTS = [
      "Effects apply at damageEnemy (lifesteal), updatePlaying (hpregen), killEnemy "
      "(resource/greed/scholar/scavenger), playerSpeedMult (swiftness), applyLevelScaling "
      "(vitality)."),
+
+    # Roster expanded 3 -> 5: rewrite the "Three classes" line. (find = current docx
+    # text; the new text says FIVE so the find can't recur -> idempotent.)
+    ("Three classes; class keys never change",
+     "FIVE classes; class keys never change (soldier/scout/tank/bounty_hunter/cyborg, "
+     "display names Dr. Syed / Xu Yihui / Benjamin Wu / Leo / Ong) so all logic keys "
+     "off them. Each keeps a class-locked LMB + held-RMB secondary; the active X/C/B/V "
+     "skills are a PROFILE LOADOUT (F=HEAL locked, +1 slot per 5 levels) drawn from the "
+     "SKILLS catalog, NOT the per-class CHARACTERS.skills kit (vestigial / kept only for "
+     "validator C7). Display names and live stats:"),
+
+    # Drop pools 3 -> 5 (one shared template + RES map). Rewrites the whole Pickups
+    # paragraph; find anchors on its current "Three drop pools" phrasing.
+    ("Three drop pools in killEnemy",
+     "Pickups (applyPickup): WEAPON ENHANCERS (timed ~8s, never change the attack's form) "
+     "- rapid (half cooldown), pierce (shots punch through), multi (single -> double shot), "
+     "damage (2x); defenses - health, shield, armor; utility powerups - speed, slowmo, "
+     "score2x, magnet; class resources - fuel, beverage, battery, protein, isotope. FIVE "
+     "drop pools now (one per class), built from ONE shared kinds/weights template with "
+     "only the class resource swapped (RES map: tank->fuel, soldier->beverage, "
+     "scout->battery, bounty_hunter->protein, cyborg->isotope), so every pool sums to 1.0 "
+     "by construction (validator C5). ~22% drop chance per non-boss kill (more for elite "
+     "mini-bosses); bosses give a guaranteed enhancer/defense drop plus a health. Drop "
+     "VARIETY stays level-gated (basic in L1-15, widening at L16 and L25, renormalized)."),
+
+    # Validation - C5 is now "1 shared template + RES covers 5 chars", headless ~30.
+    # (find anchors on the current "all 3 drop pools" / "~23" text; both gone from new.)
+    ("all 3 drop pools sum to 1.0 (C5)",
+     "tools/validate.py (pure stdlib) is a static invariant linter (not runtime): one "
+     "<script>, brace balance, 40 levels, every mix sums to 1.0 (C4), the SHARED drop "
+     "template sums to 1.0 + the RES map covers all 5 characters (C5), boss tiers, skill "
+     "wiring, GAMEPLAY_KEYS coverage, plus the passive catalog (C10). Run python "
+     "tools/validate.py after editing LEVELS, drop pools, skills, or keys; CI runs it on "
+     "push as a signal only (it never blocks the Pages deploy). There is ALSO an optional "
+     "(non-CI) runtime + balance check, tools/headless_check.py (needs pip install "
+     "py_mini_racer): it executes the game in V8 with a stubbed canvas/DOM across all 40 "
+     "levels and checks ~30 balance properties - including the STAGED boss flow, the surge "
+     "gap, and the L31-40 0s transitional-to-final handoff."),
+
+    # Screen shake was COMPLETELY removed (not just disabled); HD-vector was reverted.
+    # find anchors on the current "Screen shake is disabled" text (gone from new).
+    ("Screen shake is disabled - draw() no longer applies",
+     "The screen-shake system was COMPLETELY REMOVED: there is no setShake / shakeTime / "
+     "shakeAmt anymore and draw() applies no recoil offset, so the camera and HUD are "
+     "perfectly stable. The brief HD-vector/bloom experiment was also rolled back - "
+     "rendering is crisp pixel-art again (imageSmoothingEnabled=false)."),
 ]
 
 # INSERTS: bullets added immediately before the paragraph whose text contains the
@@ -324,6 +372,34 @@ INSERTS = [
         "also manifests the DISTANCE UNIT (px = game pixels of the 480x270 world): MOVE "
         "SPEED in px/s, a RANGE row for LMB (projectile reach) and RMB (reach + scope) in "
         "px, and a bottom legend.",
+
+        "ROSTER EXPANDED 3 -> 5 PLAYABLE CLASSES. Leo (key bounty_hunter; HP 11 / speed "
+        "120 / dmg x1.3, no shield): SHOTGUN LMB (3-pellet point-blank spread, slow "
+        "cadence) + MACHETE RMB (fireMachete - a hold-to-combo swept slash with ~2x reach) "
+        "draining a FURY pool (6, refilled by the protein pickup; C=grit, V=fanfire). Ong "
+        "(key cyborg; HP 10 / speed 140 / dmg x1.15 / 2 start-shield): GAS-GUN LMB (green "
+        "gas bolt) + BIO-GUN RMB (fireBiogun lobs a glob that bursts into a lingering "
+        "poison_cloud DoT) draining a TOXIN pool (12, refilled by isotope; C=overclock, "
+        "V=biobomb). Both ship at BASE form (no bespoke per-class weapon evolution beyond "
+        "the universal weapon-tier multiplier).",
+
+        "NEW poison_cloud ENTITY (player-owned lingering AoE DoT: base radius 24 / 2s / 6 "
+        "dps; its params ride on the spawning bullet) - NOT an ally; wired into the entity "
+        "update + draw dispatch, the player-bullet->enemy collision, and bullet expiry; "
+        "cap-gated and dropped between levels. FOUR new universally-equippable 5-tier "
+        "skills came with the new classes: grit (temp shield + i-frames), overclock (self "
+        "rapid-fire), fanfire (wide high-dmg shotgun fan), biobomb (drops a big poison "
+        "cloud) - bought/upgraded in the shop and equippable into any X/C/B/V slot, so no "
+        "new GAMEPLAY_KEYS.",
+
+        "5-TIER WEAPON EVOLUTION (account-level, separate from the active-skill tiers): "
+        "weaponTierFor(level) = min(5, floor((level-1)/8)+1), so tiers 1/2/3/4/5 unlock at "
+        "account level 1/9/17/25/33, with WEAPON_TIER_MULT = [1.0, 1.2, 1.5, 1.9, 2.5] "
+        "multiplying the BASIC-ATTACK (LMB + held-RMB) base DAMAGE and projectile SPEED. "
+        "It is cached on the player at run start (applyLevelScaling -> "
+        "player.weaponTier/weaponMult), stacks multiplicatively with the DAMAGE pickup "
+        "(x2), and is independent of RAPID (cadence only). The Tab stats window shows a "
+        "WEAPON TIER row (Tier n / 5).",
     ]),
     ("10. Allies", [
         "FOUR-PHASE difficulty curve (difficultyRamp / enemyScale / bossHpScale / "
