@@ -1929,6 +1929,40 @@ window.addEventListener('scroll', () => window.scrollTo(0, 0), { passive: true }
 // HELPERS
 // ============================================================
 function dist2(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return dx*dx + dy*dy; }
+
+// ---- Uniform spatial grid over live enemies (perf) ----
+// Rebuilt once per frame (buildEnemyGrid) so bullet/body collision checks only test
+// enemies in the 3x3 cells around a point instead of scanning every entity (was O(n^2)
+// and the main cause of frame drops in dense waves). GRID_CELL (48) is larger than the
+// biggest possible collision distance (max enemy radius 24 + bullet/body radius), so any
+// colliding enemy is guaranteed to sit in the queried 3x3 neighbourhood — no misses.
+const GRID_CELL = 48;
+const enemyGrid = new Map();
+const _nearEnemies = [];
+function buildEnemyGrid(){
+  enemyGrid.clear();
+  for(const e of entities){
+    if(e.type !== 'enemy' || e.dead) continue;
+    const k = (Math.floor(e.x / GRID_CELL)) + ',' + (Math.floor(e.y / GRID_CELL));
+    let arr = enemyGrid.get(k);
+    if(!arr){ arr = []; enemyGrid.set(k, arr); }
+    arr.push(e);
+  }
+}
+// Returns a SHARED, reused array of live enemies in the 3x3 cells around (x,y). The
+// caller must iterate it before the next call (no nesting of enemiesNear calls).
+function enemiesNear(x, y){
+  _nearEnemies.length = 0;
+  const cx = Math.floor(x / GRID_CELL), cy = Math.floor(y / GRID_CELL);
+  for(let gx = cx - 1; gx <= cx + 1; gx++){
+    for(let gy = cy - 1; gy <= cy + 1; gy++){
+      const arr = enemyGrid.get(gx + ',' + gy);
+      if(!arr) continue;
+      for(const e of arr){ if(!e.dead) _nearEnemies.push(e); }
+    }
+  }
+  return _nearEnemies;
+}
 function rand(a,b){ return a + Math.random()*(b-a); }
 function clamp(v,a,b){ return v<a?a:v>b?b:v; }
 function pickWeighted(mix){
@@ -3240,32 +3274,37 @@ function updatePlaying(dt){
   groundFields = groundFields.filter(g => g.life > 0);
 
   // ---- Collisions ----
+  // Bucket live enemies into the spatial grid ONCE, then every enemy-side check below
+  // queries only nearby cells (was a full O(n^2) entities scan per bullet/body).
+  buildEnemyGrid();
   for(const b of entities){
     if(b.type !== 'bullet' || b.dead) continue;
     if(b.owner === 'player'){
-      for(const en of entities){
-        if(en.type !== 'enemy' || en.dead) continue;
+      for(const en of enemiesNear(b.x, b.y)){
         if(b.hitSet && b.hitSet.has(en)) continue;
         const dr = b.radius + en.radius;
         if(dist2(b, en) < dr*dr){
           damageEnemy(en, b.dmg, !b.fromAlly);
-          if(b.kind === 'pellet' || b.kinetic){
-            // KINETIC impact: sharp yellow/orange SPARK shards + a grey SMOKE puff that
-            // rapidly loses opacity — solid, source-over, NOT a glowing plasma burst.
-            for(let s = 0; s < 4; s++){
-              if(particles.length >= 300) break;
-              const a = Math.random() * TAU, sp = 70 + Math.random() * 130;
-              particles.push({ spark:true, x: b.x, y: b.y, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp,
-                w: 2 + Math.random()*1.5, h: 1, life: 0.18, maxLife: 0.18, color: Math.random() < 0.5 ? '#ffd24a' : '#ff8c42' });
+          // Hit particles are THROTTLED per-enemy (en.hitFxT): a fast primary on a big
+          // boss lands ~16 hits/s, and an un-throttled burst per hit was the boss-lag
+          // cause. Damage still applies every hit; only the FX are rate-limited + fewer.
+          if((en.hitFxT || 0) <= 0){
+            en.hitFxT = 0.05;
+            if(b.kind === 'pellet' || b.kinetic){
+              // KINETIC impact: sharp spark shards + a grey smoke puff (source-over).
+              for(let s = 0; s < 2; s++){
+                if(particles.length >= 300) break;
+                const a = Math.random() * TAU, sp = 70 + Math.random() * 130;
+                particles.push({ spark:true, x: b.x, y: b.y, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp,
+                  w: 2 + Math.random()*1.5, h: 1, life: 0.18, maxLife: 0.18, color: Math.random() < 0.5 ? '#ffd24a' : '#ff8c42' });
+              }
+              if(particles.length < 300)
+                particles.push({ smoke:true, x: b.x, y: b.y, vx:(Math.random()-0.5)*20, vy:(Math.random()-0.5)*20,
+                  r0: 1, r1: 4 + Math.random()*3, color: '#9aa0a6', life: 0.35, maxLife: 0.35 });
+            } else {
+              // ENERGY impact: a small additive plasma burst in the bullet's glow colour.
+              emit(b.x, b.y, 3, b.glow || '#fff', 30, 110, 0.25, true);
             }
-            for(let s = 0; s < 2; s++){
-              if(particles.length >= 300) break;
-              particles.push({ smoke:true, x: b.x, y: b.y, vx:(Math.random()-0.5)*20, vy:(Math.random()-0.5)*20,
-                r0: 1, r1: 4 + Math.random()*3, color: '#9aa0a6', life: 0.35, maxLife: 0.35 });
-            }
-          } else {
-            // ENERGY impact: a small additive plasma burst in the bullet's glow colour.
-            emit(b.x, b.y, 5, b.glow || '#fff', 30, 110, 0.25, true);
           }
           if(b.explosive){
             explode(b.x, b.y, b.explodeRadius, b.dmg, !b.fromAlly);
@@ -3298,8 +3337,7 @@ function updatePlaying(dt){
     }
   }
   if(player.invuln <= 0){
-    for(const en of entities){
-      if(en.type !== 'enemy' || en.dead) continue;
+    for(const en of enemiesNear(player.x, player.y)){
       const dr = player.radius + en.radius;
       if(dist2(en, player) < dr*dr){
         damagePlayer((en.isBoss ? 2 : 1) * enemyDmgScale(levelIdx));
@@ -3310,11 +3348,11 @@ function updatePlaying(dt){
       }
     }
   }
-  // Enemy bodies touching any chosen ally.
+  // Enemy bodies touching any chosen ally (outer loop stays over entities so summoned
+  // sword_ally — which isn't in `allies` — is included; inner enemy scan uses the grid).
   for(const a of entities){
     if(!isAlly(a) || a.dead || a.invuln > 0) continue;
-    for(const en of entities){
-      if(en.type !== 'enemy' || en.dead) continue;
+    for(const en of enemiesNear(a.x, a.y)){
       const dr = a.radius + en.radius;
       if(dist2(en, a) < dr*dr){
         damageAlly(a, en.isBoss ? 2 : 1);
@@ -4410,6 +4448,7 @@ function bossLeash(e){
 }
 function updateEnemy(e, dt){
   if(e.invulnT > 0) e.invulnT -= dt;   // tick down any brief-invincibility shield
+  if(e.hitFxT > 0) e.hitFxT -= dt;     // throttle window for per-hit impact particles
   if(e.kind === 'bruiser')  { updateBruiser(e, dt); return bossLeash(e); }
   if(e.kind === 'sniper')   { updateSniper(e, dt); return bossLeash(e); }
   if(e.kind === 'splitter' || e.kind === 'splitter_mid') { updateSplitter(e, dt); return bossLeash(e); }
