@@ -1948,6 +1948,9 @@ function dist2(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return dx*dx + dy*dy; }
 const GRID_CELL = 48;
 const enemyGrid = new Map();
 const _nearEnemies = [];
+// Reused scratch list for drawGame's y-sort (painter order). Reusing it avoids a fresh
+// `entities.slice()` allocation every frame (GC churn that scaled with entity count).
+const _drawList = [];
 function buildEnemyGrid(){
   enemyGrid.clear();
   for(const e of entities){
@@ -3298,6 +3301,12 @@ function updatePlaying(dt){
   // Bucket live enemies into the spatial grid ONCE, then every enemy-side check below
   // queries only nearby cells (was a full O(n^2) entities scan per bullet/body).
   buildEnemyGrid();
+  // Resolve the (tiny: ≤2 equipped + a possible sword_ally) ally list ONCE per frame.
+  // The enemy-bullet → ally and enemy-body → ally checks below iterate THIS instead of
+  // scanning the whole `entities` array per item — a boss fight floods the arena with
+  // enemy bullets, so the old per-bullet full scan was O(enemyBullets × entities) and
+  // the main cause of sustained boss-fight lag.
+  const allyList = entities.filter(isAlly);
   for(const b of entities){
     if(b.type !== 'bullet' || b.dead) continue;
     if(b.owner === 'player'){
@@ -3350,8 +3359,8 @@ function updatePlaying(dt){
         const dr = b.radius + player.radius;
         if(dist2(b, player) < dr*dr){ b.dead = true; damagePlayer(1 * enemyDmgScale(levelIdx)); continue; }
       }
-      for(const a of entities){
-        if(!isAlly(a) || a.dead || a.invuln > 0) continue;
+      for(const a of allyList){
+        if(a.dead || a.invuln > 0) continue;
         const dr = b.radius + a.radius;
         if(dist2(b, a) < dr*dr){ b.dead = true; damageAlly(a, 1); break; }
       }
@@ -3369,10 +3378,10 @@ function updatePlaying(dt){
       }
     }
   }
-  // Enemy bodies touching any chosen ally (outer loop stays over entities so summoned
-  // sword_ally — which isn't in `allies` — is included; inner enemy scan uses the grid).
-  for(const a of entities){
-    if(!isAlly(a) || a.dead || a.invuln > 0) continue;
+  // Enemy bodies touching any chosen ally (allyList already includes the summoned
+  // sword_ally via isAlly; inner enemy scan uses the grid).
+  for(const a of allyList){
+    if(a.dead || a.invuln > 0) continue;
     for(const en of enemiesNear(a.x, a.y)){
       const dr = a.radius + en.radius;
       if(dist2(en, a) < dr*dr){
@@ -5689,9 +5698,12 @@ function drawGame(){
     ctx.stroke();
     ctx.globalAlpha = 1;
   }
-  const list = entities.slice().sort((a,b) => a.y - b.y);
-  for(const e of list){
-    if(e.dead) continue;
+  // Reuse a scratch array (drop dead entries in the same pass) instead of cloning
+  // `entities` every frame, then y-sort for painter order.
+  _drawList.length = 0;
+  for(const e of entities){ if(!e.dead) _drawList.push(e); }
+  _drawList.sort((a,b) => a.y - b.y);
+  for(const e of _drawList){
     if(e.type === 'player') drawPlayer(e);
     else if(e.type === 'enemy') drawEnemy(e);
     else if(e.type === 'bullet') drawBulletEntity(e);
