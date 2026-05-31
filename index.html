@@ -1960,8 +1960,14 @@ const _allyList = [];     // reused scratch for enemy-bullet→ally collision
 const _bossList = [];     // reused scratch for boss HP bars
 const _pBullets = [];     // reused scratch for player-bullet collision (avoids iterating
 const _eBullets = [];     //   all entities to find bullets in the collision loop)
+const _enemyList = [];    // reused scratch for ally AI target scanning (flat list, replaces
+                          //   the first buildEnemyGrid — allies don't need spatial queries)
+const _explodeTargets = []; // reused scratch for explode() AoE damage scan
 function buildEnemyGrid(){
-  enemyGrid.clear();
+  // Clear existing cell arrays but keep them in the map for reuse — avoids
+  // allocating new arrays every frame (was enemyGrid.clear() + new Array per cell,
+  // which churned ~40 arrays × 2 builds = ~80 arrays/frame into the GC).
+  for(const arr of enemyGrid.values()) arr.length = 0;
   for(const e of entities){
     if(e.type !== 'enemy' || e.dead) continue;
     const k = (Math.floor(e.x / GRID_CELL)) + ',' + (Math.floor(e.y / GRID_CELL));
@@ -2720,8 +2726,10 @@ function explode(x, y, radius, dmg, fromPlayer){
   sfx.explode();
   // Snapshot the enemy list — killEnemy can push splitter children into entities,
   // and we don't want this single blast to keep visiting them and cascading.
-  const targets = entities.filter(e => e.type === 'enemy' && !e.dead);
-  for(const en of targets){
+  // Uses a scratch array (zero allocation) instead of entities.filter().
+  _explodeTargets.length = 0;
+  for(const e of entities){ if(e.type === 'enemy' && !e.dead) _explodeTargets.push(e); }
+  for(const en of _explodeTargets){
     if(en.dead) continue;
     if(dist2({x,y}, en) < radius*radius){
       damageEnemy(en, dmg, fromPlayer);
@@ -3225,14 +3233,21 @@ function updatePlaying(dt){
   if(player.invuln > 0) player.invuln -= dt;
   if(player.hitFlash > 0) player.hitFlash -= dt;
 
+  // ---- Build flat enemy list for ally AI + alive counting (zero allocation) ----
+  // Allies don't need spatial queries — they always scan ALL enemies for nearest target.
+  // Building one flat list here (pre-entity-update, stale-1-frame positions OK for AI)
+  // replaces the first buildEnemyGrid() call, eliminating half the grid allocation churn.
+  _enemyList.length = 0;
+  for(const e of entities){ if(e.type === 'enemy' && !e.dead) _enemyList.push(e); }
+
   // ---- Enemy spawning ----
   // A live-enemy CONCURRENCY cap (#2 rebalance) so the late game isn't a wall of
   // monsters all at once: spawning pauses while this many regulars are already alive,
   // spreading the same `total` over time instead of bunching it up. Scales gently with
   // level but stays bounded (≈13 @L1 → 20 @L40).
-  // Compute the alive-regular count ONCE per frame (reused in the gap surge check too)
-  // instead of calling entities.filter() three separate times.
-  const aliveRegular = entities.filter(e => e.type === 'enemy' && !e.isBoss).length;
+  // Count alive regulars from the already-built _enemyList (zero allocation).
+  let aliveRegular = 0;
+  for(const e of _enemyList){ if(!e.isBoss) aliveRegular++; }
   if(spawnedCount < levelData.total){
     spawnTimer -= dt;
     const aliveCap = Math.min(20, 12 + Math.floor(levelIdx * 0.22));
@@ -3297,11 +3312,9 @@ function updatePlaying(dt){
     }
   }
 
-  // ---- Build spatial enemy grid for ally AI (will be rebuilt after entity updates ----
-  // ---- for accurate collision, see Collisions section below).                    ----
-  // Built before entity updates so ally AIs query it instead of scanning all entities;
-  // they don't need pixel-perfect accuracy so stale-1-frame positions are fine.
-  buildEnemyGrid();
+  // ---- Ally AI target scanning: uses _enemyList built above (flat list, pre-update  ----
+  // ---- positions — stale-1-frame is fine for AI targeting, no grid needed).        ----
+  // (The spatial grid is built ONCE after entity updates for accurate collision below.)
 
   // ---- Update entities (Slow-Mo powerup scales enemy & enemy-bullet dt) ----
   const enemyDt = dt * (slowMoTime > 0 ? 0.4 : 1);
@@ -3339,9 +3352,8 @@ function updatePlaying(dt){
   compact(groundFields, g => g.life > 0);
 
   // ---- Collisions ----
-  // Rebuild the spatial grid NOW (after entity updates) so enemiesNear() uses fresh
-  // enemy positions for accurate bullet collision. The grid built earlier before entity
-  // updates was used by ally AI target scanning (stale-1-frame is fine for AI targeting).
+  // Build the spatial grid ONCE (after entity updates) for accurate bullet collision
+  // via enemiesNear(). Ally AIs use the flat _enemyList built earlier instead.
   buildEnemyGrid();
   // Resolve the (tiny: ≤2 equipped + a possible sword_ally) ally list ONCE per frame
   // into a scratch array (no allocation). The enemy-bullet → ally and enemy-body → ally
@@ -3971,13 +3983,11 @@ function updateCompanion(c, dt){
   c.fireCooldown -= dt;
   const range = c.detectRange || 280;
   let nearest = null, nd = range*range;
-  for(const arr of enemyGrid.values()){
-    for(const en of arr){
+  for(const en of _enemyList){
       if(en.dead) continue;
       const dd = dist2(c, en);
       if(dd < nd){ nd = dd; nearest = en; }
     }
-  }
   if(nearest){
     c.angle = Math.atan2(nearest.y - c.y, nearest.x - c.x);
     if(c.fireCooldown <= 0){
@@ -4033,15 +4043,13 @@ function updateSwordAlly(s, dt){
   if(s.swingTime > 0) s.swingTime -= dt;
   if(s.attackCd > 0) s.attackCd -= dt;
 
-  // Pick the nearest enemy (uses the spatial grid, not a full entity scan).
+  // Pick the nearest enemy from the pre-built flat enemy list.
   let target = null, td = Infinity;
-  for(const arr of enemyGrid.values()){
-    for(const en of arr){
+  for(const en of _enemyList){
       if(en.dead) continue;
       const d2 = dist2(s, en);
       if(d2 < td){ td = d2; target = en; }
     }
-  }
 
   if(target){
     const dx = target.x - s.x, dy = target.y - s.y;
@@ -4146,12 +4154,10 @@ function updateMeleeAlly(s, dt){
   }
 
   let target = null, td = Infinity;
-  for(const arr of enemyGrid.values()){
-    for(const en of arr){
-      if(en.dead) continue;
-      const d2 = dist2(s, en);
-      if(d2 < td){ td = d2; target = en; }
-    }
+  for(const en of _enemyList){
+    if(en.dead) continue;
+    const d2 = dist2(s, en);
+    if(d2 < td){ td = d2; target = en; }
   }
   const leash = s.leash || 110;
   if(target && td < leash * leash){
@@ -4276,12 +4282,10 @@ function updateBomberAlly(s, dt){
   if(s.frameT > 0.16){ s.frameT = 0; s.frame = (s.frame + 1) % 2; }
 
   let target = null, nd = s.fireRange * s.fireRange;
-  for(const arr of enemyGrid.values()){
-    for(const en of arr){
-      if(en.dead) continue;
-      const dd = dist2(s, en);
-      if(dd < nd){ nd = dd; target = en; }
-    }
+  for(const en of _enemyList){
+    if(en.dead) continue;
+    const dd = dist2(s, en);
+    if(dd < nd){ nd = dd; target = en; }
   }
   // ---- EVOLUTIONS (gated on s.level) ----
   const lvl = s.level || 1;
@@ -4331,12 +4335,10 @@ function updatePoisonAlly(s, dt){
   const moveSpeed = Math.max(s.moveSpeed, pSpeed * 1.1);
 
   let target = null, td = Infinity;
-  for(const arr of enemyGrid.values()){
-    for(const en of arr){
-      if(en.dead) continue;
-      const d2 = dist2(s, en);
-      if(d2 < td){ td = d2; target = en; }
-    }
+  for(const en of _enemyList){
+    if(en.dead) continue;
+    const d2 = dist2(s, en);
+    if(d2 < td){ td = d2; target = en; }
   }
   const leash = s.leash || 130;
   if(target && td < leash * leash){
