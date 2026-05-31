@@ -1307,6 +1307,8 @@ let highScore = parseInt(localStorage.getItem('shooter_high') || '0', 10);
 let hitStopTime = 0;       // brief global freeze (skip updatePlaying, keep drawing) on heavy impacts
 let hitStopCd = 0;         // refractory between freezes — stops rapid-fire weapons (laser/slug)
                            // stacking a 40ms freeze every volley into a slow boss (= perceived lag)
+let hitSfxCd = 0;          // throttle for sfx.hit() — fast weapons (Scout 0.06s cadence) would
+                           // create audio nodes 16-33 times/second without this rate-limit
 const HIT_STOP_REFRACTORY = 0.3;
 let stateTime = 0;
 let bossSpawnPulse = 0;
@@ -2976,6 +2978,7 @@ function update(dt){
     // keep draw() running, so the frozen frame reads as a punch of impact. The refractory
     // ticks in real time too (even while frozen) so it gates by wall-clock, not sim time.
     if(hitStopCd > 0) hitStopCd -= dt;
+    if(hitSfxCd > 0) hitSfxCd -= dt;   // ticks in real-time so it recovers during hitStop freezes too
     if(hitStopTime > 0) hitStopTime -= dt;
     else if(!paused && !showStats) updatePlaying(dt);
   }
@@ -3213,10 +3216,12 @@ function updatePlaying(dt){
   // monsters all at once: spawning pauses while this many regulars are already alive,
   // spreading the same `total` over time instead of bunching it up. Scales gently with
   // level but stays bounded (≈13 @L1 → 20 @L40).
+  // Compute the alive-regular count ONCE per frame (reused in the gap surge check too)
+  // instead of calling entities.filter() three separate times.
+  const aliveRegular = entities.filter(e => e.type === 'enemy' && !e.isBoss).length;
   if(spawnedCount < levelData.total){
     spawnTimer -= dt;
     const aliveCap = Math.min(20, 12 + Math.floor(levelIdx * 0.22));
-    const aliveRegular = entities.filter(e => e.type === 'enemy' && !e.isBoss).length;
     if(spawnTimer <= 0 && aliveRegular < aliveCap){
       spawnEnemyAtEdge(pickWeighted(levelData.mix));
       spawnedCount++;
@@ -3255,7 +3260,7 @@ function updatePlaying(dt){
   if(bossPhase === 2 && bossGapTimer > 0){
     bossGapTimer -= dt;
     gapSpawnTimer -= dt;
-    const aliveRegular = entities.filter(e => e.type === 'enemy' && !e.isBoss).length;
+    // aliveRegular was computed in the spawning block above — reuse it.
     if(gapSpawnTimer <= 0 && aliveRegular < 20 && entities.length < 480){
       spawnEnemyAtEdge(pickWeighted(levelData.mix));
       gapSpawnTimer = levelData.rate * rand(0.4, 0.7);
@@ -3272,11 +3277,16 @@ function updatePlaying(dt){
   }
   // L1-10 (no medium boss): the original gate — end boss after all regulars spawned + most dead.
   if(!hasMedium && !bossSpawned && spawnedCount >= levelData.total){
-    const aliveRegular = entities.filter(e => e.type === 'enemy' && !e.isBoss).length;
+    // aliveRegular was computed in the spawning block above — reuse it.
     if(aliveRegular <= Math.max(2, Math.floor(levelData.total * 0.2))){
       bossSpawned = true; bossPhase = 4; spawnBoss(levelData.boss);
     }
   }
+
+  // ---- Build spatial enemy grid (rebuilt once per frame) ----
+  // Built before entity updates so ally AIs query it instead of scanning all entities;
+  // also used by the collision block below (3x3-cell local checks).
+  buildEnemyGrid();
 
   // ---- Update entities (Slow-Mo powerup scales enemy & enemy-bullet dt) ----
   const enemyDt = dt * (slowMoTime > 0 ? 0.4 : 1);
@@ -3314,9 +3324,8 @@ function updatePlaying(dt){
   groundFields = groundFields.filter(g => g.life > 0);
 
   // ---- Collisions ----
-  // Bucket live enemies into the spatial grid ONCE, then every enemy-side check below
-  // queries only nearby cells (was a full O(n^2) entities scan per bullet/body).
-  buildEnemyGrid();
+  // The spatial grid was built above; collision checks use enemiesNear() for 3x3-cell
+  // local queries instead of a full O(n) entities scan per bullet/body.
   // Resolve the (tiny: ≤2 equipped + a possible sword_ally) ally list ONCE per frame.
   // The enemy-bullet → ally and enemy-body → ally checks below iterate THIS instead of
   // scanning the whole `entities` array per item — a boss fight floods the arena with
@@ -3358,13 +3367,13 @@ function updatePlaying(dt){
           } else if(b.spawnsCloud){
             spawnPoisonCloud(b.x, b.y, b);
             b.dead = true;
-            sfx.hit();
+            if(hitSfxCd <= 0){ sfx.hit(); hitSfxCd = 0.05; }
           } else if(b.pierce){
             b.hitSet.add(en);
-            sfx.hit();
+            if(hitSfxCd <= 0){ sfx.hit(); hitSfxCd = 0.05; }
           } else {
             b.dead = true;
-            sfx.hit();
+            if(hitSfxCd <= 0){ sfx.hit(); hitSfxCd = 0.05; }
           }
           if(!b.pierce) break;
         }
@@ -3938,10 +3947,12 @@ function updateCompanion(c, dt){
   c.fireCooldown -= dt;
   const range = c.detectRange || 280;
   let nearest = null, nd = range*range;
-  for(const en of entities){
-    if(en.type !== 'enemy' || en.dead) continue;
-    const dd = dist2(c, en);
-    if(dd < nd){ nd = dd; nearest = en; }
+  for(const arr of enemyGrid.values()){
+    for(const en of arr){
+      if(en.dead) continue;
+      const dd = dist2(c, en);
+      if(dd < nd){ nd = dd; nearest = en; }
+    }
   }
   if(nearest){
     c.angle = Math.atan2(nearest.y - c.y, nearest.x - c.x);
@@ -3998,12 +4009,14 @@ function updateSwordAlly(s, dt){
   if(s.swingTime > 0) s.swingTime -= dt;
   if(s.attackCd > 0) s.attackCd -= dt;
 
-  // Pick the nearest enemy.
+  // Pick the nearest enemy (uses the spatial grid, not a full entity scan).
   let target = null, td = Infinity;
-  for(const en of entities){
-    if(en.type !== 'enemy' || en.dead) continue;
-    const d2 = dist2(s, en);
-    if(d2 < td){ td = d2; target = en; }
+  for(const arr of enemyGrid.values()){
+    for(const en of arr){
+      if(en.dead) continue;
+      const d2 = dist2(s, en);
+      if(d2 < td){ td = d2; target = en; }
+    }
   }
 
   if(target){
@@ -4109,10 +4122,12 @@ function updateMeleeAlly(s, dt){
   }
 
   let target = null, td = Infinity;
-  for(const en of entities){
-    if(en.type !== 'enemy' || en.dead) continue;
-    const d2 = dist2(s, en);
-    if(d2 < td){ td = d2; target = en; }
+  for(const arr of enemyGrid.values()){
+    for(const en of arr){
+      if(en.dead) continue;
+      const d2 = dist2(s, en);
+      if(d2 < td){ td = d2; target = en; }
+    }
   }
   const leash = s.leash || 110;
   if(target && td < leash * leash){
@@ -4237,10 +4252,12 @@ function updateBomberAlly(s, dt){
   if(s.frameT > 0.16){ s.frameT = 0; s.frame = (s.frame + 1) % 2; }
 
   let target = null, nd = s.fireRange * s.fireRange;
-  for(const en of entities){
-    if(en.type !== 'enemy' || en.dead) continue;
-    const dd = dist2(s, en);
-    if(dd < nd){ nd = dd; target = en; }
+  for(const arr of enemyGrid.values()){
+    for(const en of arr){
+      if(en.dead) continue;
+      const dd = dist2(s, en);
+      if(dd < nd){ nd = dd; target = en; }
+    }
   }
   // ---- EVOLUTIONS (gated on s.level) ----
   const lvl = s.level || 1;
@@ -4290,10 +4307,12 @@ function updatePoisonAlly(s, dt){
   const moveSpeed = Math.max(s.moveSpeed, pSpeed * 1.1);
 
   let target = null, td = Infinity;
-  for(const en of entities){
-    if(en.type !== 'enemy' || en.dead) continue;
-    const d2 = dist2(s, en);
-    if(d2 < td){ td = d2; target = en; }
+  for(const arr of enemyGrid.values()){
+    for(const en of arr){
+      if(en.dead) continue;
+      const d2 = dist2(s, en);
+      if(d2 < td){ td = d2; target = en; }
+    }
   }
   const leash = s.leash || 130;
   if(target && td < leash * leash){
