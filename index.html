@@ -1956,6 +1956,10 @@ const _nearEnemies = [];
 // Reused scratch list for drawGame's y-sort (painter order). Reusing it avoids a fresh
 // `entities.slice()` allocation every frame (GC churn that scaled with entity count).
 const _drawList = [];
+const _allyList = [];     // reused scratch for enemy-bullet→ally collision
+const _bossList = [];     // reused scratch for boss HP bars
+const _pBullets = [];     // reused scratch for player-bullet collision (avoids iterating
+const _eBullets = [];     //   all entities to find bullets in the collision loop)
 function buildEnemyGrid(){
   enemyGrid.clear();
   for(const e of entities){
@@ -1982,6 +1986,16 @@ function enemiesNear(x, y){
 }
 function rand(a,b){ return a + Math.random()*(b-a); }
 function clamp(v,a,b){ return v<a?a:v>b?b:v; }
+// In-place array compaction: keeps items where aliveFn(item) is truthy, mutates
+// the array in place (no allocation) and sets length. Replaces .filter() in hot
+// paths to avoid per-frame GC churn from discarded array objects.
+function compact(arr, aliveFn){
+  let wi = 0;
+  for(let i = 0; i < arr.length; i++){
+    if(aliveFn(arr[i])) arr[wi++] = arr[i];
+  }
+  arr.length = wi;
+}
 function pickWeighted(mix){
   const r = Math.random();
   let acc = 0;
@@ -3000,7 +3014,7 @@ function updatePlaying(dt){
   // Visual-only decals fade over ~10s (no physics/collision).
   if(decals.length){
     for(const d of decals) d.life -= dt;
-    decals = decals.filter(d => d.life > 0);
+    compact(decals, d => d.life > 0);
   }
 
   // ---- Player movement (SPEED powerup + X-skill sprint boost it) ----
@@ -3283,9 +3297,10 @@ function updatePlaying(dt){
     }
   }
 
-  // ---- Build spatial enemy grid (rebuilt once per frame) ----
+  // ---- Build spatial enemy grid for ally AI (will be rebuilt after entity updates ----
+  // ---- for accurate collision, see Collisions section below).                    ----
   // Built before entity updates so ally AIs query it instead of scanning all entities;
-  // also used by the collision block below (3x3-cell local checks).
+  // they don't need pixel-perfect accuracy so stale-1-frame positions are fine.
   buildEnemyGrid();
 
   // ---- Update entities (Slow-Mo powerup scales enemy & enemy-bullet dt) ----
@@ -3321,21 +3336,30 @@ function updatePlaying(dt){
                        vx: 0, vy: -12, life: 0.5, maxLife: 0.5, color: '#2ecc71', size: 1 });
     }
   }
-  groundFields = groundFields.filter(g => g.life > 0);
+  compact(groundFields, g => g.life > 0);
 
   // ---- Collisions ----
-  // The spatial grid was built above; collision checks use enemiesNear() for 3x3-cell
-  // local queries instead of a full O(n) entities scan per bullet/body.
-  // Resolve the (tiny: ≤2 equipped + a possible sword_ally) ally list ONCE per frame.
-  // The enemy-bullet → ally and enemy-body → ally checks below iterate THIS instead of
-  // scanning the whole `entities` array per item — a boss fight floods the arena with
-  // enemy bullets, so the old per-bullet full scan was O(enemyBullets × entities) and
-  // the main cause of sustained boss-fight lag.
-  const allyList = entities.filter(isAlly);
+  // Rebuild the spatial grid NOW (after entity updates) so enemiesNear() uses fresh
+  // enemy positions for accurate bullet collision. The grid built earlier before entity
+  // updates was used by ally AI target scanning (stale-1-frame is fine for AI targeting).
+  buildEnemyGrid();
+  // Resolve the (tiny: ≤2 equipped + a possible sword_ally) ally list ONCE per frame
+  // into a scratch array (no allocation). The enemy-bullet → ally and enemy-body → ally
+  // checks below iterate THIS instead of scanning the whole `entities` array per item —
+  // a boss fight floods the arena with enemy bullets, so the old per-bullet full scan was
+  // O(enemyBullets × entities) and the main cause of sustained boss-fight lag.
+  _allyList.length = 0;
+  for(const e of entities){ if(isAlly(e) && !e.dead) _allyList.push(e); }
+  // Pre-build bullet lists from entities so the collision loops below don't have to
+  // re-scan non-bullet entities (saves ~50 skipped iterations/frame during boss fights).
+  _pBullets.length = 0; _eBullets.length = 0;
   for(const b of entities){
     if(b.type !== 'bullet' || b.dead) continue;
-    if(b.owner === 'player'){
-      for(const en of enemiesNear(b.x, b.y)){
+    if(b.owner === 'player') _pBullets.push(b); else _eBullets.push(b);
+  }
+  // ---- Player bullets: check against every nearby enemy via the spatial grid ----
+  for(const b of _pBullets){
+    for(const en of enemiesNear(b.x, b.y)){
         if(b.hitSet && b.hitSet.has(en)) continue;
         const dr = b.radius + en.radius;
         if(dist2(b, en) < dr*dr){
@@ -3378,17 +3402,17 @@ function updatePlaying(dt){
           if(!b.pierce) break;
         }
       }
-    } else {
-      // Enemy bullet — can hit the player or any chosen ally.
-      if(player.invuln <= 0){
-        const dr = b.radius + player.radius;
-        if(dist2(b, player) < dr*dr){ b.dead = true; damagePlayer(1 * enemyDmgScale(levelIdx)); continue; }
-      }
-      for(const a of allyList){
-        if(a.dead || a.invuln > 0) continue;
-        const dr = b.radius + a.radius;
-        if(dist2(b, a) < dr*dr){ b.dead = true; damageAlly(a, 1); break; }
-      }
+  }
+  // ---- Enemy bullets: check against the player and all alive allies ----
+  for(const b of _eBullets){
+    if(player.invuln <= 0){
+      const dr = b.radius + player.radius;
+      if(dist2(b, player) < dr*dr){ b.dead = true; damagePlayer(1 * enemyDmgScale(levelIdx)); continue; }
+    }
+    for(const a of _allyList){
+      if(a.dead || a.invuln > 0) continue;
+      const dr = b.radius + a.radius;
+      if(dist2(b, a) < dr*dr){ b.dead = true; damageAlly(a, 1); break; }
     }
   }
   if(player.invuln <= 0){
@@ -3403,9 +3427,9 @@ function updatePlaying(dt){
       }
     }
   }
-  // Enemy bodies touching any chosen ally (allyList already includes the summoned
+  // Enemy bodies touching any chosen ally (_allyList already includes the summoned
   // sword_ally via isAlly; inner enemy scan uses the grid).
-  for(const a of allyList){
+  for(const a of _allyList){
     if(a.dead || a.invuln > 0) continue;
     for(const en of enemiesNear(a.x, a.y)){
       const dr = a.radius + en.radius;
@@ -3438,9 +3462,9 @@ function updatePlaying(dt){
     p.vx *= 0.92;
     p.vy *= 0.92;
   }
-  particles = particles.filter(p => p.life > 0);
+  compact(particles, p => p.life > 0);
 
-  entities = entities.filter(e => !e.dead);
+  compact(entities, e => !e.dead);
 
   // Win/loss
   const enemiesAlive = entities.some(e => e.type === 'enemy');
@@ -5751,6 +5775,7 @@ function drawGame(){
     else if(e.type === 'poison_ally') drawPoisonAlly(e);
     else if(e.type === 'poison_cloud') drawPoisonCloud(e);
   }
+  let _lastPColor = '';    // cache last fillStyle color to skip redundant CSS color parses
   for(const p of particles){
     const a = clamp(p.life / p.maxLife, 0, 1);
     ctx.globalAlpha = a;
@@ -5776,17 +5801,17 @@ function drawGame(){
       ctx.fillRect(Math.floor(p.x - s/2), Math.floor(p.y - s/2), s, s);
     } else if(p.spark){
       // Spark shard — a crisp little rectangle.
-      ctx.fillStyle = p.color;
+      if(p.color !== _lastPColor){ ctx.fillStyle = p.color; _lastPColor = p.color; }
       ctx.fillRect(Math.floor(p.x), Math.floor(p.y), p.w || 2, p.h || 1);
     } else if(p.flash){
       // Muzzle/impact flash — a crisp solid square burst (no star/glow).
       const r = Math.max(2, Math.round(p.r || 6));
-      ctx.fillStyle = p.color;
+      if(p.color !== _lastPColor){ ctx.fillStyle = p.color; _lastPColor = p.color; }
       ctx.fillRect(Math.floor(p.x - r/2), Math.floor(p.y - r/2), r, r);
     } else {
       // Plain mote (incl. former glow embers) — a crisp blocky square.
       const s = p.size || 1;
-      ctx.fillStyle = p.color;
+      if(p.color !== _lastPColor){ ctx.fillStyle = p.color; _lastPColor = p.color; }
       ctx.fillRect(Math.floor(p.x), Math.floor(p.y), s, s);
     }
   }
@@ -7080,15 +7105,17 @@ function drawHUD(){
   drawWeaponHUD();
 
   // Boss bar(s) — one per live boss, so the L21-40 twin medium bosses both show.
-  const bosses = entities.filter(e => e.isBoss && !e.dead);
-  if(bosses.length){
-    const barW = bosses.length > 1 ? 120 : 180;
+  // (Reuses _bossList scratch array — no per-frame allocation.)
+  _bossList.length = 0;
+  for(const e of entities){ if(e.isBoss && !e.dead) _bossList.push(e); }
+  if(_bossList.length){
+    const barW = _bossList.length > 1 ? 120 : 180;
     const gap = 8;
-    const totalW = bosses.length * barW + (bosses.length - 1) * gap;
+    const totalW = _bossList.length * barW + (_bossList.length - 1) * gap;
     let bx = Math.floor(W/2 - totalW/2);
     ctx.font = 'bold 8px monospace';
     ctx.textAlign = 'center';
-    for(const boss of bosses){
+    for(const boss of _bossList){
       ctx.fillStyle = '#000';
       ctx.fillRect(bx, H - 26, barW, 12);
       ctx.fillStyle = '#3a1338';
