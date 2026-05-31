@@ -65,7 +65,26 @@ window.addEventListener('resize', resize); resize();
 // ============================================================
 // SPRITES
 // ============================================================
-function S(pal, rows){ return { pal, rows, w: rows[0].length, h: rows.length }; }
+function S(pal, rows){
+  const h = rows.length, w = rows[0].length;
+  // Pre-compute color-batched pixel lists so drawSprite/drawSpriteTinted set
+  // fillStyle once per DISTINCT COLOR instead of once per non-transparent pixel.
+  // For a typical 14x14 sprite with 5 colors and ~100 filled pixels, this cuts
+  // ~100 fillStyle assignments (each a CSS color parse) down to ~5 per sprite.
+  const colorMap = {};
+  for(let r = 0; r < rows.length; r++){
+    const row = rows[r];
+    for(let c = 0; c < row.length; c++){
+      const ch = row[c];
+      const col = pal[ch];
+      if(!col) continue;
+      (colorMap[col] || (colorMap[col] = [])).push(c, r);
+    }
+  }
+  const batches = [];
+  for(const color in colorMap) batches.push({ color, rects: colorMap[color] });
+  return { pal, rows, w, h, batches };
+}
 
 const SPR = {
   player_a: S({'.':null,'1':'#f5d76e','2':'#3498db','3':'#1a2538','4':'#fff1c1'}, [
@@ -944,13 +963,13 @@ const SPR = {
 };
 
 function drawSprite(sp, x, y){
-  const rows = sp.rows, pal = sp.pal;
-  for(let r=0;r<rows.length;r++){
-    const row = rows[r];
-    for(let c=0;c<row.length;c++){
-      const col = pal[row[c]];
-      if(col){ ctx.fillStyle = col; ctx.fillRect(x+c, y+r, 1, 1); }
-    }
+  // Color-batched: one fillStyle per distinct color, then all rects in bulk.
+  // For a 5-color sprite this is ~5 fillStyle calls instead of ~100 (20× fewer
+  // CSS color parses per sprite, the primary per-entity draw cost).
+  for(const batch of sp.batches){
+    ctx.fillStyle = batch.color;
+    const rects = batch.rects;
+    for(let i = 0; i < rects.length; i += 2) ctx.fillRect(x + rects[i], y + rects[i+1], 1, 1);
   }
 }
 function drawSpriteCentered(sp, x, y){
@@ -958,13 +977,11 @@ function drawSpriteCentered(sp, x, y){
   drawSprite(sp, Math.floor(x - sp.w/2), Math.floor(y - sp.h/2));
 }
 function drawSpriteTinted(sp, x, y, tint){
-  const rows = sp.rows, pal = sp.pal;
+  // Single-color tint: one fillStyle for the whole sprite (already efficient).
   ctx.fillStyle = tint;
-  for(let r=0;r<rows.length;r++){
-    const row = rows[r];
-    for(let c=0;c<row.length;c++){
-      if(pal[row[c]]) ctx.fillRect(x+c, y+r, 1, 1);
-    }
+  for(const batch of sp.batches){
+    const rects = batch.rects;
+    for(let i = 0; i < rects.length; i += 2) ctx.fillRect(x + rects[i], y + rects[i+1], 1, 1);
   }
 }
 
@@ -1965,8 +1982,8 @@ const _enemyList = [];    // reused scratch for ally AI target scanning (flat li
 const _explodeTargets = []; // reused scratch for explode() AoE damage scan
 function buildEnemyGrid(){
   // Clear existing cell arrays but keep them in the map for reuse — avoids
-  // allocating new arrays every frame (was enemyGrid.clear() + new Array per cell,
-  // which churned ~40 arrays × 2 builds = ~80 arrays/frame into the GC).
+  // allocating new arrays every frame. Stale cells (populated last frame but
+  // empty this frame) are DELETED to prevent unbounded map growth.
   for(const arr of enemyGrid.values()) arr.length = 0;
   for(const e of entities){
     if(e.type !== 'enemy' || e.dead) continue;
@@ -1975,6 +1992,10 @@ function buildEnemyGrid(){
     if(!arr){ arr = []; enemyGrid.set(k, arr); }
     arr.push(e);
   }
+  // Purge cells that stayed empty this frame (enemies moved away). Without this
+  // the map grows to every cell an enemy ever touched, making the per-frame
+  // clear loop above O(unique cells ever visited) instead of O(current enemies).
+  for(const [k, arr] of enemyGrid){ if(arr.length === 0) enemyGrid.delete(k); }
 }
 // Returns a SHARED, reused array of live enemies in the 3x3 cells around (x,y). The
 // caller must iterate it before the next call (no nesting of enemiesNear calls).
@@ -5760,14 +5781,20 @@ function drawGame(){
     ctx.globalAlpha = 1;
   }
   // Reuse a scratch array (drop dead entries in the same pass) instead of cloning
-  // `entities` every frame, then y-sort for painter order.
+  // `entities` every frame, then y-sort for painter order. Bullets are drawn in a
+  // separate unsorted first pass — they're tiny dots (~1-4 px) whose depth order is
+  // invisible, but they make up ~40% of entities; removing them from the sort halves
+  // the O(n log n) cost (~1000 comparisons → ~300).
   _drawList.length = 0;
-  for(const e of entities){ if(!e.dead) _drawList.push(e); }
+  for(const e of entities){
+    if(e.dead) continue;
+    if(e.type === 'bullet') drawBulletEntity(e);
+    else _drawList.push(e);
+  }
   _drawList.sort((a,b) => a.y - b.y);
   for(const e of _drawList){
     if(e.type === 'player') drawPlayer(e);
     else if(e.type === 'enemy') drawEnemy(e);
-    else if(e.type === 'bullet') drawBulletEntity(e);
     else if(e.type === 'pickup') drawPickupEntity(e);
     else if(e.type === 'companion') drawCompanion(e);
     else if(e.type === 'sword_ally') drawSwordAlly(e);
@@ -7144,6 +7171,14 @@ function drawHUD(){
     ctx.fillText('!! ' + (bossSpawnName || levelData.bossName || BOSS_NAMES[levelData.boss] || 'BOSS') + ' !!', W/2, H/2);
     ctx.globalAlpha = 1;
   }
+
+  // FPS readout (bottom-right corner). Shows the rolling-average frame rate so the
+  // player can quantify "lag" in numbers. Green ≥55, yellow ≥35, red below.
+  const fps = Math.round(fpsAvg);
+  ctx.font = 'bold 8px monospace';
+  ctx.textAlign = 'right';
+  ctx.fillStyle = fps >= 55 ? '#27ae60' : fps >= 35 ? '#f39c12' : '#e74c3c';
+  ctx.fillText(fps + ' FPS', W - 4, H - 4);
 }
 
 function drawWeaponHUD(){
@@ -8652,8 +8687,13 @@ function drawVictory(){
 // MAIN LOOP
 // ============================================================
 let lastT = performance.now();
+let fpsAvg = 60;  // rolling-average FPS for on-screen display (bottom-right corner)
 function loop(t){
-  const dt = Math.min(0.033, (t - lastT) / 1000);
+  const rawDt = (t - lastT) / 1000;
+  const dt = Math.min(0.033, rawDt);
+  // Rolling-average FPS (exponential smoothing, ~1 s window). Displayed in the
+  // bottom-right corner of the HUD so the player can quantify "lag" in numbers.
+  fpsAvg += (1 / Math.max(rawDt, 0.001) - fpsAvg) * 0.08;
   lastT = t;
   // Hard safety cap: if some pathological path explodes the entity list,
   // strip dead entries and clamp to a sane size so the per-frame work stays bounded.
