@@ -886,7 +886,7 @@ DRIVER_BALANCE = r"""
     var savedC = selectedChar, savedP = profile, ok = true, d = [];
     profile = DEFAULT_PROFILE(); profile.level = 40;
     startGame(); state = STATE.PLAYING;
-    function resetHS(){ bossSlowT = 0; bossSlowCd = 0; }
+    function resetHS(){ bossSlowT = 0; }
     function boss(x, y){ var b = createEnemy('bruiser', x || 0, y || 0); b.isBoss = true; b.hp = b.maxHp = 1e9; return b; }
     // (a) Chokepoint predicate. A TINY player hit (mimics a continuous-secondary per-frame
     //     tick, far below the old dmg>=3 gate) on a boss arms the slow-mo for every non-scout.
@@ -930,21 +930,31 @@ DRIVER_BALANCE = r"""
     }
     if(!lmbSlow('soldier')){ ok = false; d.push('soldierLMB!slow'); }
     if(lmbSlow('scout')){ ok = false; d.push('scoutLMBslowed'); }
-    // (d) It's a SLOW-MOTION, not a freeze: with the slow active, update() STILL advances
-    //     entities (the interface keeps running) but by LESS than at full speed.
+    // (d) BULLET-TIME, not a global slowdown: with the slow active, ONLY the enemy slows.
+    //     The PLAYER moves the SAME distance with the slow on as off (full speed always) — this
+    //     is the exact bug being guarded ("all characters slow down their movements"). The
+    //     enemy, by contrast, moves LESS. Player holds D (move right); the grunt seeks left.
     state = STATE.PLAYING; paused = false; showStats = false;
-    player = createPlayer('soldier'); player.x = 200; player.y = 100;
-    var mv = createEnemy('grunt', 260, 100); mv.hp = mv.maxHp = 1e9;   // seeks left toward player
-    entities = [player, mv];
-    resetHS();
-    var xa = mv.x; update(1/60); var full = xa - mv.x;                 // bossSlowT=0 -> full-speed step
-    mv.x = 260; bossSlowT = BOSS_SLOW_DUR; bossSlowCd = 0;
-    var xb = mv.x; update(1/60); var slow = xb - mv.x;                 // slow step (scaled dt)
-    if(!(full > 0)){ ok = false; d.push('enemy!move'); }
-    if(!(slow > 0)){ ok = false; d.push('FROZEN(notSlowMo)'); }        // must still move = NOT a freeze
-    if(!(slow < full * 0.6)){ ok = false; d.push('notSlowed s=' + slow.toFixed(2) + ' f=' + full.toFixed(2)); }
+    keys['KeyD'] = true;
+    function step(slowOn){
+      player = createPlayer('soldier'); player.x = 200; player.y = 100;
+      var en = createEnemy('grunt', 260, 100); en.hp = en.maxHp = 1e9;   // seeks left toward player
+      entities = [player, en];
+      bossSlowT = slowOn ? BOSS_SLOW_DUR : 0;
+      var px = player.x, ex = en.x;
+      update(1/60);
+      return { player: player.x - px, enemy: ex - en.x };
+    }
+    var norm = step(false), slow = step(true);
+    keys['KeyD'] = false;
+    if(!(norm.player > 0)){ ok = false; d.push('player!move'); }
+    // Player speed MUST be identical slow-on vs slow-off (the interface never slows).
+    if(!(Math.abs(slow.player - norm.player) < 1e-6)){ ok = false; d.push('PLAYER_SLOWED s=' + slow.player.toFixed(3) + ' n=' + norm.player.toFixed(3)); }
+    if(!(norm.enemy > 0)){ ok = false; d.push('enemy!move'); }
+    if(!(slow.enemy > 0)){ ok = false; d.push('enemyFrozen'); }                 // slowed, not frozen
+    if(!(slow.enemy < norm.enemy * 0.6)){ ok = false; d.push('enemyNotSlowed s=' + slow.enemy.toFixed(2) + ' n=' + norm.enemy.toFixed(2)); }
     selectedChar = savedC; profile = savedP;
-    check('Boss slow-mo: visible slow-motion (not freeze), all classes except scout, LMB + RMB', ok, d.join(' '));
+    check('Boss bullet-time: only enemies slow (player full-speed), all classes except scout, LMB + RMB', ok, d.join(' '));
   })();
 
   return JSON.stringify(R);
