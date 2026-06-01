@@ -1327,15 +1327,8 @@ let hitStopCd = 0;         // refractory between freezes — stops rapid-fire we
 let hitSfxCd = 0;          // throttle for sfx.hit() — fast weapons (Scout 0.06s cadence) would
                            // create audio nodes 16-33 times/second without this rate-limit
 const HIT_STOP_REFRACTORY = 0.3;
-// Boss-hit BULLET-TIME: on a qualifying player hit to a boss, ONLY enemies + enemy bullets
-// are slowed (via enemyDt in updatePlaying) for BOSS_SLOW_DUR seconds. The player, the
-// allies, and the interface keep moving at FULL speed — so it reads as the boss going into
-// slow-motion while you stay fast (an advantage), never as the controls lagging. This reuses
-// the exact lever the Slow-Mo powerup uses. Each qualifying hit refreshes the window, so the
-// enemies stay slowed while you're landing hits and ramp back ~0.25 s after the last one.
-let bossSlowT = 0;                    // remaining ENEMY slow-motion time (real time)
-const BOSS_SLOW_FACTOR = 0.4;         // enemies run at 40% speed during the window
-const BOSS_SLOW_DUR = 0.25;           // how long the slow lingers after the last hit
+// NOTE: landing a hit on a boss intentionally has NO slow-motion / hit-stop effect (removed
+// per user request). hitStop below is now fully vestigial (never called).
 let stateTime = 0;
 let bossSpawnPulse = 0;
 let bossSpawnName = '';   // name shown in the boss-arrival flash (mid-boss or end boss)
@@ -2405,13 +2398,6 @@ function hitStop(ms){
   hitStopTime = Math.max(hitStopTime, ms / 1000);
   hitStopCd = HIT_STOP_REFRACTORY;
 }
-// Boss-hit bullet-time. UNLIKE hitStop (which froze the whole loop) and unlike scaling the
-// global dt (which would slow the PLAYER too), this only arms bossSlowT — read by enemyDt in
-// updatePlaying — so just the enemies + enemy bullets slow. The player, allies, and interface
-// are never touched. Refreshed on every qualifying hit; lingers BOSS_SLOW_DUR after the last.
-function triggerBossSlow(){
-  bossSlowT = BOSS_SLOW_DUR;
-}
 function spawnDecal(x, y, r, kind){
   if(decals.length >= DECAL_CAP) decals.shift();
   const life = 10;
@@ -2741,13 +2727,6 @@ function damageEnemy(en, dmg, fromPlayer, heavy = true){
   if(en.invulnT > 0){ en.hitFlash = 0.06; return true; }   // invuln boss absorbs it
   en.hp -= dmg;
   en.hitFlash = 0.09;   // brief pure-white pop (drawEnemy white-tints while > 0)
-  // Boss-hit BULLET-TIME: ANY player hit on a boss briefly slows the ENEMIES + enemy bullets
-  // (see triggerBossSlow + enemyDt) while the PLAYER, allies, and interface keep full speed —
-  // for EVERY playable class EXCEPT Xu Yihui (the scout). Keyed on the CHARACTER, not on damage
-  // magnitude, so it fires identically on the basic (LMB) and secondary (RMB) attacks —
-  // including the continuous secondaries (spear/flame/machete) whose per-frame ticks are tiny.
-  // The `dmg>0` guard skips pure-absorb/0-damage calls.
-  if(en.isBoss && fromPlayer && dmg > 0 && player.char !== 'scout') triggerBossSlow();
   if(fromPlayer && dmg > 0 && player.hp > 0){
     const ls = passiveValue('lifesteal');
     if(ls > 0) player.hp = Math.min(player.maxHp, player.hp + dmg * ls);
@@ -2961,7 +2940,6 @@ function startLevel(idx){
   particles = [];
   decals = [];
   groundFields = [];
-  bossSlowT = 0;   // never carry a bullet-time window across a level transition
   if(!player){ player = createPlayer(selectedChar); entities.push(player); }
   else { player.x = worldW/2; player.y = worldH/2; player.invuln = 1.2; }
   // Refresh the chosen assistants each level: keep survivors (full HP), recreate
@@ -3000,7 +2978,6 @@ function startGame(){
   particles = [];
   decals = [];
   groundFields = [];
-  bossSlowT = 0;
   startLevel(0);
 }
 
@@ -3036,10 +3013,8 @@ function update(dt){
   else if(state === STATE.GAME_OVER) handleEndScreen();
   else if(state === STATE.VICTORY) handleVictory();
   else if(state === STATE.PLAYING){
-    // The boss-hit slow-motion is BULLET-TIME: it slows ONLY enemies (via enemyDt inside
-    // updatePlaying), so the player/allies/interface always run at full speed here — we never
-    // scale the dt fed to updatePlaying. (hitStopTime/hitStop are legacy: no longer triggered,
-    // so that freeze branch is a no-op kept only for safety.)
+    // hitStopTime/hitStop are legacy (no longer triggered — boss hits have no time effect now);
+    // this branch is a harmless no-op kept only for safety.
     if(hitStopCd > 0) hitStopCd -= dt;
     if(hitSfxCd > 0) hitSfxCd -= dt;
     if(hitStopTime > 0) hitStopTime -= dt;
@@ -3055,7 +3030,6 @@ function update(dt){
 function updatePlaying(dt){
   // ---- Decay global & powerup timers ----
   if(slowMoTime > 0) slowMoTime -= dt;
-  if(bossSlowT > 0) bossSlowT -= dt;   // boss-hit bullet-time window (enemies only; see enemyDt)
   if(player.speedTime > 0)  player.speedTime  -= dt;
   if(player.sprintTime > 0) player.sprintTime -= dt;
   if(player.damageTime > 0) player.damageTime -= dt;
@@ -3359,9 +3333,7 @@ function updatePlaying(dt){
   // (The spatial grid is built ONCE after entity updates for accurate collision below.)
 
   // ---- Update entities (Slow-Mo powerup scales enemy & enemy-bullet dt) ----
-  // Boss-hit bullet-time AND the Slow-Mo powerup both slow ONLY enemies + enemy bullets via
-  // this enemyDt; the player/allies keep full dt. bossSlowT takes precedence (its own factor).
-  const enemyDt = dt * (bossSlowT > 0 ? BOSS_SLOW_FACTOR : (slowMoTime > 0 ? 0.4 : 1));
+  const enemyDt = dt * (slowMoTime > 0 ? 0.4 : 1);
   for(const e of entities){
     if(e.dead) continue;
     if(e.type === 'enemy') updateEnemy(e, enemyDt);
