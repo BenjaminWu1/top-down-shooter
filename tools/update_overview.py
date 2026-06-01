@@ -38,6 +38,21 @@ DOCX = os.path.normpath(os.path.join(HERE, "..", "Game-Overview.docx"))
 # the new text (so a second run is a no-op).
 # ---------------------------------------------------------------------------
 REPLACEMENTS = [
+    # 0. Leo machete now drains FURY (was infinite) + Ong RMB is a RAPID-FIRE PISTOL on
+    # a MAGAZINE pool (renamed from toxin). Re-keyed off the old stale "GAS-GUN LMB" text.
+    ("GAS-GUN LMB (green ",
+     "ROSTER EXPANDED 3 -> 5 PLAYABLE CLASSES. Leo (key bounty_hunter; HP 11 / speed "
+     "120 / dmg x1.3, no shield): SHOTGUN LMB (3-pellet point-blank spread, slow "
+     "cadence) + MACHETE RMB (a hold-to-combo swept slash with ~2x reach) draining a "
+     "high-but-limited FURY pool (10 s, drained while slashing, regen 0.2/s, refilled "
+     "by the protein pickup; C=grit, V=fanfire). Ong (key cyborg; HP 10 / speed 140 / "
+     "dmg x1.15 / 2 start-shield): BIO-GUN LMB (fireBiogun lobs a glob that bursts into "
+     "a lingering poison_cloud DoT, infinite ammo) + RAPID-FIRE PISTOL RMB "
+     "(fireRapidPistol - fast kinetic rounds) draining a MAGAZINE pool (24 rounds, ~14 "
+     "rounds/s, reloads fast at 3/s, refilled by isotope; C=overclock, V=biobomb). Both "
+     "ship at BASE form (no bespoke per-class weapon evolution beyond the universal "
+     "weapon-tier multiplier)."),
+
     # 1. The big picture - refresh the line count (re-keyed off the now-current
     # "(~6,224 lines)" text) and note the 5-class roster.
     ("(~6,224 lines)",
@@ -375,13 +390,15 @@ INSERTS = [
 
         "ROSTER EXPANDED 3 -> 5 PLAYABLE CLASSES. Leo (key bounty_hunter; HP 11 / speed "
         "120 / dmg x1.3, no shield): SHOTGUN LMB (3-pellet point-blank spread, slow "
-        "cadence) + MACHETE RMB (fireMachete - a hold-to-combo swept slash with ~2x reach) "
-        "draining a FURY pool (6, refilled by the protein pickup; C=grit, V=fanfire). Ong "
-        "(key cyborg; HP 10 / speed 140 / dmg x1.15 / 2 start-shield): GAS-GUN LMB (green "
-        "gas bolt) + BIO-GUN RMB (fireBiogun lobs a glob that bursts into a lingering "
-        "poison_cloud DoT) draining a TOXIN pool (12, refilled by isotope; C=overclock, "
-        "V=biobomb). Both ship at BASE form (no bespoke per-class weapon evolution beyond "
-        "the universal weapon-tier multiplier).",
+        "cadence) + MACHETE RMB (a hold-to-combo swept slash with ~2x reach) draining a "
+        "high-but-limited FURY pool (10 s, drained while slashing, regen 0.2/s, refilled "
+        "by the protein pickup; C=grit, V=fanfire). Ong (key cyborg; HP 10 / speed 140 / "
+        "dmg x1.15 / 2 start-shield): BIO-GUN LMB (fireBiogun lobs a glob that bursts into "
+        "a lingering poison_cloud DoT, infinite ammo) + RAPID-FIRE PISTOL RMB "
+        "(fireRapidPistol - fast kinetic rounds) draining a MAGAZINE pool (24 rounds, ~14 "
+        "rounds/s, reloads fast at 3/s, refilled by isotope; C=overclock, V=biobomb). Both "
+        "ship at BASE form (no bespoke per-class weapon evolution beyond the universal "
+        "weapon-tier multiplier).",
 
         "NEW poison_cloud ENTITY (player-owned lingering AoE DoT: base radius 24 / 2s / 6 "
         "dps; its params ride on the spawning bullet) - NOT an ally; wired into the entity "

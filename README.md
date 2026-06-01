@@ -40,8 +40,8 @@ Choose one of five classes — each plays completely differently, with its own p
 | **Dr.Syed** | 21st-century rainforest warrior · +25% damage | 10 | Pistol | **Spear** — swift straight thrusts over a wide *obtuse* arc; runs on a ~6 s **energy** bar |
 | **Xu Yihui** | Blue cyberpunk mech · fast & nimble | 9 | Fast SMG | **3× laser beams** — three instant straight-line beams that damage every enemy along each line at once; runs on a ~20-shot **power** bar (refilled by **battery**) |
 | **Benjamin Wu** | U.S.-Army heavy · +20% damage · starts with shield | 12 (+4 shield) | Heavy slug | **Flamethrower** — sustained cone of fire; runs on a 12-unit **fuel** bar. Below 50% fuel it overheats into a crimson **Dangerous Temperature** (1.5× damage) until it empties and forces a brief lockout |
-| **Leo** | Bounty hunter · +30% damage · tanky brawler | 11 | Shotgun (3-pellet spread, short range) | **Machete** — wide swept-arc melee, longer reach + higher DPS than the blade; runs on a ~6 s **fury** bar (refilled by **protein**) |
-| **Ong** | Cyborg · standard damage · starts with shield | 10 (+2 shield) | Heavy magnum (slow, very high single-shot) | **Bio-gun** — lobs a glob that drops a lingering **poison cloud** (AoE damage-over-time); runs on a ~12-shot **toxin** bar (refilled by **isotope**) |
+| **Leo** | Bounty hunter · +30% damage · tanky brawler | 11 | Shotgun (3-pellet spread, short range) | **Machete** — wide swept-arc melee, longer reach + higher DPS than the blade; runs on a high but limited ~10 s **fury** bar (refilled by **protein**) |
+| **Ong** | Cyborg · standard damage · starts with shield | 10 (+2 shield) | Bio-gun (lobs a glob that drops a lingering **poison cloud**, infinite ammo) | **Rapid-fire pistol** — very high fire rate; runs on a medium ~24-round **magazine** that reloads fast (refilled by **isotope**) |
 
 ### Skills
 
@@ -62,8 +62,8 @@ All three secondaries draw from a depletable bar shown top-left (no number — t
 - **Dr.Syed** — **energy** for the blade; regenerates **0.2/s** (fast), refilled by a green **beverage**.
 - **Xu Yihui** — **power** for the laser beams (~20 volleys, 1 per shot); regenerates **0.6/s**, refilled by a cyan **battery**.
 - **Benjamin Wu** — **fuel** for the flamethrower; regenerates **0.1/s**, refilled by a **fuel** canister.
-- **Leo** — **fury** for the machete; regenerates **0.2/s**, refilled by a red **protein**.
-- **Ong** — **toxin** for the bio-gun (~12 shots, 1 per shot); regenerates **0.6/s**, refilled by a purple **isotope**.
+- **Leo** — **fury** for the machete (~10 s, drained while slashing); regenerates **0.2/s**, refilled by a red **protein**.
+- **Ong** — **magazine** for the rapid-fire pistol (~24 rounds, 1 per shot); reloads fast at **3/s**, refilled by a purple **isotope**.
 
 ## Assistants
 
@@ -108,7 +108,7 @@ Enemies drop attack enhancers, defenses, and buffs. The drop pool swaps in your 
 
 **Powerups:** Speed (+50% move) · Slow-Mo (enemies crawl) · Score ×2 · Magnet (pickups fly to you).
 
-**Class resources:** Fuel (Benjamin Wu's flamethrower) · Beverage (Dr.Syed's blade energy) · Battery (Xu Yihui's laser power) · Protein (Leo's machete fury) · Isotope (Ong's bio-gun toxin).
+**Class resources:** Fuel (Benjamin Wu's flamethrower) · Beverage (Dr.Syed's blade energy) · Battery (Xu Yihui's laser power) · Protein (Leo's machete fury) · Isotope (Ong's pistol magazine).
 
 ## Features
 

@@ -532,7 +532,7 @@ DRIVER_BALANCE = r"""
      ['tank','fuel','maxFuel',false,null],
      ['scout','power','maxPower',true,'laserCd'],
      ['bounty_hunter','fury','maxFury',false,null],
-     ['cyborg','toxin','maxToxin',true,'bioCd']].forEach(function(spec){
+     ['cyborg','magazine','maxMagazine',true,'bioCd']].forEach(function(spec){
       var cls = spec[0], pool = spec[1], maxF = spec[2], perShot = spec[3], cad = spec[4];
       function fresh(){ player = createPlayer(cls); entities = [player]; allies = []; mouse.rdown = true; mouse.down = false; if(cad) player[cad] = 0; player.hp = player.maxHp; }
       // (a) recover while held: empty pool, not locked -> regen still bumps it above 0.
