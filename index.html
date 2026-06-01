@@ -3253,7 +3253,7 @@ function updatePlaying(dt){
   if(player.char === 'cyborg' && mouse.rdown && player.rmbLockT <= 0 && player.bioCd <= 0 && player.magazine >= 1){
     fireRapidPistol();
     player.magazine = Math.max(0, player.magazine - 1);
-    player.bioCd = 0.07;   // fast cadence (~14 rounds/s)
+    player.bioCd = 0.0467;   // very fast cadence (~21 rounds/s — 1.5x the prior 0.07)
     if(player.magazine < 1) player.rmbLockT = 1;   // mag empty -> 1s reload lockout
   }
 
@@ -5624,7 +5624,7 @@ function drawStats(){
     secName = 'RAPID PISTOL';
     secDmg  = fmt(1.6 * dm) + ' /shot';
     capLabel = 'MAGAZINE'; capVal = fmt(p.magazine) + ' / ' + fmt(p.maxMagazine) + ' rounds';
-    regenVal = '3 /s';    rmbExtra = fmt(1 / 0.07) + ' rounds/s · rapid';
+    regenVal = '3 /s';    rmbExtra = fmt(1 / 0.0467) + ' rounds/s · rapid';
   } else {
     secName = 'FLAMETHROWER';
     secDmg  = fmt(7 * dm) + ' DPS';

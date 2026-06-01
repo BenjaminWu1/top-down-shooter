@@ -40,7 +40,7 @@ DOCX = os.path.normpath(os.path.join(HERE, "..", "Game-Overview.docx"))
 REPLACEMENTS = [
     # 0. Leo machete now drains FURY (was infinite) + Ong RMB is a RAPID-FIRE PISTOL on
     # a MAGAZINE pool (renamed from toxin). Re-keyed off the old stale "GAS-GUN LMB" text.
-    ("GAS-GUN LMB (green ",
+    ("rounds/s, reloads fast at 3/s",
      "ROSTER EXPANDED 3 -> 5 PLAYABLE CLASSES. Leo (key bounty_hunter; HP 11 / speed "
      "120 / dmg x1.3, no shield): SHOTGUN LMB (3-pellet point-blank spread, slow "
      "cadence) + MACHETE RMB (a hold-to-combo swept slash with ~2x reach) draining a "
@@ -48,7 +48,7 @@ REPLACEMENTS = [
      "by the protein pickup; C=grit, V=fanfire). Ong (key cyborg; HP 10 / speed 140 / "
      "dmg x1.15 / 2 start-shield): BIO-GUN LMB (fireBiogun lobs a glob that bursts into "
      "a lingering poison_cloud DoT, infinite ammo) + RAPID-FIRE PISTOL RMB "
-     "(fireRapidPistol - fast kinetic rounds) draining a MAGAZINE pool (24 rounds, ~14 "
+     "(fireRapidPistol - fast kinetic rounds) draining a MAGAZINE pool (24 rounds, ~21 "
      "rounds/s, reloads fast at 3/s, refilled by isotope; C=overclock, V=biobomb). Both "
      "ship at BASE form (no bespoke per-class weapon evolution beyond the universal "
      "weapon-tier multiplier)."),
