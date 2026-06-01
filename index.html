@@ -1518,6 +1518,10 @@ function loadProfile(){
         out.equippedWeapons[ck][slot] = id;
     }
   }
+  // TEST EDITION: always top the player up to at least 50,000 gold on load so the
+  // shop (weapons/skills/passives/assistants) can be exercised freely. REMOVE this
+  // single line to ship the real economy.
+  out.gold = Math.max(out.gold, 50000);
   return out;
 }
 function saveProfile(){
