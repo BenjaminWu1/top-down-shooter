@@ -875,61 +875,76 @@ DRIVER_BALANCE = r"""
     check('Weapon tiers: formula/mults + bullet tags + damage stacks + soldier plasma@T3', ok, d.join(' '));
   })();
 
-  // 33) Boss hit-stop slow-mo is keyed on the CHARACTER, not on damage magnitude: a player
-  //     hit on a boss briefly freezes the whole sim for EVERY class except the scout (Xu
-  //     Yihui), on BOTH the basic (LMB) and the secondary (RMB) attack. Guards against the
-  //     old `dmg>=3` heuristic, which silently dropped the continuous secondaries
-  //     (spear/flame per-frame ticks are <3) and only excluded the scout by accident.
+  // 33) Boss-hit SLOW-MOTION is keyed on the CHARACTER, not on damage magnitude: a player hit
+  //     on a boss arms a brief slow-mo pulse (bossSlowT) for EVERY class except the scout (Xu
+  //     Yihui), on BOTH the basic (LMB) and the secondary (RMB) attack. It is a slow-MOTION,
+  //     not a freeze: update() keeps running updatePlaying every frame, just with a scaled-down
+  //     dt. Guards against (a) the old `dmg>=3` heuristic that silently dropped the continuous
+  //     secondaries (spear/flame ticks are <3), (b) the scout being excluded only by accident,
+  //     and (c) any regression back to a hard freeze (entities must still advance while slow).
   (function(){
     var savedC = selectedChar, savedP = profile, ok = true, d = [];
     profile = DEFAULT_PROFILE(); profile.level = 40;
     startGame(); state = STATE.PLAYING;
-    function resetHS(){ hitStopTime = 0; hitStopCd = 0; }
+    function resetHS(){ bossSlowT = 0; bossSlowCd = 0; }
     function boss(x, y){ var b = createEnemy('bruiser', x || 0, y || 0); b.isBoss = true; b.hp = b.maxHp = 1e9; return b; }
     // (a) Chokepoint predicate. A TINY player hit (mimics a continuous-secondary per-frame
-    //     tick, far below the old dmg>=3 gate) on a boss freezes for every non-scout class.
+    //     tick, far below the old dmg>=3 gate) on a boss arms the slow-mo for every non-scout.
     ['soldier','tank','bounty_hunter','cyborg'].forEach(function(c){
       player = createPlayer(c); var b = boss(); entities = [player, b];
       resetHS(); damageEnemy(b, 0.1, true);
-      if(!(hitStopTime > 0)){ ok = false; d.push(c + ':tick!freeze'); }
+      if(!(bossSlowT > 0)){ ok = false; d.push(c + ':tick!slow'); }
     });
     // ...and NEVER for the scout — not on a big hit, not via the heavy=false laser path.
     player = createPlayer('scout'); var bs = boss(); entities = [player, bs];
-    resetHS(); damageEnemy(bs, 5, true);        if(hitStopTime > 0){ ok = false; d.push('scout:bigHitFroze'); }
-    resetHS(); damageEnemy(bs, 5, true, false); if(hitStopTime > 0){ ok = false; d.push('scout:laserFroze'); }
-    // Non-boss hits and ally-sourced (fromPlayer=false) hits must never freeze.
+    resetHS(); damageEnemy(bs, 5, true);        if(bossSlowT > 0){ ok = false; d.push('scout:bigHitSlowed'); }
+    resetHS(); damageEnemy(bs, 5, true, false); if(bossSlowT > 0){ ok = false; d.push('scout:laserSlowed'); }
+    // Non-boss hits and ally-sourced (fromPlayer=false) hits must never slow.
     player = createPlayer('tank');
     var reg = createEnemy('grunt', 0, 0); reg.hp = reg.maxHp = 1e9; entities = [player, reg];
-    resetHS(); damageEnemy(reg, 9, true); if(hitStopTime > 0){ ok = false; d.push('regularFroze'); }
+    resetHS(); damageEnemy(reg, 9, true); if(bossSlowT > 0){ ok = false; d.push('regularSlowed'); }
     var b2 = boss(); entities = [player, b2];
-    resetHS(); damageEnemy(b2, 9, false); if(hitStopTime > 0){ ok = false; d.push('allyHitFroze'); }
+    resetHS(); damageEnemy(b2, 9, false); if(bossSlowT > 0){ ok = false; d.push('allyHitSlowed'); }
     // (b) Real RMB code paths — the two continuous secondaries the old gate silently dropped.
     player = createPlayer('soldier'); player.x = 100; player.y = 100; player.angle = 0;
     var bk = boss(112, 100); entities = [player, bk];
     resetHS(); fireKatana(1/60);
-    if(!(hitStopTime > 0)){ ok = false; d.push('soldierRMB!freeze'); }
+    if(!(bossSlowT > 0)){ ok = false; d.push('soldierRMB!slow'); }
     player = createPlayer('tank'); player.x = 100; player.y = 100; player.angle = 0;
     var bf = boss(120, 100); entities = [player, bf];
     resetHS(); fireFlamethrower(1/60);
-    if(!(hitStopTime > 0)){ ok = false; d.push('tankRMB!freeze'); }
-    // scout laser on the center beam must NOT freeze.
+    if(!(bossSlowT > 0)){ ok = false; d.push('tankRMB!slow'); }
+    // scout laser on the center beam must NOT slow.
     player = createPlayer('scout'); player.x = 100; player.y = 100; player.angle = 0;
     var bl = boss(130, 108); entities = [player, bl];
     resetHS(); fireLaserBeams();
-    if(hitStopTime > 0){ ok = false; d.push('scoutLaserFroze'); }
-    // (c) Real LMB end-to-end: a fired player bullet connecting with a boss freezes for a
+    if(bossSlowT > 0){ ok = false; d.push('scoutLaserSlowed'); }
+    // (c) Real LMB end-to-end: a fired player bullet connecting with a boss arms the slow for a
     //     non-scout but not for the scout.
-    function lmbFreeze(c){
+    function lmbSlow(c){
       player = createPlayer(c); player.x = 100; player.y = 100; player.angle = 0; player.fireCooldown = 0;
       var bb = boss(112, 100); entities = [player, bb];
       resetHS(); fireWeapon(player.x + 9, player.y);
-      for(var i = 0; i < 12 && hitStopTime === 0; i++) update(1/60);
-      return hitStopTime > 0;
+      for(var i = 0; i < 12 && bossSlowT === 0; i++) update(1/60);
+      return bossSlowT > 0;
     }
-    if(!lmbFreeze('soldier')){ ok = false; d.push('soldierLMB!freeze'); }
-    if(lmbFreeze('scout')){ ok = false; d.push('scoutLMBfroze'); }
+    if(!lmbSlow('soldier')){ ok = false; d.push('soldierLMB!slow'); }
+    if(lmbSlow('scout')){ ok = false; d.push('scoutLMBslowed'); }
+    // (d) It's a SLOW-MOTION, not a freeze: with the slow active, update() STILL advances
+    //     entities (the interface keeps running) but by LESS than at full speed.
+    state = STATE.PLAYING; paused = false; showStats = false;
+    player = createPlayer('soldier'); player.x = 200; player.y = 100;
+    var mv = createEnemy('grunt', 260, 100); mv.hp = mv.maxHp = 1e9;   // seeks left toward player
+    entities = [player, mv];
+    resetHS();
+    var xa = mv.x; update(1/60); var full = xa - mv.x;                 // bossSlowT=0 -> full-speed step
+    mv.x = 260; bossSlowT = BOSS_SLOW_DUR; bossSlowCd = 0;
+    var xb = mv.x; update(1/60); var slow = xb - mv.x;                 // slow step (scaled dt)
+    if(!(full > 0)){ ok = false; d.push('enemy!move'); }
+    if(!(slow > 0)){ ok = false; d.push('FROZEN(notSlowMo)'); }        // must still move = NOT a freeze
+    if(!(slow < full * 0.6)){ ok = false; d.push('notSlowed s=' + slow.toFixed(2) + ' f=' + full.toFixed(2)); }
     selectedChar = savedC; profile = savedP;
-    check('Boss hit-stop: fires for every class except scout, on both LMB + RMB', ok, d.join(' '));
+    check('Boss slow-mo: visible slow-motion (not freeze), all classes except scout, LMB + RMB', ok, d.join(' '));
   })();
 
   return JSON.stringify(R);
