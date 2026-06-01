@@ -2445,6 +2445,9 @@ function createBullet(x,y,angle,owner,opts={}){
     // (radial-gradient bloom under 'lighter'). tracer = a thin sharp air-distortion trail.
     kinetic: opts.kinetic ?? false,
     tracer: opts.tracer ?? false,
+    // fluor = render as a bright fluorescent glowing orb (Xu's Purple Core LMB). Must be
+    // carried through here or drawBulletEntity's fluor branch never fires.
+    fluor: opts.fluor ?? false,
     // 5-tier weapon evolution tags: the firing weapon's tier + the class that fired it.
     // (drawBulletEntity's kinetic/energy split is derived from these at fire time; the
     // renderer also reads `tier` to scale the projectile's heft/brightness.)
