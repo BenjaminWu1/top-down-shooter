@@ -3688,8 +3688,11 @@ function fireFlamethrower(dt){
     const py = baseY + Math.sin(player.angle + jitter) * 4;
     const vx = Math.cos(player.angle + jitter) * (reach * 2);
     const vy = Math.sin(player.angle + jitter) * (reach * 2);
-    // Normal = orange-red; Dangerous Temperature = deep, vibrant crimson.
-    const pal = danger ? ['#fff', '#e74c3c', '#c0392b', '#7a1f12'] : ['#fff', '#f1c40f', '#e67e22', '#e74c3c'];
+    // Normal = orange-red; Dangerous Temperature = deep, vibrant crimson. The Blue
+    // Flame Blowgun (equipped second weapon) shoots a blue jet instead.
+    const pal = player.weaponSecond === 'wu_blowgun'
+      ? ['#fff', '#7fd4ff', '#2a9df4', '#0d47a1']
+      : (danger ? ['#fff', '#e74c3c', '#c0392b', '#7a1f12'] : ['#fff', '#f1c40f', '#e67e22', '#e74c3c']);
     particles.push({
       x: px, y: py, vx, vy,
       life: 0.3 + Math.random() * 0.15,
@@ -3910,6 +3913,8 @@ function fireLaserBeams(){
   const a = player.angle;
   const lx = player.x + Math.cos(a) * 8 - Math.sin(a) * 8;
   const ly = player.y + Math.sin(a) * 8 + Math.cos(a) * 8;
+  // PURPLE CORE (equipped first weapon) recolors the RMB beams + muzzle bright purple.
+  const beamCol = player.weaponFirst === 'xu_purplecore' ? '#b44cff' : '#4fc3f7';
   for(const off of [-LASER_BEAM_SPREAD, 0, LASER_BEAM_SPREAD]){
     const a = player.angle + off;
     const cx = Math.cos(a), cy = Math.sin(a);
@@ -3928,10 +3933,10 @@ function fireLaserBeams(){
     // Beam visual: a straight line from muzzle along the beam, flashing then fading.
     if(particles.length < 300) particles.push({
       beam:true, x:lx, y:ly, angle:a, len:LASER_BEAM_LEN,
-      vx:0, vy:0, color:'#4fc3f7', life:0.14, maxLife:0.14
+      vx:0, vy:0, color:beamCol, life:0.14, maxLife:0.14
     });
   }
-  emit(lx, ly, 6, '#4fc3f7', 40, 150, 0.18, true);
+  emit(lx, ly, 6, beamCol, 40, 150, 0.18, true);
   sfx.laserBeam();
 }
 
@@ -3954,9 +3959,14 @@ function fireWeapon(mx, my){
   let opts, cd, flashN, flashCol, flashSpd, flashLife, fireSfx = sfx.shoot;
   if(player.char === 'scout'){
     // Assassin SMG: fast, light, low-damage blue laser dots. High sustained DPS up
-    // close; each shot is weak — rewards landing many hits.
-    opts = { dmg: 0.85 * dmgMult, speed: 360, radius: 2, life: 1.0, sprite: SPR.bullet_dot_blue, glow: '#4fc3f7' };
-    cd = 0.06; flashN = 2; flashCol = '#b3e5fc'; flashSpd = 110; flashLife = 0.14;
+    // close; each shot is weak — rewards landing many hits. PURPLE CORE (equipped
+    // first weapon) recolors the dot + muzzle bright purple (no sprite → the glow
+    // colour draws the dot, so the laser colour actually changes).
+    const purple = player.weaponFirst === 'xu_purplecore';
+    opts = purple
+      ? { dmg: 0.85 * dmgMult, speed: 360, radius: 2, life: 1.0, glow: '#b44cff' }
+      : { dmg: 0.85 * dmgMult, speed: 360, radius: 2, life: 1.0, sprite: SPR.bullet_dot_blue, glow: '#4fc3f7' };
+    cd = 0.06; flashN = 2; flashCol = purple ? '#d6aaff' : '#b3e5fc'; flashSpd = 110; flashLife = 0.14;
   } else if(player.char === 'tank'){
     // Heavy slug: 2× base damage. KINETIC — a gunmetal artillery slug, not a glow orb.
     opts = { dmg: 2 * dmgMult, radius: 3, speed: 300, life: 1.6, kinetic: true, glow: '#b0b6bd' };
@@ -6032,7 +6042,7 @@ function drawCharacterFloorPlan(ctx, charKey){
 // aimAngle. drawPlayer (for soldier) and the soldier card both call this
 // directly with absolute (x, y); they bypass the drawCharacterFloorPlan
 // transform path used by the other four classes.
-function drawDrSyed(ctx, x, y, aimAngle, px = 5, firstW = null, secondW = null) {
+function drawDrSyed(ctx, x, y, aimAngle, px = 5, firstW = null, secondW = null, melee = false) {
   const MAP = [
     "....HHHHHH....","...HHHHHHHH...","..HSSSSSSSSH..","..SSSSSSSSSS..",
     "..sSSSSSSSSs..","..SSEESSEESS..","..SSSSSSSSSS..","..sSSSMMSSSs..",
@@ -6058,6 +6068,8 @@ function drawDrSyed(ctx, x, y, aimAngle, px = 5, firstW = null, secondW = null) 
   // proper AK silhouette (wooden stock + grey receiver + long barrel +
   // banana mag + muzzle device) so the in-game Dr. Syed visibly carries
   // an AK-47, matching the AK in his CHOOSE-YOUR-CHARACTER card pose.
+  // Hidden during the melee swing (only the swinging blade shows — mirrors Leo).
+  if(!melee){
   ctx.save();
   ctx.translate(0, 2*px); ctx.rotate(-0.9);
   ctx.fillStyle = '#4a3520'; ctx.fillRect(-5*px,   -1*px,   2.5*px, 2*px);    // wooden stock (rear)
@@ -6067,6 +6079,7 @@ function drawDrSyed(ctx, x, y, aimAngle, px = 5, firstW = null, secondW = null) 
   ctx.fillStyle = '#3a2c18'; ctx.fillRect(-1*px,    1*px,   1.8*px, 2.8*px);  // banana magazine
   ctx.fillStyle = '#15171b'; ctx.fillRect( 7*px,   -0.5*px, 1*px,   1*px);    // muzzle device
   ctx.restore();
+  }
 
   const ox = -w/2, oy = -h/2;
   for (let r = 0; r < rows; r++) {
@@ -6080,6 +6093,8 @@ function drawDrSyed(ctx, x, y, aimAngle, px = 5, firstW = null, secondW = null) 
   }
 
   // Second-attack (LEFT hand): default resting spear, or the equipped weapon model.
+  // Hidden during the melee swing — drawPlayer draws the swinging blade instead.
+  if(!melee){
   ctx.save();
   ctx.translate(-7*px, 2*px); ctx.rotate(-0.35);
   if(secondW && WEAPONS[secondW] && WEAPONS[secondW].draw){
@@ -6093,8 +6108,11 @@ function drawDrSyed(ctx, x, y, aimAngle, px = 5, firstW = null, secondW = null) 
     ctx.closePath(); ctx.fill();
   }
   ctx.restore();
+  }
 
   // First-attack (RIGHT hand): default pistol, or the equipped weapon model.
+  // Hidden during the melee swing so only the sword shows (mirrors Leo's sword mode).
+  if(!melee){
   ctx.save();
   ctx.translate(7*px, 4*px); ctx.rotate(aimAngle);
   if(firstW && WEAPONS[firstW] && WEAPONS[firstW].draw){
@@ -6107,6 +6125,7 @@ function drawDrSyed(ctx, x, y, aimAngle, px = 5, firstW = null, secondW = null) 
     ctx.fillStyle = '#6b7580'; ctx.fillRect(1.5*px, -1*px, 3.5*px, 0.4*px);
   }
   ctx.restore();
+  }
 
   ctx.restore();
 }
@@ -6407,8 +6426,11 @@ function drawBenjaminWu(ctx, x, y, aimAngle, px = 3, firing = true, handgunAngle
   }
   if (firing) {
     const flick = Math.sin(tt) * 0.4*px;
+    // Blue Flame Blowgun (equipped) shoots a blue jet; default flamethrower is orange.
+    const blue = secondW === 'wu_blowgun';
     const grd = ctx.createLinearGradient(12*px, 0, 24*px, 0);
-    grd.addColorStop(0, '#fff3b0'); grd.addColorStop(0.4, '#ff9b2e'); grd.addColorStop(1, 'rgba(214,42,0,0)');
+    if(blue){ grd.addColorStop(0, '#dff3ff'); grd.addColorStop(0.4, '#2a9df4'); grd.addColorStop(1, 'rgba(13,71,161,0)'); }
+    else    { grd.addColorStop(0, '#fff3b0'); grd.addColorStop(0.4, '#ff9b2e'); grd.addColorStop(1, 'rgba(214,42,0,0)'); }
     ctx.fillStyle = grd;
     ctx.beginPath();
     ctx.moveTo(12*px, -1.4*px);
@@ -6417,7 +6439,7 @@ function drawBenjaminWu(ctx, x, y, aimAngle, px = 3, firing = true, handgunAngle
     ctx.lineTo(24*px+flick, 3*px+flick);
     ctx.lineTo(12*px, 1.4*px);
     ctx.closePath(); ctx.fill();
-    ctx.fillStyle = 'rgba(255,240,180,.9)';
+    ctx.fillStyle = blue ? 'rgba(223,243,255,.9)' : 'rgba(255,240,180,.9)';
     ctx.beginPath();
     ctx.moveTo(12*px, -0.8*px); ctx.lineTo(19*px+flick, 0); ctx.lineTo(12*px, 0.8*px);
     ctx.closePath(); ctx.fill();
@@ -6606,7 +6628,10 @@ function drawBenjaminWuCard(ctx, x, y, px = 3, firstW = null, secondW = null) {
   ctx.fill();
 
   // ----- second-attack slung across BACK (behind body): default flamethrower, or equipped card model -----
-  if(secondW && WEAPONS[secondW] && WEAPONS[secondW].card){
+  // The Blue Flame Blowgun deliberately keeps the DEFAULT flamethrower model + pose on
+  // the card — only its muzzle flame turns blue (handled in the default branch below).
+  const wuBlueFlame = (secondW === 'wu_blowgun');
+  if(secondW && WEAPONS[secondW] && WEAPONS[secondW].card && !wuBlueFlame){
     ctx.save(); WEAPONS[secondW].card(ctx, px); ctx.restore();
   } else {
   ctx.save();
@@ -6630,13 +6655,14 @@ function drawBenjaminWuCard(ctx, x, y, px = 3, firstW = null, secondW = null) {
   ctx.fillStyle='#2b2f36'; ctx.fillRect(-0.4*px,-14*px,2.2*px,1.4*px);
   const flick = Math.sin(Date.now()*0.02)*0.4*px;
   const grd = ctx.createRadialGradient(0.7*px,-15*px,0,0.7*px,-15*px,3*px);
-  grd.addColorStop(0,'#fff3b0'); grd.addColorStop(0.5,'#ff9b2e'); grd.addColorStop(1,'rgba(214,42,0,0)');
+  if(wuBlueFlame){ grd.addColorStop(0,'#dff3ff'); grd.addColorStop(0.5,'#2a9df4'); grd.addColorStop(1,'rgba(13,71,161,0)'); }
+  else           { grd.addColorStop(0,'#fff3b0'); grd.addColorStop(0.5,'#ff9b2e'); grd.addColorStop(1,'rgba(214,42,0,0)'); }
   ctx.fillStyle=grd;
   ctx.beginPath();
   ctx.moveTo(-0.4*px,-14*px);
   ctx.quadraticCurveTo(0.7*px,-18*px-flick,1.8*px,-14*px);
   ctx.closePath(); ctx.fill();
-  ctx.fillStyle='#fff7d6'; ctx.beginPath(); ctx.arc(0.7*px,-14.6*px,0.7*px,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = wuBlueFlame ? '#dff3ff' : '#fff7d6'; ctx.beginPath(); ctx.arc(0.7*px,-14.6*px,0.7*px,0,Math.PI*2); ctx.fill();
   ctx.restore();
   }
 
@@ -6908,7 +6934,10 @@ function drawPlayer(p){
   // by the character-select card preview, so don't delete them.
   if(p.char === 'soldier'){
     // Dr. Syed has his own renderer — body always head-up, only the Uzi rotates by aim.
-    drawDrSyed(ctx, p.x, p.y, p.angle, DR_SYED_PX, p.weaponFirst, p.weaponSecond);
+    // During the melee swing (RMB held + energy), hide his guns so only the swinging
+    // blade (drawn above) shows — mirrors Leo's sword-only mode.
+    const syedMelee = mouse.rdown && p.energy > 0;
+    drawDrSyed(ctx, p.x, p.y, p.angle, DR_SYED_PX, p.weaponFirst, p.weaponSecond, syedMelee);
   } else if(p.char === 'scout'){
     // Xu Yihui — same convention: body head-up, weapons rotate by aim. (Purple Core
     // has no model swap, so no weapon params are passed.)
