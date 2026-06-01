@@ -6225,7 +6225,7 @@ function drawDrSyedCard(ctx, x, y, px = 3, firstW = null, secondW = null) {
 // original function (both weapons swivel together). The character-select card
 // passes a different `pistolAngle` so the two weapons point to opposite sides
 // on the card while staying locked-together in-game (user request).
-function drawXuYihui(ctx, x, y, aimAngle, px = 3, pistolAngle = aimAngle) {
+function drawXuYihui(ctx, x, y, aimAngle, px = 3, pistolAngle = aimAngle, purple = false) {
   const MAP = [
     "...AAAAAAAA...","..AaAAAAAAaA..","..AAVVVVVVAA..","..AVvvvvvvVA..",
     "..AVvvvvvvVA..","..AAVVVVVVAA..","...AaSSSSaA...","..AAaAAAAaAA..",
@@ -6233,8 +6233,20 @@ function drawXuYihui(ctx, x, y, aimAngle, px = 3, pistolAngle = aimAngle) {
     ".AAAaccccaAAA.",".AAcAAAAAAcAA.","GAAAaaaaaaAAAG",".AALLaaaaLLAA.",
     ".AALLaAAaLLAA.",".AcLLaAAaLLcA.",".AALLaaaaLLAA.","..GGc....cGG..","..GGG....GGG..",
   ];
-  const C = { V:'#173a5c', v:'#6fe0ff', A:'#2a63c8', a:'#163a82',
-              c:'#36d6ff', N:'#cffaff', S:'#caa078', G:'#0c1420', L:'#3a78d8', l:'#1d4690' };
+  // Body palette: default blue, or bright PURPLE with the Purple Core equipped (matches
+  // the card). Skin S + near-black G keep their hue; everything blue → purple.
+  const C = purple
+    ? { V:'#3a1a5c', v:'#d06fff', A:'#7a2ac8', a:'#3a1682', c:'#b836ff', N:'#f0cfff', S:'#caa078', G:'#140c20', L:'#7a3ad8', l:'#461d90' }
+    : { V:'#173a5c', v:'#6fe0ff', A:'#2a63c8', a:'#163a82', c:'#36d6ff', N:'#cffaff', S:'#caa078', G:'#0c1420', L:'#3a78d8', l:'#1d4690' };
+  // Weapon + energy-accent colors (blue default / bright purple with Purple Core).
+  const wkGun    = purple ? '#160e22' : '#0e1622';
+  const wkBody   = purple ? '#7a1fe0' : '#1f6fe0';
+  const wkMid    = purple ? '#8a3aff' : '#3a9bff';
+  const wkDark   = purple ? '#3a0d8a' : '#0d3a8a';
+  const wkLite   = purple ? '#cf7fff' : '#7fd4ff';
+  const wkAccent = purple ? '#b836ff' : '#36d6ff';
+  const wkTip    = purple ? '#ecd6ff' : '#d6f4ff';
+  const coreGlow = purple ? '170,54,255' : '54,214,255';
   const tt = (typeof performance !== 'undefined' ? performance.now() : Date.now()) * 0.005;
 
   ctx.save();
@@ -6248,7 +6260,7 @@ function drawXuYihui(ctx, x, y, aimAngle, px = 3, pistolAngle = aimAngle) {
   ctx.fill();
 
   const pulse = 0.35 + 0.22*Math.sin(tt);
-  ctx.fillStyle = 'rgba(54,214,255,' + pulse + ')';
+  ctx.fillStyle = 'rgba(' + coreGlow + ',' + pulse + ')';
   ctx.beginPath();
   ctx.arc(0, -0.5*px, 3.2*px, 0, Math.PI*2);
   ctx.fill();
@@ -6266,21 +6278,21 @@ function drawXuYihui(ctx, x, y, aimAngle, px = 3, pistolAngle = aimAngle) {
 
   ctx.save();
   ctx.translate(-3*px, 2*px); ctx.rotate(aimAngle);
-  ctx.fillStyle = '#1f6fe0'; ctx.fillRect(-2*px, -2.6*px, 12*px, 5.2*px);
-  ctx.fillStyle = '#3a9bff'; ctx.fillRect(0, -1.8*px, 8*px, 3.6*px);
-  ctx.fillStyle = '#0d3a8a'; ctx.fillRect(10*px, -1.8*px, 4*px, 3.6*px);
-  ctx.fillStyle = '#7fd4ff'; ctx.fillRect(2*px, -0.7*px, 6*px, 1.4*px);
-  ctx.fillStyle = '#36d6ff'; ctx.fillRect(1*px, 2*px, 2*px, 1*px); ctx.fillRect(4*px, 2*px, 2*px, 1*px);
-  ctx.fillStyle = '#d6f4ff'; ctx.fillRect(13*px, -0.9*px, 1.8*px, 1.8*px);
+  ctx.fillStyle = wkBody;   ctx.fillRect(-2*px, -2.6*px, 12*px, 5.2*px);
+  ctx.fillStyle = wkMid;    ctx.fillRect(0, -1.8*px, 8*px, 3.6*px);
+  ctx.fillStyle = wkDark;   ctx.fillRect(10*px, -1.8*px, 4*px, 3.6*px);
+  ctx.fillStyle = wkLite;   ctx.fillRect(2*px, -0.7*px, 6*px, 1.4*px);
+  ctx.fillStyle = wkAccent; ctx.fillRect(1*px, 2*px, 2*px, 1*px); ctx.fillRect(4*px, 2*px, 2*px, 1*px);
+  ctx.fillStyle = wkTip;    ctx.fillRect(13*px, -0.9*px, 1.8*px, 1.8*px);
   ctx.restore();
 
   ctx.save();
   ctx.translate(7*px, -1*px); ctx.rotate(pistolAngle);
-  ctx.fillStyle = '#0e1622'; ctx.fillRect(-0.4*px, -1*px, 2*px, 2.4*px);
-  ctx.fillStyle = '#1f6fe0'; ctx.fillRect(1.4*px, -1*px, 4.5*px, 2*px);
-  ctx.fillStyle = '#7fd4ff'; ctx.fillRect(2*px, -0.4*px, 3.5*px, 0.8*px);
-  ctx.fillStyle = '#0d3a8a'; ctx.fillRect(5.9*px, -0.6*px, 2.5*px, 1.2*px);
-  ctx.fillStyle = '#d6f4ff'; ctx.fillRect(8.1*px, -0.5*px, 1*px, 1*px);
+  ctx.fillStyle = wkGun;  ctx.fillRect(-0.4*px, -1*px, 2*px, 2.4*px);
+  ctx.fillStyle = wkBody; ctx.fillRect(1.4*px, -1*px, 4.5*px, 2*px);
+  ctx.fillStyle = wkLite; ctx.fillRect(2*px, -0.4*px, 3.5*px, 0.8*px);
+  ctx.fillStyle = wkDark; ctx.fillRect(5.9*px, -0.6*px, 2.5*px, 1.2*px);
+  ctx.fillStyle = wkTip;  ctx.fillRect(8.1*px, -0.5*px, 1*px, 1*px);
   ctx.restore();
 
   ctx.restore();
@@ -6954,9 +6966,9 @@ function drawPlayer(p){
     const syedMelee = mouse.rdown && p.energy > 0;
     drawDrSyed(ctx, p.x, p.y, p.angle, DR_SYED_PX, p.weaponFirst, p.weaponSecond, syedMelee);
   } else if(p.char === 'scout'){
-    // Xu Yihui — same convention: body head-up, weapons rotate by aim. (Purple Core
-    // has no model swap, so no weapon params are passed.)
-    drawXuYihui(ctx, p.x, p.y, p.angle, XU_YIHUI_PX);
+    // Xu Yihui — same convention: body head-up, weapons rotate by aim. Purple Core
+    // has no MODEL swap, but recolors the body/weapons bright purple (matches the card).
+    drawXuYihui(ctx, p.x, p.y, p.angle, XU_YIHUI_PX, p.angle, p.weaponFirst === 'xu_purplecore');
   } else if(p.char === 'tank'){
     // Benjamin Wu — bespoke renderer. `firing` shows the flame visual at the
     // flamethrower nozzle whenever the RMB flamethrower is actually doing
