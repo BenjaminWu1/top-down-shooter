@@ -1415,12 +1415,39 @@ const PASSIVES = {
 };
 const PASSIVE_ORDER = ['lifesteal','hpregen','resource','greed','scholar','scavenger','swiftness','vitality'];
 
+// ---- PURCHASABLE WEAPONS (shop "WEAPONS" tab + per-character equip). Each class
+// has up to two slots — `first` = the LMB primary (right hand in-game / across the
+// chest on the card), `second` = the held-RMB secondary (left hand in-game / on the
+// back-or-waist on the card). The default weapon stays the default for each slot
+// (null = default). `draw(ctx,px)` renders the weapon pointing +x at a hand/chest
+// pivot; the optional `card(ctx,px)` is the self-posed back/waist card variant.
+// Xu Yihui's Purple Core is a single cheap option with NO model swap (draw:null) —
+// its visual/shield mechanics land in Stage 2. The function refs are hoisted, so
+// referencing the draw fns (defined far below) here is safe. ----
+const WEAPON_COST = 4000;        // expensive: the real weapon models
+const WEAPON_COST_CHEAP = 350;   // Xu Purple Core (cheap, easy to try)
+const WEAPONS = {
+  syed_ak12:     { char:'soldier',       slot:'first',  name:'AK-12',         cost:WEAPON_COST, draw:drawAK12,          blurb:'+3% primary dmg' },
+  syed_scimitar: { char:'soldier',       slot:'second', name:'SCIMITAR',      cost:WEAPON_COST, draw:drawScimitar,      card:cardScimitar,     blurb:'+3% atk speed' },
+  wu_sig250:     { char:'tank',          slot:'first',  name:'SIG M250',      cost:WEAPON_COST, draw:drawSIG250,        blurb:'+3.5% atk speed' },
+  wu_blowgun:    { char:'tank',          slot:'second', name:'FLAME BLOWGUN', cost:WEAPON_COST, draw:drawBlowgun,       card:cardBlowgun,      blurb:'blue flames (S2)' },
+  leo_benelli:   { char:'bounty_hunter', slot:'first',  name:'BENELLI M4',    cost:WEAPON_COST, draw:drawBenelli,       blurb:'pellet blast (S2)' },
+  leo_greatsword:{ char:'bounty_hunter', slot:'second', name:'GREAT SWORD',   cost:WEAPON_COST, draw:drawGreatsword,    card:cardGreatsword,   blurb:'+3% dmg' },
+  ong_xm7:       { char:'cyborg',        slot:'first',  name:'XM7',           cost:WEAPON_COST, draw:drawXM7,           blurb:'+10% gas radius' },
+  ong_dragon:    { char:'cyborg',        slot:'second', name:'DRAGON',        cost:WEAPON_COST, draw:drawDragonPistol,  card:cardDragonPistol, blurb:'+15% mag regen' },
+  xu_purplecore: { char:'scout',         slot:'first',  name:'PURPLE CORE',   cost:WEAPON_COST_CHEAP, draw:null,        blurb:'+3% move (S2: purple+shield)' }
+};
+const WEAPON_ORDER = ['syed_ak12','syed_scimitar','wu_sig250','wu_blowgun','leo_benelli','leo_greatsword','ong_xm7','ong_dragon','xu_purplecore'];
+
 function DEFAULT_PROFILE(){
   return { v:1, level:1, xp:0, gold:0,
            ownedSkills:['heal'], ownedAssistants:['drone'],
            assistantLevels:{ drone:1 },
            skillLevels:{ heal:1 },
            passiveLevels:{}, equippedPassives:[],
+           ownedWeapons:[],
+           equippedWeapons:{ soldier:{first:null,second:null}, scout:{first:null,second:null},
+                             tank:{first:null,second:null}, bounty_hunter:{first:null,second:null}, cyborg:{first:null,second:null} },
            loadout:{ x:null, c:null, b:null, v:null },
            defaultAssistant:'drone', equippedAssistants:['drone'] };
 }
@@ -1477,6 +1504,20 @@ function loadProfile(){
   const maxS = Math.min(5, Math.floor((out.level - 1) / 8) + 1);
   out.equippedPassives = (Array.isArray(p.equippedPassives) ? p.equippedPassives : [])
     .filter(k => PASSIVES[k] && out.passiveLevels[k]).slice(0, maxS);
+  // Purchasable weapons: keep only ids that exist in the catalog; rebuild the
+  // per-character equipped map, keeping an id only if owned + correct char + slot.
+  out.ownedWeapons = (Array.isArray(p.ownedWeapons) ? p.ownedWeapons : []).filter(id => WEAPONS[id]);
+  out.equippedWeapons = {};
+  const ew = (p.equippedWeapons && typeof p.equippedWeapons === 'object') ? p.equippedWeapons : {};
+  for(const ck of ['soldier','scout','tank','bounty_hunter','cyborg']){
+    out.equippedWeapons[ck] = { first:null, second:null };
+    const src = ew[ck] || {};
+    for(const slot of ['first','second']){
+      const id = src[slot];
+      if(id && WEAPONS[id] && WEAPONS[id].char === ck && WEAPONS[id].slot === slot && out.ownedWeapons.includes(id))
+        out.equippedWeapons[ck][slot] = id;
+    }
+  }
   return out;
 }
 function saveProfile(){
@@ -1558,6 +1599,22 @@ function passiveUpgradeCost(key){
 }
 // Active passive slots by account level: thresholds 1 / 9 / 17 / 25 / 33 -> 1..5 (cap 5).
 function maxPassiveSlots(){ return Math.min(5, Math.floor((profile.level - 1) / 8) + 1); }
+// ---- Purchasable-weapon helpers (ownership + per-character equip). ----
+function weaponOwned(id){ return (profile.ownedWeapons || []).includes(id); }
+function equippedWeapon(char, slot){
+  const e = (profile.equippedWeapons || {})[char];
+  const id = e && e[slot];
+  return (id && weaponOwned(id)) ? id : null;
+}
+function setEquippedWeapon(char, slot, id){
+  if(!profile.equippedWeapons[char]) profile.equippedWeapons[char] = { first:null, second:null };
+  profile.equippedWeapons[char][slot] = id;
+  saveProfile();
+}
+// Owned weapons for a char+slot (for the equip-chip cycle on character select).
+function ownedWeaponsForSlot(char, slot){
+  return WEAPON_ORDER.filter(id => WEAPONS[id].char === char && WEAPONS[id].slot === slot && weaponOwned(id));
+}
 // Short formatted effect string for a passive at a given level (shop/stats display).
 function passiveBlurb(key, level){
   const p = PASSIVES[key]; if(!p) return '';
@@ -2074,6 +2131,15 @@ function applyLevelScaling(p){
    ['maxFury','fury'],['maxMagazine','magazine']].forEach(([mx, cur]) => {
     if(p[mx] > 0){ p[mx] = Math.max(1, Math.round(p[mx] * rmbMul)); p[cur] = p[mx]; }
   });
+  // ---- Purchasable-weapon buff multipliers (cached; default 1.0 = class default).
+  // Read at the fire/movement call sites so the hot path stays a single multiply.
+  const wf = p.weaponFirst, ws = p.weaponSecond;
+  p.wpnLmbDmg   = wf === 'syed_ak12' ? 1.03 : 1;                                   // AK-12: +3% primary dmg
+  p.wpnLmbRate  = wf === 'wu_sig250' ? 0.965 : 1;                                  // SIG M250: +3.5% atk speed (lower cd)
+  p.wpnSecDmg   = (ws === 'syed_scimitar' || ws === 'leo_greatsword') ? 1.03 : 1;  // Scimitar/Greatsword: +3% (DPS)
+  p.wpnGasCov   = wf === 'ong_xm7' ? 1.10 : 1;                                     // XM7: +10% gas-cloud radius
+  p.wpnMagRegen = ws === 'ong_dragon' ? 1.15 : 1;                                  // Dragon: +15% magazine regen
+  p.wpnMove     = wf === 'xu_purplecore' ? 1.03 : 1;                               // Purple Core: +3% move speed
 }
 
 function createPlayer(charKey){
@@ -2154,6 +2220,10 @@ function createPlayer(charKey){
     loadout: resolvePlayerLoadout(),
     hitFlash:0, invuln:0, frame:0, frameT:0, dead:false
   };
+  // Equipped purchasable weapons (null = class default) — read by the renderers
+  // (visual swap) + applyLevelScaling (cached buff multipliers below).
+  p.weaponFirst  = equippedWeapon(p.char, 'first');
+  p.weaponSecond = equippedWeapon(p.char, 'second');
   applyLevelScaling(p);
   return p;
 }
@@ -2434,6 +2504,8 @@ function playerSpeedMult(){
   // SWIFTNESS passive: permanent +% move speed when equipped (0 otherwise).
   const sw = passiveValue('swiftness');
   if(sw > 0) m *= (1 + sw);
+  // Purple Core (Xu first-attack): +3% move speed.
+  m *= (player.wpnMove || 1);
   return m;
 }
 
@@ -3147,7 +3219,7 @@ function updatePlaying(dt){
   if(player.maxPower  > 0) player.power  = Math.min(player.maxPower,  player.power  + 0.6 * dt);
   if(player.maxFury    > 0) player.fury     = Math.min(player.maxFury,     player.fury     + 0.2 * dt);
   // Ong's pistol magazine reloads FAST (3/s) so the rapid-fire stays available often.
-  if(player.maxMagazine> 0) player.magazine = Math.min(player.maxMagazine, player.magazine + 3 * dt);
+  if(player.maxMagazine> 0) player.magazine = Math.min(player.maxMagazine, player.magazine + 3 * dt * (player.wpnMagRegen || 1));
 
   // Universal HP REGEN passive (only when equipped; 0 otherwise). Capped at maxHp;
   // never revives a dead player.
@@ -3638,7 +3710,7 @@ const KATANA_RANGE = 32;     // long katana reach
 const KATANA_HALF  = 0.9;    // ~51.6° half-arc => ~103° total slash — still obtuse,
                              // and 3/4 of the prior 1.2-rad arc (scope cut to 3/4)
 function fireKatana(dt){
-  const dps = 40 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1) * (player.weaponMult || 1);
+  const dps = 40 * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1) * (player.weaponMult || 1) * (player.wpnSecDmg || 1);
   // The spear is held in Dr. Syed's left hand (drawn at offset (-7*px, +2*px)
   // in drawDrSyed, with DR_SYED_PX=1), so the thrust originates from there
   // instead of player center. The damage scan and the afterimage particle
@@ -3695,7 +3767,7 @@ function fireKatana(dt){
 // lock-step with the arc drawn in drawPlayer). MACHETE_DPS is the balance lever.
 const MACHETE_RANGE = 38, MACHETE_HALF = 0.9, MACHETE_DPS = 46;
 function fireMachete(dt){
-  const dps = MACHETE_DPS * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1) * (player.weaponMult || 1);
+  const dps = MACHETE_DPS * (player.damageMult || 1) * (player.damageTime > 0 ? 2 : 1) * (player.weaponMult || 1) * (player.wpnSecDmg || 1);
   let hitAny = false, hx = 0, hy = 0;
   for(const en of entities){
     if(en.type !== 'enemy' || en.dead) continue;
@@ -3752,7 +3824,8 @@ function fireBiogun(){
   const b = createBullet(mx, my, a, 'player', { dmg: 1 * (player.damageMult || 1) * tMul, speed: 260 * tMul, radius: 3, life: 0.8, sprite: SPR.bullet_bio, glow: '#2ecc71', tier: player.weaponTier || 1, sourceClass: 'cyborg' });
   // Cloud is a touch weaker than its old RMB form since the bio-gun is now Ong's
   // INFINITE primary (LMB) — spammable, so each cloud is smaller/shorter/less DPS.
-  b.spawnsCloud = true; b.cloudRadius = 20; b.cloudLife = 1.6; b.cloudDps = 4 * tMul; b.cloudSlow = 0;
+  // wpnGasCov = XM7 first-attack buff: +10% gas-cloud coverage radius.
+  b.spawnsCloud = true; b.cloudRadius = 20 * (player.wpnGasCov || 1); b.cloudLife = 1.6; b.cloudDps = 4 * tMul; b.cloudSlow = 0;
   entities.push(b);
   emit(mx, my, 4, '#27ae60', 30, 90, 0.2, true);
   sfx.shoot();
@@ -3870,7 +3943,8 @@ function fireWeapon(mx, my){
   // MULTIPLICATIVELY with the DAMAGE pickup (x2) and account damageMult; independent of
   // RAPID (cadence). tMul is also applied to projectile speed just below.
   const tMul = player.weaponMult || 1;
-  const dmgMult = (player.damageTime > 0 ? 2 : 1) * (player.damageMult || 1) * tMul;
+  // wpnLmbDmg = equipped first-attack weapon's damage buff (e.g. AK-12 +3%).
+  const dmgMult = (player.damageTime > 0 ? 2 : 1) * (player.damageMult || 1) * tMul * (player.wpnLmbDmg || 1);
 
   // Per-class basic-attack projectile spec + cadence + muzzle flash + fire sound.
   let opts, cd, flashN, flashCol, flashSpd, flashLife, fireSfx = sfx.shoot;
@@ -3923,7 +3997,8 @@ function fireWeapon(mx, my){
       entities.push(createBullet(mx + perpX * o, my + perpY * o, ang, 'player', opts));
     }
   }
-  player.fireCooldown = cd * rapidFactor;
+  // wpnLmbRate = first-attack weapon's cadence buff (e.g. SIG M250 +3.5% atk speed → ×0.965 cd).
+  player.fireCooldown = cd * rapidFactor * (player.wpnLmbRate || 1);
   emit(mx, my, flashN, flashCol, 30, flashSpd, flashLife, true);
   // Shotgun: a bright muzzle-flash polygon at the barrel tip (a `flash` star particle).
   if(player.char === 'bounty_hunter' && particles.length < 300){
@@ -5953,7 +6028,7 @@ function drawCharacterFloorPlan(ctx, charKey){
 // aimAngle. drawPlayer (for soldier) and the soldier card both call this
 // directly with absolute (x, y); they bypass the drawCharacterFloorPlan
 // transform path used by the other four classes.
-function drawDrSyed(ctx, x, y, aimAngle, px = 5) {
+function drawDrSyed(ctx, x, y, aimAngle, px = 5, firstW = null, secondW = null) {
   const MAP = [
     "....HHHHHH....","...HHHHHHHH...","..HSSSSSSSSH..","..SSSSSSSSSS..",
     "..sSSSSSSSSs..","..SSEESSEESS..","..SSSSSSSSSS..","..sSSSMMSSSs..",
@@ -6000,23 +6075,33 @@ function drawDrSyed(ctx, x, y, aimAngle, px = 5) {
     }
   }
 
+  // Second-attack (LEFT hand): default resting spear, or the equipped weapon model.
   ctx.save();
   ctx.translate(-7*px, 2*px); ctx.rotate(-0.35);
-  ctx.strokeStyle = '#a8823f'; ctx.lineWidth = 1.8*px; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(0, 7*px); ctx.lineTo(0, -9*px); ctx.stroke();
-  ctx.fillStyle = '#7d8893';
-  ctx.beginPath();
-  ctx.moveTo(0, -12.5*px); ctx.lineTo(2*px, -8.5*px); ctx.lineTo(-2*px, -8.5*px);
-  ctx.closePath(); ctx.fill();
+  if(secondW && WEAPONS[secondW] && WEAPONS[secondW].draw){
+    WEAPONS[secondW].draw(ctx, px);
+  } else {
+    ctx.strokeStyle = '#a8823f'; ctx.lineWidth = 1.8*px; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(0, 7*px); ctx.lineTo(0, -9*px); ctx.stroke();
+    ctx.fillStyle = '#7d8893';
+    ctx.beginPath();
+    ctx.moveTo(0, -12.5*px); ctx.lineTo(2*px, -8.5*px); ctx.lineTo(-2*px, -8.5*px);
+    ctx.closePath(); ctx.fill();
+  }
   ctx.restore();
 
+  // First-attack (RIGHT hand): default pistol, or the equipped weapon model.
   ctx.save();
   ctx.translate(7*px, 4*px); ctx.rotate(aimAngle);
-  ctx.fillStyle = '#3a2516'; ctx.fillRect(-0.5*px, -1*px, 2*px, 2.4*px);
-  ctx.fillStyle = '#4a525c'; ctx.fillRect(1.5*px, -1*px, 3.5*px, 2*px);
-  ctx.fillStyle = '#3a4048'; ctx.fillRect(5*px, -0.5*px, 2.5*px, 1*px);
-  ctx.fillStyle = '#2e333a'; ctx.fillRect(2*px, 1.4*px, 1.2*px, 2*px);
-  ctx.fillStyle = '#6b7580'; ctx.fillRect(1.5*px, -1*px, 3.5*px, 0.4*px);
+  if(firstW && WEAPONS[firstW] && WEAPONS[firstW].draw){
+    WEAPONS[firstW].draw(ctx, px);
+  } else {
+    ctx.fillStyle = '#3a2516'; ctx.fillRect(-0.5*px, -1*px, 2*px, 2.4*px);
+    ctx.fillStyle = '#4a525c'; ctx.fillRect(1.5*px, -1*px, 3.5*px, 2*px);
+    ctx.fillStyle = '#3a4048'; ctx.fillRect(5*px, -0.5*px, 2.5*px, 1*px);
+    ctx.fillStyle = '#2e333a'; ctx.fillRect(2*px, 1.4*px, 1.2*px, 2*px);
+    ctx.fillStyle = '#6b7580'; ctx.fillRect(1.5*px, -1*px, 3.5*px, 0.4*px);
+  }
   ctx.restore();
 
   ctx.restore();
@@ -6042,7 +6127,7 @@ function drSyedMuzzle(px, x, y, aim){
 // (drawn LAST so it overlays the body). Pasted verbatim — do not edit the
 // draw logic. The in-game renderer drawDrSyed is NOT touched per the user's
 // request.
-function drawDrSyedCard(ctx, x, y, px = 3) {
+function drawDrSyedCard(ctx, x, y, px = 3, firstW = null, secondW = null) {
   const MAP = [
     "....HHHHHH....","...HHHHHHHH...","..HSSSSSSSSH..","..SSSSSSSSSS..",
     "..sSSSSSSSSs..","..SSEESSEESS..","..SSSSSSSSSS..","..sSSSMMSSSs..",
@@ -6063,15 +6148,19 @@ function drawDrSyedCard(ctx, x, y, px = 3) {
   ctx.ellipse(0, h/2 - px, w*0.42, px*1.6, 0, 0, Math.PI*2);
   ctx.fill();
 
-  // ----- spear on BACK (behind body) -----
-  ctx.save();
-  ctx.translate(0, 1*px); ctx.rotate(-0.6);
-  ctx.strokeStyle='#7a5a32'; ctx.lineWidth=1.6*px; ctx.lineCap='round';
-  ctx.beginPath(); ctx.moveTo(0, 9*px); ctx.lineTo(0, -11*px); ctx.stroke();
-  ctx.fillStyle='#9aa6b2';
-  ctx.beginPath(); ctx.moveTo(0,-14*px); ctx.lineTo(2*px,-10.5*px); ctx.lineTo(-2*px,-10.5*px);
-  ctx.closePath(); ctx.fill();
-  ctx.restore();
+  // ----- second-attack on BACK (behind body): default spear, or equipped card model -----
+  if(secondW && WEAPONS[secondW] && WEAPONS[secondW].card){
+    ctx.save(); WEAPONS[secondW].card(ctx, px); ctx.restore();
+  } else {
+    ctx.save();
+    ctx.translate(0, 1*px); ctx.rotate(-0.6);
+    ctx.strokeStyle='#7a5a32'; ctx.lineWidth=1.6*px; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(0, 9*px); ctx.lineTo(0, -11*px); ctx.stroke();
+    ctx.fillStyle='#9aa6b2';
+    ctx.beginPath(); ctx.moveTo(0,-14*px); ctx.lineTo(2*px,-10.5*px); ctx.lineTo(-2*px,-10.5*px);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
 
   // ----- body -----
   const ox = -w/2, oy = -h/2;
@@ -6085,15 +6174,19 @@ function drawDrSyedCard(ctx, x, y, px = 3) {
     }
   }
 
-  // ----- AK-47 slung across CHEST (front, opposite diagonal) -----
+  // ----- first-attack slung across CHEST (front): default AK silhouette, or equipped model -----
   ctx.save();
   ctx.translate(-7*px, 3*px); ctx.rotate(0.32);
-  ctx.fillStyle='#4a3520'; ctx.fillRect(0,-1.3*px,3.5*px,2.6*px);
-  ctx.fillStyle='#8f9aa6'; ctx.fillRect(3.5*px,-1.4*px,6*px,2.8*px);
-  ctx.fillStyle='#6e7884'; ctx.fillRect(3.5*px,-1.4*px,6*px,0.8*px);
-  ctx.fillStyle='#5e6772'; ctx.fillRect(9.5*px,-0.9*px,6*px,1.8*px);
-  ctx.fillStyle='#3a2c18'; ctx.fillRect(5*px,1.4*px,2*px,3.4*px);
-  ctx.fillStyle='#15171b'; ctx.fillRect(15.2*px,-0.7*px,1.2*px,1.4*px);
+  if(firstW && WEAPONS[firstW] && WEAPONS[firstW].draw){
+    WEAPONS[firstW].draw(ctx, px);
+  } else {
+    ctx.fillStyle='#4a3520'; ctx.fillRect(0,-1.3*px,3.5*px,2.6*px);
+    ctx.fillStyle='#8f9aa6'; ctx.fillRect(3.5*px,-1.4*px,6*px,2.8*px);
+    ctx.fillStyle='#6e7884'; ctx.fillRect(3.5*px,-1.4*px,6*px,0.8*px);
+    ctx.fillStyle='#5e6772'; ctx.fillRect(9.5*px,-0.9*px,6*px,1.8*px);
+    ctx.fillStyle='#3a2c18'; ctx.fillRect(5*px,1.4*px,2*px,3.4*px);
+    ctx.fillStyle='#15171b'; ctx.fillRect(15.2*px,-0.7*px,1.2*px,1.4*px);
+  }
   ctx.restore();
 
   ctx.restore();
@@ -6263,7 +6356,7 @@ function drawXuYihuiCard(ctx, x, y, px = 3) {
 // sides on the card while staying locked-together in-game (user request).
 // `firing` toggles the flame visual at the flamethrower nozzle (in-game:
 // wired to mouse.rdown && fuel > 0 && rmbLockT <= 0; card: true).
-function drawBenjaminWu(ctx, x, y, aimAngle, px = 3, firing = true, handgunAngle = aimAngle) {
+function drawBenjaminWu(ctx, x, y, aimAngle, px = 3, firing = true, handgunAngle = aimAngle, firstW = null, secondW = null) {
   const MAP = [
     "...HHHHHHHH...","..HHHHHHHHHH..","..HhHHHHHHhH..","..HHVVVVVVHH..",
     "...HSSSSSSH...","...hSSSSSSh...","...HHHHHHHH...","..AppAAAAppA..",
@@ -6296,14 +6389,18 @@ function drawBenjaminWu(ctx, x, y, aimAngle, px = 3, firing = true, handgunAngle
     }
   }
 
-  // LEFT hand: flamethrower (aims; flame shows when firing)
+  // LEFT hand: second-attack (default flamethrower body, or equipped model); flame shows when firing.
   ctx.save();
   ctx.translate(-4*px, 3*px); ctx.rotate(aimAngle);
-  ctx.fillStyle = '#15140f'; ctx.fillRect(-0.4*px, -1.2*px, 2*px, 2.8*px);
-  ctx.fillStyle = '#566b3b'; ctx.fillRect(1.4*px, -1.4*px, 6*px, 2.8*px);
-  ctx.fillStyle = '#3e4f2a'; ctx.fillRect(1.4*px, -1.4*px, 6*px, 0.8*px);
-  ctx.fillStyle = '#2b2f36'; ctx.fillRect(7.4*px, -0.7*px, 4*px, 1.4*px);
-  ctx.fillStyle = '#ffd24a'; ctx.fillRect(11.4*px, -0.4*px, 0.8*px, 0.8*px);
+  if(secondW && WEAPONS[secondW] && WEAPONS[secondW].draw){
+    WEAPONS[secondW].draw(ctx, px);
+  } else {
+    ctx.fillStyle = '#15140f'; ctx.fillRect(-0.4*px, -1.2*px, 2*px, 2.8*px);
+    ctx.fillStyle = '#566b3b'; ctx.fillRect(1.4*px, -1.4*px, 6*px, 2.8*px);
+    ctx.fillStyle = '#3e4f2a'; ctx.fillRect(1.4*px, -1.4*px, 6*px, 0.8*px);
+    ctx.fillStyle = '#2b2f36'; ctx.fillRect(7.4*px, -0.7*px, 4*px, 1.4*px);
+    ctx.fillStyle = '#ffd24a'; ctx.fillRect(11.4*px, -0.4*px, 0.8*px, 0.8*px);
+  }
   if (firing) {
     const flick = Math.sin(tt) * 0.4*px;
     const grd = ctx.createLinearGradient(12*px, 0, 24*px, 0);
@@ -6323,12 +6420,16 @@ function drawBenjaminWu(ctx, x, y, aimAngle, px = 3, firing = true, handgunAngle
   }
   ctx.restore();
 
-  // RIGHT hand: handgun (aims)
+  // RIGHT hand: first-attack (default handgun, or equipped model).
   ctx.save();
   ctx.translate(7*px, 1*px); ctx.rotate(handgunAngle);
-  ctx.fillStyle = '#15140f'; ctx.fillRect(-0.4*px, -1*px, 2*px, 2.4*px);
-  ctx.fillStyle = '#3a3f47'; ctx.fillRect(1.4*px, -1*px, 3.5*px, 2*px);
-  ctx.fillStyle = '#2b2f36'; ctx.fillRect(4.9*px, -0.5*px, 2*px, 1*px);
+  if(firstW && WEAPONS[firstW] && WEAPONS[firstW].draw){
+    WEAPONS[firstW].draw(ctx, px);
+  } else {
+    ctx.fillStyle = '#15140f'; ctx.fillRect(-0.4*px, -1*px, 2*px, 2.4*px);
+    ctx.fillStyle = '#3a3f47'; ctx.fillRect(1.4*px, -1*px, 3.5*px, 2*px);
+    ctx.fillStyle = '#2b2f36'; ctx.fillRect(4.9*px, -0.5*px, 2*px, 1*px);
+  }
   ctx.restore();
 
   ctx.restore();
@@ -6417,18 +6518,23 @@ function _leoCleaver(ctx, px) {
 }
 
 // ----- CARD POSE (character select) -----
-function drawLeoCard(ctx, x, y, px = 3) {
+function drawLeoCard(ctx, x, y, px = 3, firstW = null, secondW = null) {
   ctx.save(); ctx.translate(x, y); ctx.imageSmoothingEnabled = false;
-  _leoMacheteBack(ctx, px);
+  // second-attack on BACK: default machete, or equipped card model.
+  if(secondW && WEAPONS[secondW] && WEAPONS[secondW].card){ ctx.save(); WEAPONS[secondW].card(ctx, px); ctx.restore(); }
+  else _leoMacheteBack(ctx, px);
   _leoBody(ctx, px);
-  _leoShotgunAcross(ctx, px);
+  // first-attack across CHEST: default shotgun, or equipped model (same pose as _leoShotgunAcross).
+  if(firstW && WEAPONS[firstW] && WEAPONS[firstW].draw){
+    ctx.save(); ctx.translate(-7*px, 3*px); ctx.rotate(-0.28); WEAPONS[firstW].draw(ctx, px); ctx.restore();
+  } else _leoShotgunAcross(ctx, px);
   ctx.restore();
 }
 
 // ----- IN-GAME POSE -----
 // mode: 'shotgun' (default) or 'sword'
 // slashT: 0..1 progress of the cleaver swing (only used when mode==='sword')
-function drawLeoGame(ctx, x, y, aimAngle, px = 3, mode = 'shotgun', slashT = 0) {
+function drawLeoGame(ctx, x, y, aimAngle, px = 3, mode = 'shotgun', slashT = 0, firstW = null, secondW = null) {
   ctx.save(); ctx.translate(x, y); ctx.imageSmoothingEnabled = false;
   _leoBody(ctx, px);
   if (mode === 'sword') {
@@ -6439,10 +6545,18 @@ function drawLeoGame(ctx, x, y, aimAngle, px = 3, mode = 'shotgun', slashT = 0) 
     ctx.fillStyle = 'rgba(230,240,255,0.22)';
     ctx.beginPath(); ctx.arc(2*px, 0, 22*px, swing-0.2, swing+0.7); ctx.lineTo(2*px, 0); ctx.closePath(); ctx.fill();
     ctx.restore();
-    ctx.save(); ctx.translate(4*px, 1*px); ctx.rotate(aimAngle + swing); _leoCleaver(ctx, px); ctx.restore();
+    // The chop swings the second-attack weapon (default cleaver, or equipped model).
+    ctx.save(); ctx.translate(4*px, 1*px); ctx.rotate(aimAngle + swing);
+    if(secondW && WEAPONS[secondW] && WEAPONS[secondW].draw) WEAPONS[secondW].draw(ctx, px); else _leoCleaver(ctx, px);
+    ctx.restore();
   } else {
-    ctx.save(); ctx.translate(-7*px, 2*px); ctx.rotate(aimAngle); _leoMacheteHand(ctx, px); ctx.restore();
-    ctx.save(); ctx.translate(7*px, 2*px); ctx.rotate(aimAngle); _leoShotgunHand(ctx, px); ctx.restore();
+    // LEFT hand = second-attack (machete / equipped); RIGHT hand = first-attack (shotgun / equipped).
+    ctx.save(); ctx.translate(-7*px, 2*px); ctx.rotate(aimAngle);
+    if(secondW && WEAPONS[secondW] && WEAPONS[secondW].draw) WEAPONS[secondW].draw(ctx, px); else _leoMacheteHand(ctx, px);
+    ctx.restore();
+    ctx.save(); ctx.translate(7*px, 2*px); ctx.rotate(aimAngle);
+    if(firstW && WEAPONS[firstW] && WEAPONS[firstW].draw) WEAPONS[firstW].draw(ctx, px); else _leoShotgunHand(ctx, px);
+    ctx.restore();
   }
   ctx.restore();
 }
@@ -6466,7 +6580,7 @@ function leoMuzzle(px, x, y, aim){
 // and a machine gun is slung diagonally across the CHEST in the opposite
 // direction (drawn LAST so it overlays the body). The in-game renderer
 // drawBenjaminWu is NOT touched per the user's request — pasted verbatim.
-function drawBenjaminWuCard(ctx, x, y, px = 3) {
+function drawBenjaminWuCard(ctx, x, y, px = 3, firstW = null, secondW = null) {
   const MAP = [
     "...HHHHHHHH...","..HHHHHHHHHH..","..HhHHHHHHhH..","..HHVVVVVVHH..",
     "...HSSSSSSH...","...hSSSSSSh...","...HHHHHHHH...","..AppAAAAppA..",
@@ -6487,7 +6601,10 @@ function drawBenjaminWuCard(ctx, x, y, px = 3) {
   ctx.ellipse(0, h/2 - px, w*0.42, px*1.6, 0, 0, Math.PI*2);
   ctx.fill();
 
-  // ----- flamethrower slung across BACK (behind body) -----
+  // ----- second-attack slung across BACK (behind body): default flamethrower, or equipped card model -----
+  if(secondW && WEAPONS[secondW] && WEAPONS[secondW].card){
+    ctx.save(); WEAPONS[secondW].card(ctx, px); ctx.restore();
+  } else {
   ctx.save();
   ctx.translate(1*px, 1*px); ctx.rotate(0.6);
   ctx.fillStyle='#2b3520'; ctx.fillRect(-2.6*px,-9*px,2.4*px,12*px);
@@ -6517,6 +6634,7 @@ function drawBenjaminWuCard(ctx, x, y, px = 3) {
   ctx.closePath(); ctx.fill();
   ctx.fillStyle='#fff7d6'; ctx.beginPath(); ctx.arc(0.7*px,-14.6*px,0.7*px,0,Math.PI*2); ctx.fill();
   ctx.restore();
+  }
 
   // ----- body -----
   const ox = -w/2, oy = -h/2;
@@ -6530,15 +6648,19 @@ function drawBenjaminWuCard(ctx, x, y, px = 3) {
     }
   }
 
-  // ----- machine gun slung across CHEST (front, opposite diagonal) -----
+  // ----- first-attack slung across CHEST (front): default machine gun, or equipped model -----
   ctx.save();
   ctx.translate(-7*px, 3*px); ctx.rotate(-0.32);
-  ctx.fillStyle='#1d1f24'; ctx.fillRect(0,-1.3*px,3*px,2.6*px);
-  ctx.fillStyle='#3a3f47'; ctx.fillRect(3*px,-1.5*px,6*px,3*px);
-  ctx.fillStyle='#2b2f36'; ctx.fillRect(9*px,-1*px,8*px,2*px);
-  ctx.fillStyle='#4a4f57'; ctx.fillRect(9*px,-1*px,8*px,0.7*px);
-  ctx.fillStyle='#23231f'; ctx.fillRect(4.5*px,1.5*px,2*px,3.5*px);
-  ctx.fillStyle='#15171b'; ctx.fillRect(16.6*px,-0.7*px,1.4*px,1.4*px);
+  if(firstW && WEAPONS[firstW] && WEAPONS[firstW].draw){
+    WEAPONS[firstW].draw(ctx, px);
+  } else {
+    ctx.fillStyle='#1d1f24'; ctx.fillRect(0,-1.3*px,3*px,2.6*px);
+    ctx.fillStyle='#3a3f47'; ctx.fillRect(3*px,-1.5*px,6*px,3*px);
+    ctx.fillStyle='#2b2f36'; ctx.fillRect(9*px,-1*px,8*px,2*px);
+    ctx.fillStyle='#4a4f57'; ctx.fillRect(9*px,-1*px,8*px,0.7*px);
+    ctx.fillStyle='#23231f'; ctx.fillRect(4.5*px,1.5*px,2*px,3.5*px);
+    ctx.fillStyle='#15171b'; ctx.fillRect(16.6*px,-0.7*px,1.4*px,1.4*px);
+  }
   ctx.restore();
 
   ctx.restore();
@@ -6628,22 +6750,35 @@ function _ongPistolHand(ctx, px) {
 }
 
 // ===== CARD POSE (character select) =====
-function drawOngCard(ctx, x, y, px = 3) {
+function drawOngCard(ctx, x, y, px = 3, firstW = null, secondW = null) {
   ctx.save(); ctx.translate(x, y); ctx.imageSmoothingEnabled = false;
   _ongBody(ctx, px);
-  _ongHolsterPistol(ctx, px);   // pistol holstered at waist
-  _ongGasGunAcross(ctx, px);    // gas gun slung across chest (on top)
+  // second-attack holstered at WAIST: default pistol, or equipped card model.
+  if(secondW && WEAPONS[secondW] && WEAPONS[secondW].card){ ctx.save(); WEAPONS[secondW].card(ctx, px); ctx.restore(); }
+  else _ongHolsterPistol(ctx, px);
+  // first-attack slung across CHEST: default gas gun, or equipped model (same pose as _ongGasGunAcross).
+  if(firstW && WEAPONS[firstW] && WEAPONS[firstW].draw){
+    ctx.save(); ctx.translate(-7*px, 4*px); ctx.rotate(-0.30); WEAPONS[firstW].draw(ctx, px); ctx.restore();
+  } else _ongGasGunAcross(ctx, px);
   ctx.restore();
 }
 
 // ===== IN-GAME POSE =====
-function drawOngGame(ctx, x, y, aimAngle, px = 3, gasOn = true) {
+function drawOngGame(ctx, x, y, aimAngle, px = 3, gasOn = true, firstW = null, secondW = null) {
   ctx.save(); ctx.translate(x, y); ctx.imageSmoothingEnabled = false;
   _ongBody(ctx, px);
-  // LEFT hand: pistol (aims)
-  ctx.save(); ctx.translate(-7*px, 3*px); ctx.rotate(aimAngle); _ongPistolHand(ctx, px); ctx.restore();
-  // RIGHT hand: gas gun (aims)
-  ctx.save(); ctx.translate(7*px, 2*px); ctx.rotate(aimAngle); _ongGasGunHand(ctx, px, gasOn); ctx.restore();
+  // LEFT hand: second-attack (default pistol, or equipped model).
+  ctx.save(); ctx.translate(-7*px, 3*px); ctx.rotate(aimAngle);
+  if(secondW && WEAPONS[secondW] && WEAPONS[secondW].draw) WEAPONS[secondW].draw(ctx, px); else _ongPistolHand(ctx, px);
+  ctx.restore();
+  // RIGHT hand: first-attack (default gas gun, or equipped model; keep the gas puff while firing).
+  ctx.save(); ctx.translate(7*px, 2*px); ctx.rotate(aimAngle);
+  if(firstW && WEAPONS[firstW] && WEAPONS[firstW].draw){
+    WEAPONS[firstW].draw(ctx, px);
+    if(gasOn){ const t = _ongTime(); const a = 0.28 + 0.16*Math.sin(t*0.35); ctx.fillStyle = 'rgba(125,255,90,' + a + ')';
+      for(let i=0;i<3;i++){ const dx=(11+i*4)*px+Math.sin(t*0.2+i)*px; ctx.beginPath(); ctx.arc(dx, Math.sin(t*0.26+i)*2*px, (2.2+i)*px, 0, Math.PI*2); ctx.fill(); } }
+  } else _ongGasGunHand(ctx, px, gasOn);
+  ctx.restore();
   ctx.restore();
 }
 
@@ -6658,6 +6793,58 @@ function ongMuzzle(px, x, y, aim){
     y: y + 2 * px + 10.4 * px * Math.sin(aim),
   };
 }
+
+// ============================================================
+//  PURCHASABLE WEAPON ICONS (Weapons shop / equip swap).
+//  Pasted VERBATIM from the user — do not edit the draw logic. Each takes
+//  (ctx, px) and draws a weapon pointing along +x from the origin (so it can
+//  be placed at a hand pivot and rotated by aim, exactly like the default
+//  weapon it replaces). The card* variants self-pose for a back/waist look.
+// ============================================================
+function drawAK12(c,p){
+  c.fillStyle='#2a2a2e';c.fillRect(-3*p,-1*p,3*p,2*p);c.fillStyle='#3a3f47';c.fillRect(0,-1.1*p,6*p,2.2*p);
+  c.fillStyle='#23262b';c.fillRect(6*p,-0.7*p,6*p,1.4*p);c.fillStyle='#1a1d22';c.fillRect(2*p,1.1*p,1.6*p,3*p);
+  c.fillStyle='#0f1115';c.fillRect(12*p,-0.6*p,1.5*p,1.2*p);
+}
+function drawSIG250(c,p){
+  c.fillStyle='#222';c.fillRect(-3*p,-1.2*p,3*p,2.4*p);c.fillStyle='#3a3f47';c.fillRect(0,-1.3*p,6*p,2.6*p);
+  c.fillStyle='#23262b';c.fillRect(6*p,-0.8*p,7*p,1.6*p);c.fillStyle='#1a1d22';c.fillRect(2*p,1.3*p,2.4*p,3.2*p);
+  c.fillStyle='#0f1115';c.fillRect(13*p,-0.6*p,1.5*p,1.2*p);
+}
+function drawBenelli(c,p){
+  c.fillStyle='#1a1a1a';c.fillRect(-2.5*p,-1*p,2.5*p,2*p);c.fillStyle='#2b2f36';c.fillRect(0,-1*p,4*p,2*p);
+  c.fillStyle='#3a3f47';c.fillRect(4*p,-0.8*p,7*p,1.6*p);c.fillStyle='#23262b';c.fillRect(4*p,0.4*p,6*p,0.9*p);
+  c.fillStyle='#0f1115';c.fillRect(11*p,-0.7*p,1*p,1.4*p);
+}
+function drawXM7(c,p){
+  c.fillStyle='#3a3328';c.fillRect(-3*p,-1.1*p,3*p,2.2*p);c.fillStyle='#5a5142';c.fillRect(0,-1.2*p,6*p,2.4*p);
+  c.fillStyle='#2b2f36';c.fillRect(6*p,-0.7*p,6*p,1.4*p);c.fillStyle='#1a1d22';c.fillRect(2*p,1.2*p,1.8*p,3*p);
+  c.fillStyle='#0f1115';c.fillRect(12*p,-0.7*p,2*p,1.4*p);
+}
+function drawScimitar(c,p){
+  c.fillStyle='#3a2a18';c.fillRect(-1*p,-0.9*p,2.5*p,1.8*p);c.fillStyle='#caa83a';c.fillRect(1.5*p,-1.4*p,1.2*p,2.8*p);
+  c.strokeStyle='#cfd6df';c.lineWidth=1.8*p;c.lineCap='round';c.beginPath();c.moveTo(2.7*p,0);c.quadraticCurveTo(10*p,-3*p,15*p,-1*p);c.stroke();
+  c.strokeStyle='#eef4fb';c.lineWidth=0.6*p;c.beginPath();c.moveTo(2.7*p,0.4*p);c.quadraticCurveTo(10*p,-2.4*p,15*p,-0.6*p);c.stroke();
+}
+function drawGreatsword(c,p){
+  c.fillStyle='#2a1c0e';c.fillRect(-3*p,-0.9*p,3*p,1.8*p);c.fillStyle='#d9a441';c.fillRect(-4*p,-0.9*p,1*p,1.8*p);
+  c.fillStyle='#d9a441';c.fillRect(0,-2.6*p,1.6*p,5.2*p);c.fillStyle='#cfd6df';c.fillRect(1.6*p,-1.6*p,15*p,3.2*p);
+  c.fillStyle='#9aa0a8';c.fillRect(1.6*p,-1.6*p,15*p,1.1*p);c.fillStyle='#eef4fb';c.fillRect(1.6*p,-0.3*p,15*p,0.6*p);
+  c.fillStyle='#cfd6df';c.beginPath();c.moveTo(16.6*p,-1.6*p);c.lineTo(19.5*p,0);c.lineTo(16.6*p,1.6*p);c.closePath();c.fill();
+}
+function drawBlowgun(c,p){
+  c.fillStyle='#15140f';c.fillRect(-0.4*p,-0.9*p,2*p,2.2*p);c.fillStyle='#2a3550';c.fillRect(1.4*p,-1*p,9*p,2*p);
+  c.fillStyle='#3a4a70';c.fillRect(1.4*p,-1*p,9*p,0.7*p);c.fillStyle='#1a2236';c.fillRect(10.4*p,-1.2*p,2*p,2.4*p);
+}
+function drawDragonPistol(c,p){
+  c.fillStyle='#1a1a1a';c.fillRect(-0.6*p,-1*p,2.2*p,3*p);c.fillStyle='#7a2b2b';c.fillRect(1.6*p,-1.3*p,4.5*p,2.6*p);
+  c.fillStyle='#9a3b3b';c.fillRect(1.6*p,-1.3*p,4.5*p,0.8*p);c.fillStyle='#3a3f47';c.fillRect(6.1*p,-0.7*p,3*p,1.4*p);
+  c.fillStyle='#caa83a';c.beginPath();c.arc(2.6*p,0.4*p,1*p,0,7);c.fill();c.fillStyle='#0f1115';c.fillRect(9.1*p,-0.5*p,0.8*p,1*p);
+}
+function cardScimitar(c,p){c.save();c.translate(2*p,1*p);c.rotate(0.5);c.fillStyle='#3a2a18';c.fillRect(-1*p,7*p,2*p,4*p);c.fillStyle='#caa83a';c.fillRect(-1.2*p,5*p,2.4*p,2*p);c.strokeStyle='#cfd6df';c.lineWidth=2.4*p;c.lineCap='round';c.beginPath();c.moveTo(0,5*p);c.quadraticCurveTo(-3*p,-4*p,1*p,-11*p);c.stroke();c.strokeStyle='#eef4fb';c.lineWidth=0.7*p;c.beginPath();c.moveTo(0.6*p,5*p);c.quadraticCurveTo(-2.4*p,-4*p,1.4*p,-10.6*p);c.stroke();c.restore();}
+function cardGreatsword(c,p){c.save();c.translate(2*p,1*p);c.rotate(0.55);c.fillStyle='#2a1c0e';c.fillRect(-1*p,8*p,2*p,4*p);c.fillStyle='#d9a441';c.fillRect(-3*p,6*p,6*p,1.6*p);c.fillStyle='#cfd6df';c.fillRect(-1.8*p,-12*p,3.6*p,18*p);c.fillStyle='#9aa0a8';c.fillRect(-1.8*p,-12*p,1.2*p,18*p);c.fillStyle='#eef4fb';c.fillRect(-0.3*p,-12*p,0.6*p,18*p);c.restore();}
+function cardBlowgun(c,p){c.save();c.translate(2*p,1*p);c.rotate(0.55);c.fillStyle='#2a3550';c.fillRect(-1.2*p,-11*p,2.4*p,20*p);c.fillStyle='#3a4a70';c.fillRect(-1.2*p,-11*p,0.9*p,20*p);c.fillStyle='#1a2236';c.fillRect(-1.6*p,-13*p,3.2*p,2.5*p);c.restore();}
+function cardDragonPistol(c,p){c.save();c.translate(5*p,5*p);c.rotate(0.35);c.fillStyle='#3a2a16';c.fillRect(-1*p,-1*p,4*p,4.5*p);c.fillStyle='#7a2b2b';c.fillRect(0,-3*p,2.4*p,3*p);c.fillStyle='#3a3f47';c.fillRect(-0.4*p,-3.4*p,3.2*p,1.4*p);c.fillStyle='#caa83a';c.beginPath();c.arc(1*p,-1.4*p,0.8*p,0,7);c.fill();c.restore();}
 
 function drawPlayer(p){
   if(p.invuln > 0 && Math.floor(p.invuln * 18) % 2) return;
@@ -6717,16 +6904,17 @@ function drawPlayer(p){
   // by the character-select card preview, so don't delete them.
   if(p.char === 'soldier'){
     // Dr. Syed has his own renderer — body always head-up, only the Uzi rotates by aim.
-    drawDrSyed(ctx, p.x, p.y, p.angle, DR_SYED_PX);
+    drawDrSyed(ctx, p.x, p.y, p.angle, DR_SYED_PX, p.weaponFirst, p.weaponSecond);
   } else if(p.char === 'scout'){
-    // Xu Yihui — same convention: body head-up, weapons rotate by aim.
+    // Xu Yihui — same convention: body head-up, weapons rotate by aim. (Purple Core
+    // has no model swap, so no weapon params are passed.)
     drawXuYihui(ctx, p.x, p.y, p.angle, XU_YIHUI_PX);
   } else if(p.char === 'tank'){
     // Benjamin Wu — bespoke renderer. `firing` shows the flame visual at the
     // flamethrower nozzle whenever the RMB flamethrower is actually doing
     // damage (RMB held + has fuel + not in the post-empty lockout).
     const firing = mouse.rdown && p.fuel > 0 && p.rmbLockT <= 0;
-    drawBenjaminWu(ctx, p.x, p.y, p.angle, BENJAMIN_WU_PX, firing);
+    drawBenjaminWu(ctx, p.x, p.y, p.angle, BENJAMIN_WU_PX, firing, p.angle, p.weaponFirst, p.weaponSecond);
   } else if(p.char === 'bounty_hunter'){
     // Leo — bespoke renderer. Default mode is 'shotgun' (shotgun in right
     // hand + machete in left, both swivel with aim). When a cleaver slash
@@ -6734,16 +6922,16 @@ function drawPlayer(p){
     // the slash progress 0..1 so the chop animation plays out.
     if(p.leoSlashRem > 0){
       const slashT = 1 - p.leoSlashRem / p.leoSlashTotal;
-      drawLeoGame(ctx, p.x, p.y, p.angle, LEO_PX, 'sword', slashT);
+      drawLeoGame(ctx, p.x, p.y, p.angle, LEO_PX, 'sword', slashT, p.weaponFirst, p.weaponSecond);
     } else {
-      drawLeoGame(ctx, p.x, p.y, p.angle, LEO_PX, 'shotgun', 0);
+      drawLeoGame(ctx, p.x, p.y, p.angle, LEO_PX, 'shotgun', 0, p.weaponFirst, p.weaponSecond);
     }
   } else if(p.char === 'cyborg'){
     // Ong — bespoke renderer. Both weapons (pistol LEFT, gas gun RIGHT)
     // swivel with aim; `gasOn` toggles the green gas-puff visual at the gas
     // gun's muzzle. Tied to mouse.down so the puff shows while the player
     // is firing the LMB gas gun.
-    drawOngGame(ctx, p.x, p.y, p.angle, ONG_PX, mouse.down);
+    drawOngGame(ctx, p.x, p.y, p.angle, ONG_PX, mouse.down, p.weaponFirst, p.weaponSecond);
   } else {
     ctx.save();
     ctx.translate(p.x, p.y);
@@ -7413,10 +7601,58 @@ let shopHoverSkill = null;   // skill id under the cursor (skills tab) -> bottom
 let shopHoverPassive = null; // passive id under the cursor (passives tab) -> bottom detail panel
 let paramChar = 'soldier';   // which class the PARAMETERS screen is currently showing
 
-const SHOP_TABS = [['skills','SKILLS'], ['allies','ASSISTANTS'], ['passives','PASSIVES']];
+const SHOP_TABS = [['skills','SKILLS'], ['allies','ASSISTANTS'], ['passives','PASSIVES'], ['weapons','WEAPONS']];
 function shopTabRect(i){
   const w = 78, gap = 6, n = SHOP_TABS.length, total = n * w + (n - 1) * gap, xs = Math.floor((W - total) / 2);
   return { x: xs + i * (w + gap), y: 26, w, h: 14 };
+}
+// WEAPONS tab: 5-col grid of cards (9 weapons → 2 rows). Each card shows the weapon
+// icon (its draw fn), the owning class + slot tag, name, effect blurb, and BUY/OWNED.
+function shopWeaponCardRect(i){
+  const cw = 90, ch = 78, gap = 6, cols = 5;
+  const totalW = cols * cw + (cols - 1) * gap;
+  const xs = Math.floor((W - totalW) / 2);
+  const col = i % cols, row = Math.floor(i / cols);
+  return { x: xs + col * (cw + gap), y: 52 + row * (ch + 8), w: cw, h: ch };
+}
+const WEAPON_CHAR_LABEL = { soldier:'SYED', scout:'XU', tank:'WU', bounty_hunter:'LEO', cyborg:'ONG' };
+function drawWeaponShop(){
+  for(let i = 0; i < WEAPON_ORDER.length; i++){
+    const id = WEAPON_ORDER[i], wp = WEAPONS[id];
+    const r = shopWeaponCardRect(i);
+    const owned = weaponOwned(id);
+    const afford = profile.gold >= wp.cost;
+    const hov = clickedRect(r.x, r.y, r.w, r.h);
+    const col = CHARACTERS[wp.char] ? CHARACTERS[wp.char].color : '#9fb4c9';
+    ctx.fillStyle = owned ? '#15241a' : (hov && afford ? '#23303f' : '#141822');
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = owned ? '#2ecc71' : col;
+    ctx.lineWidth = (hov && !owned) ? 2 : 1;
+    ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+    // Class + slot tag
+    ctx.textAlign = 'center'; ctx.font = 'bold 7px monospace';
+    ctx.fillStyle = col;
+    ctx.fillText(WEAPON_CHAR_LABEL[wp.char] + ' · ' + (wp.slot === 'first' ? '1ST' : '2ND'), r.x + r.w/2, r.y + 11);
+    // Weapon icon (its own draw fn; Purple Core → a purple orb since draw is null)
+    ctx.save();
+    ctx.translate(r.x + r.w/2 - 6, r.y + 28);
+    if(wp.draw){ wp.draw(ctx, 2.4); }
+    else { ctx.fillStyle = '#9b59b6'; ctx.beginPath(); ctx.arc(6, 0, 6, 0, TAU); ctx.fill();
+           ctx.fillStyle = '#d6aaff'; ctx.beginPath(); ctx.arc(6, 0, 2.6, 0, TAU); ctx.fill(); }
+    ctx.restore();
+    // Name + effect
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 8px monospace';
+    ctx.fillText(wp.name, r.x + r.w/2, r.y + 48);
+    ctx.fillStyle = '#9fb4c9'; ctx.font = 'bold 6px monospace';
+    ctx.fillText(wp.blurb, r.x + r.w/2, r.y + 58);
+    // Price / owned
+    ctx.font = 'bold 8px monospace';
+    if(owned){ ctx.fillStyle = '#2ecc71'; ctx.fillText('OWNED', r.x + r.w/2, r.y + 70); }
+    else { ctx.fillStyle = afford ? '#f5d76e' : '#7d6608'; ctx.fillText('BUY G ' + wp.cost, r.x + r.w/2, r.y + 70); }
+  }
+  ctx.textAlign = 'center'; ctx.font = 'bold 8px monospace';
+  ctx.fillStyle = '#9fb4c9';
+  ctx.fillText('BUY WITH GOLD  ·  EQUIP ON THE CHARACTER-SELECT SCREEN', W/2, 224);
 }
 function shopCardRect(i){
   const cw = 86, ch = 46, gap = 6, cols = 5;
@@ -7529,6 +7765,7 @@ function drawShop(){
   }
 
   if(shopTab === 'passives'){ drawPassiveShop(); }
+  else if(shopTab === 'weapons'){ drawWeaponShop(); }
   else {
 
   const items = shopTab === 'skills' ? SKILL_ORDER : SHOP_ASSIST_ORDER;
@@ -7657,6 +7894,8 @@ function drawShop(){
       ? 'BUY WITH GOLD  ·  EQUIP IN THE LOADOUT SCREEN'
       : shopTab === 'allies'
       ? 'BUY / UPGRADE WITH GOLD  ·  HIGHER LEVEL = STRONGER ALLY'
+      : shopTab === 'weapons'
+      ? 'BUY WITH GOLD  ·  SWAP ON THE CHARACTER-SELECT SCREEN'
       : 'BUY / UPGRADE WITH GOLD  ·  EQUIP ON THE CHARACTER-SELECT SCREEN', W/2, H - 26);
   }
 
@@ -7693,6 +7932,22 @@ function handleShop(){
       if(profile.gold < cost){ shopMsgText = 'NOT ENOUGH GOLD'; shopMsgUntil = stateTime + 1.2; return; }
       profile.gold -= cost;
       profile.passiveLevels[id] = lvl + 1;                            // 0->1 buys, else +1
+      saveProfile(); if(sfx.pickup) sfx.pickup();
+      return;
+    }
+    return;
+  }
+  // WEAPONS tab: BUY only (equipping/swapping is on the CHARACTER SELECT screen).
+  if(shopTab === 'weapons'){
+    for(let i = 0; i < WEAPON_ORDER.length; i++){
+      const id = WEAPON_ORDER[i];
+      const r = shopWeaponCardRect(i);
+      if(!clickedRect(r.x, r.y, r.w, r.h)) continue;
+      if(weaponOwned(id)) return;                                      // already owned
+      const cost = WEAPONS[id].cost;
+      if(profile.gold < cost){ shopMsgText = 'NOT ENOUGH GOLD'; shopMsgUntil = stateTime + 1.2; return; }
+      profile.gold -= cost;
+      profile.ownedWeapons.push(id);
       saveProfile(); if(sfx.pickup) sfx.pickup();
       return;
     }
@@ -7757,6 +8012,24 @@ function charCardRect(i){
   const totalW = n * cw + (n - 1) * gap;
   const xs = Math.floor((W - totalW) / 2);
   return { x: xs + i * (cw + gap), y: 52, w: cw, h: ch };
+}
+// ---- Per-character WEAPON equip chips (bottom band of each card; click to cycle the
+// owned weapons for that slot). Scout has one slot (Purple Core); the rest have two. ----
+function charWeaponSlots(char){ return char === 'scout' ? ['first'] : ['first','second']; }
+function charWeaponChipRect(i, k){
+  const r = charCardRect(i), h = 12;
+  // Stack from the card bottom: first-attack chip above the second-attack chip.
+  const y = r.y + r.h - 4 - (2 - k) * (h + 1);
+  return { x: r.x + 5, y, w: r.w - 10, h };
+}
+// Cycle a char's slot through [DEFAULT, ...owned weapons for that slot].
+function cycleCharWeapon(char, k){
+  const slot = charWeaponSlots(char)[k];
+  if(!slot) return;
+  const opts = [null].concat(ownedWeaponsForSlot(char, slot));
+  const cur = equippedWeapon(char, slot);
+  const idx = Math.max(0, opts.indexOf(cur));
+  setEquippedWeapon(char, slot, opts[(idx + 1) % opts.length]);
 }
 // ---- PASSIVE picker (lives on the CHARACTER SELECT screen, below the cards). Each
 // equipped passive occupies a slot; the slot count = maxPassiveSlots() (grows with
@@ -8042,7 +8315,7 @@ function drawCharacterSelect(){
       // the BACK and AK-47 slung across the CHEST on opposite diagonals.
       // In-game still uses drawDrSyed (Uzi + spear in hands, both swivel
       // with aim) — only the card image changes.
-      drawDrSyedCard(ctx, r.x + r.w / 2, r.y + 46, DR_SYED_PX);
+      drawDrSyedCard(ctx, r.x + r.w / 2, r.y + 46, DR_SYED_PX, equippedWeapon('soldier','first'), equippedWeapon('soldier','second'));
     } else if(key === 'scout'){
       // Xu Yihui — card-ONLY renderer with a fixed pose (both arms angled
       // ~30° from straight-down toward the legs; laser cannon's muzzle
@@ -8055,17 +8328,17 @@ function drawCharacterSelect(){
       // The in-game drawBenjaminWu (flamethrower in left hand + handgun in
       // right hand, both swivel with aim) is NOT used here per the user's
       // "the image of Wu in the game do not change".
-      drawBenjaminWuCard(ctx, r.x + r.w / 2, r.y + 46, BENJAMIN_WU_PX);
+      drawBenjaminWuCard(ctx, r.x + r.w / 2, r.y + 46, BENJAMIN_WU_PX, equippedWeapon('tank','first'), equippedWeapon('tank','second'));
     } else if(key === 'bounty_hunter'){
       // Leo — bespoke card pose: shotgun across the chest + machete on the
       // back. In-game uses drawLeoGame (different pose: shotgun right hand,
       // machete left hand + cleaver chop on RMB).
-      drawLeoCard(ctx, r.x + r.w / 2, r.y + 46, LEO_PX);
+      drawLeoCard(ctx, r.x + r.w / 2, r.y + 46, LEO_PX, equippedWeapon('bounty_hunter','first'), equippedWeapon('bounty_hunter','second'));
     } else if(key === 'cyborg'){
       // Ong — bespoke card pose: gas gun slung across chest + pistol
       // holstered at waist. In-game uses drawOngGame (both weapons in
       // hand, both swivel with aim, gas puff at muzzle while firing).
-      drawOngCard(ctx, r.x + r.w / 2, r.y + 46, ONG_PX);
+      drawOngCard(ctx, r.x + r.w / 2, r.y + 46, ONG_PX, equippedWeapon('cyborg','first'), equippedWeapon('cyborg','second'));
     } else {
       // Floor-plan preview: same renderer as in-game (drawCharacterFloorPlan), drawn
       // head-up — no rotation needed since the sprite's local frame already has the
@@ -8093,21 +8366,38 @@ function drawCharacterSelect(){
     let sy = r.y + 68;
     for(const st of stats){ ctx.fillStyle = st[1]; ctx.fillText(st[0], r.x + 6, sy); sy += 9; }
 
-    // Class identity: LMB + held-RMB are fixed per class; the active X/C/B/V skills
-    // are now chosen in the LOADOUT screen (the old per-class kit is retired).
+    // Class identity: the active X/C/B/V skills are chosen in the LOADOUT screen; the
+    // WEAPON chips below let the player swap to any owned alt weapon (click to cycle).
     sy += 3;
-    ctx.fillStyle = '#7f8c8d';
-    ctx.fillText('WEAPONS', r.x + 6, sy); sy += 9;
-    ctx.fillStyle = '#fff';
-    const lmbN = { soldier:'PISTOL', scout:'SMG', tank:'SLUG', bounty_hunter:'SHOTGUN', cyborg:'BIO-GUN' }[key] || 'GUN';
-    const rmbN = { soldier:'SPEAR', scout:'3xLASER', tank:'FLAME', bounty_hunter:'MACHETE', cyborg:'RAPID PISTOL' }[key] || 'RMB';
-    ctx.fillText('LMB ' + lmbN, r.x + 6, sy); sy += 8;
-    ctx.fillText('RMB ' + rmbN, r.x + 6, sy); sy += 8;
     ctx.fillStyle = '#5dade2';
     ctx.fillText('SKILLS: LOADOUT', r.x + 6, sy); sy += 8;
-    // Passives are universal + account-wide — chosen in the shared bar below the cards.
     ctx.fillStyle = '#2ecc71';
-    ctx.fillText('PASSIVES BELOW', r.x + 6, sy);
+    ctx.fillText('PASSIVES BELOW', r.x + 6, sy); sy += 8;
+    ctx.fillStyle = '#7f8c8d';
+    ctx.fillText('WEAPONS (TAP):', r.x + 6, sy);
+
+    // Weapon equip chips (fixed bottom band; tap to cycle owned weapons for the slot).
+    const slots = charWeaponSlots(key);
+    const lmbDef = { soldier:'PISTOL', scout:'SMG', tank:'SLUG', bounty_hunter:'SHOTGUN', cyborg:'BIO-GUN' }[key] || 'GUN';
+    const rmbDef = { soldier:'SPEAR', scout:'CORE', tank:'FLAME', bounty_hunter:'MACHETE', cyborg:'RAPID PISTOL' }[key] || 'RMB';
+    for(let k = 0; k < slots.length; k++){
+      const cr = charWeaponChipRect(i, k);
+      const slot = slots[k];
+      const eqId = key === 'scout' ? equippedWeapon('scout','first') : equippedWeapon(key, slot);
+      const chov = clickedRect(cr.x, cr.y, cr.w, cr.h);
+      ctx.fillStyle = eqId ? '#23303f' : (chov ? '#1c2433' : '#10141c');
+      ctx.fillRect(cr.x, cr.y, cr.w, cr.h);
+      ctx.strokeStyle = eqId ? (WEAPONS[eqId] && CHARACTERS[key] ? CHARACTERS[key].color : '#5dade2') : '#46586c';
+      ctx.lineWidth = chov ? 2 : 1;
+      ctx.strokeRect(cr.x + 0.5, cr.y + 0.5, cr.w - 1, cr.h - 1);
+      ctx.textAlign = 'left'; ctx.font = 'bold 6px monospace'; ctx.fillStyle = '#7f8c8d';
+      const tag = key === 'scout' ? 'C' : (k === 0 ? '1' : '2');
+      ctx.fillText(tag, cr.x + 3, cr.y + 9);
+      ctx.textAlign = 'center'; ctx.font = 'bold 7px monospace';
+      ctx.fillStyle = eqId ? '#eef2f7' : '#9fb4c9';
+      const defName = key === 'scout' ? rmbDef : (k === 0 ? lmbDef : rmbDef);
+      ctx.fillText(eqId ? WEAPONS[eqId].name : defName, cr.x + cr.w/2 + 3, cr.y + 9);
+    }
 
     ctx.textAlign = 'center';
   }
@@ -8130,7 +8420,7 @@ function drawCharacterSelect(){
 
   ctx.font = 'bold 7px monospace';
   ctx.fillStyle = '#5d6d7e';
-  ctx.fillText('PICK PASSIVES BELOW  ·  CLICK A CHARACTER TO SET YOUR LOADOUT', W/2, H - 8);
+  ctx.fillText('TAP WEAPON CHIPS TO SWAP  ·  CLICK A CHARACTER TO START', W/2, H - 8);
 }
 
 // The shared passive-slot bar + its click-to-choose dropdown (drawn on top of the cards).
@@ -8210,6 +8500,15 @@ function handleCharacterSelect(){
   for(let i = 0; i < maxPassiveSlots(); i++){
     const s = passiveSlotRect(i);
     if(clickedRect(s.x, s.y, s.w, s.h)){ passiveMenuSlot = i; return; }
+  }
+  // WEAPON equip chips (checked before card selection so cycling a weapon never
+  // proceeds to the loadout screen).
+  for(let i = 0; i < CHAR_ORDER.length; i++){
+    const key = CHAR_ORDER[i], slots = charWeaponSlots(key);
+    for(let k = 0; k < slots.length; k++){
+      const cr = charWeaponChipRect(i, k);
+      if(clickedRect(cr.x, cr.y, cr.w, cr.h)){ cycleCharWeapon(key, k); if(sfx.pickup) sfx.pickup(); return; }
+    }
   }
   for(let i = 0; i < CHAR_ORDER.length; i++){
     const r = charCardRect(i);

@@ -193,6 +193,28 @@ DRIVER = r"""
     profile = DEFAULT_PROFILE();
   });
 
+  // SHOP WEAPONS tab + the per-character weapon swap (renderer + buff) paths: buy/own
+  // a weapon for each slot, equip it, then draw the shop tab, the character-select cards
+  // (card-renderer swap), and an in-game frame per class (in-game renderer swap + the
+  // applyLevelScaling buff multipliers).
+  safe('draw SHOP weapons + weapon swap render', function(){
+    profile = DEFAULT_PROFILE(); profile.level = 20; profile.gold = 99999;
+    profile.ownedWeapons = ['syed_ak12','syed_scimitar','wu_sig250','wu_blowgun',
+                            'leo_benelli','leo_greatsword','ong_xm7','ong_dragon','xu_purplecore'];
+    profile.equippedWeapons = {
+      soldier:{first:'syed_ak12',second:'syed_scimitar'}, scout:{first:'xu_purplecore',second:null},
+      tank:{first:'wu_sig250',second:'wu_blowgun'}, bounty_hunter:{first:'leo_benelli',second:'leo_greatsword'},
+      cyborg:{first:'ong_xm7',second:'ong_dragon'} };
+    shopTab = 'weapons'; state = STATE.SHOP; draw();
+    state = STATE.CHARACTER_SELECT; draw();   // card-renderer swap for all 5 classes
+    // In-game renderer swap + buff multipliers, one frame per class.
+    ['soldier','scout','tank','bounty_hunter','cyborg'].forEach(function(ck){
+      selectedChar = ck; player = createPlayer(ck);
+      entities = [player]; state = STATE.PLAYING; mouse.down = true; mouse.rdown = true; draw();
+    });
+    shopTab = 'skills'; mouse.down = false; mouse.rdown = false; profile = DEFAULT_PROFILE();
+  });
+
   // CHARACTER SELECT passive picker: draw the slot bar with some equipped + the
   // click-to-choose dropdown OPEN (every option branch), then closed.
   safe('draw CHARACTER_SELECT passive picker', function(){
