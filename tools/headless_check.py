@@ -875,6 +875,63 @@ DRIVER_BALANCE = r"""
     check('Weapon tiers: formula/mults + bullet tags + damage stacks + soldier plasma@T3', ok, d.join(' '));
   })();
 
+  // 33) Boss hit-stop slow-mo is keyed on the CHARACTER, not on damage magnitude: a player
+  //     hit on a boss briefly freezes the whole sim for EVERY class except the scout (Xu
+  //     Yihui), on BOTH the basic (LMB) and the secondary (RMB) attack. Guards against the
+  //     old `dmg>=3` heuristic, which silently dropped the continuous secondaries
+  //     (spear/flame per-frame ticks are <3) and only excluded the scout by accident.
+  (function(){
+    var savedC = selectedChar, savedP = profile, ok = true, d = [];
+    profile = DEFAULT_PROFILE(); profile.level = 40;
+    startGame(); state = STATE.PLAYING;
+    function resetHS(){ hitStopTime = 0; hitStopCd = 0; }
+    function boss(x, y){ var b = createEnemy('bruiser', x || 0, y || 0); b.isBoss = true; b.hp = b.maxHp = 1e9; return b; }
+    // (a) Chokepoint predicate. A TINY player hit (mimics a continuous-secondary per-frame
+    //     tick, far below the old dmg>=3 gate) on a boss freezes for every non-scout class.
+    ['soldier','tank','bounty_hunter','cyborg'].forEach(function(c){
+      player = createPlayer(c); var b = boss(); entities = [player, b];
+      resetHS(); damageEnemy(b, 0.1, true);
+      if(!(hitStopTime > 0)){ ok = false; d.push(c + ':tick!freeze'); }
+    });
+    // ...and NEVER for the scout — not on a big hit, not via the heavy=false laser path.
+    player = createPlayer('scout'); var bs = boss(); entities = [player, bs];
+    resetHS(); damageEnemy(bs, 5, true);        if(hitStopTime > 0){ ok = false; d.push('scout:bigHitFroze'); }
+    resetHS(); damageEnemy(bs, 5, true, false); if(hitStopTime > 0){ ok = false; d.push('scout:laserFroze'); }
+    // Non-boss hits and ally-sourced (fromPlayer=false) hits must never freeze.
+    player = createPlayer('tank');
+    var reg = createEnemy('grunt', 0, 0); reg.hp = reg.maxHp = 1e9; entities = [player, reg];
+    resetHS(); damageEnemy(reg, 9, true); if(hitStopTime > 0){ ok = false; d.push('regularFroze'); }
+    var b2 = boss(); entities = [player, b2];
+    resetHS(); damageEnemy(b2, 9, false); if(hitStopTime > 0){ ok = false; d.push('allyHitFroze'); }
+    // (b) Real RMB code paths — the two continuous secondaries the old gate silently dropped.
+    player = createPlayer('soldier'); player.x = 100; player.y = 100; player.angle = 0;
+    var bk = boss(112, 100); entities = [player, bk];
+    resetHS(); fireKatana(1/60);
+    if(!(hitStopTime > 0)){ ok = false; d.push('soldierRMB!freeze'); }
+    player = createPlayer('tank'); player.x = 100; player.y = 100; player.angle = 0;
+    var bf = boss(120, 100); entities = [player, bf];
+    resetHS(); fireFlamethrower(1/60);
+    if(!(hitStopTime > 0)){ ok = false; d.push('tankRMB!freeze'); }
+    // scout laser on the center beam must NOT freeze.
+    player = createPlayer('scout'); player.x = 100; player.y = 100; player.angle = 0;
+    var bl = boss(130, 108); entities = [player, bl];
+    resetHS(); fireLaserBeams();
+    if(hitStopTime > 0){ ok = false; d.push('scoutLaserFroze'); }
+    // (c) Real LMB end-to-end: a fired player bullet connecting with a boss freezes for a
+    //     non-scout but not for the scout.
+    function lmbFreeze(c){
+      player = createPlayer(c); player.x = 100; player.y = 100; player.angle = 0; player.fireCooldown = 0;
+      var bb = boss(112, 100); entities = [player, bb];
+      resetHS(); fireWeapon(player.x + 9, player.y);
+      for(var i = 0; i < 12 && hitStopTime === 0; i++) update(1/60);
+      return hitStopTime > 0;
+    }
+    if(!lmbFreeze('soldier')){ ok = false; d.push('soldierLMB!freeze'); }
+    if(lmbFreeze('scout')){ ok = false; d.push('scoutLMBfroze'); }
+    selectedChar = savedC; profile = savedP;
+    check('Boss hit-stop: fires for every class except scout, on both LMB + RMB', ok, d.join(' '));
+  })();
+
   return JSON.stringify(R);
 })();
 """

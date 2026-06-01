@@ -2726,11 +2726,14 @@ function damageEnemy(en, dmg, fromPlayer, heavy = true){
   if(en.invulnT > 0){ en.hitFlash = 0.06; return true; }   // invuln boss absorbs it
   en.hp -= dmg;
   en.hitFlash = 0.09;   // brief pure-white pop (drawEnemy white-tints while > 0)
-  // Hit-stop on a heavy DISCRETE hit to a boss (dmg threshold excludes the tiny
-  // per-frame ticks of continuous weapons like the spear/flame/machete; the refractory
-  // in hitStop() stops a fast gun from stacking freezes — only spaced-out shots / skills
-  // / big blasts actually freeze it).
-  if(heavy && en.isBoss && fromPlayer && dmg >= 3) hitStop(40);
+  // Hit-stop slow-mo: ANY player hit on a boss briefly freezes the whole sim (every
+  // character on the field), for EVERY playable class EXCEPT Xu Yihui (the scout). This
+  // is keyed on the character — NOT on damage magnitude — so it fires identically on the
+  // basic (LMB) and secondary (RMB) attacks, including the continuous secondaries
+  // (spear/flame/machete) whose per-frame ticks are far below any damage threshold. The
+  // `dmg>0` guard skips pure-absorb/0-damage calls; hitStop()'s own 0.3s refractory then
+  // rate-limits a fast/continuous weapon to an occasional pulse instead of a constant freeze.
+  if(en.isBoss && fromPlayer && dmg > 0 && player.char !== 'scout') hitStop(40);
   if(fromPlayer && dmg > 0 && player.hp > 0){
     const ls = passiveValue('lifesteal');
     if(ls > 0) player.hp = Math.min(player.maxHp, player.hp + dmg * ls);
