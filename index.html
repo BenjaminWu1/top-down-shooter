@@ -1368,7 +1368,12 @@ const LEVEL_CAP = 50;         // account-level cap (bounds stat scaling). Levels
                               // is unchanged; this just adds 10 more levels on top.
 const LVL_DMG_PER = 0.015, LVL_DMG_CAP = 0.60;   // +1.5%/lvl damage, max +60%
 const LVL_FIRE_PER = 0.010, LVL_FIRE_CAP = 0.40; // -1%/lvl fire cooldown, floor at 60%
-const LVL_HP_PER = 6,        LVL_HP_CAP = 8;      // +1 maxHp every 6 levels, max +8
+const LVL_HP_PER = 4,        LVL_HP_CAP = 9;      // +1 maxHp every 4 levels, max +9 (~account L37)
+// Movement speed now SCALES with account level (it used to be a fixed base). Lean L1 base
+// speeds (see CHARACTERS) climb +1/level to +35 by ~account L36, so a class roughly returns
+// to / passes its old speed by the cap. Flat additive, uniform across classes. Consumed by
+// applyLevelScaling + scaledStatsFor + the char-select card + the PARAMETERS screen.
+const LVL_SPD_PER = 1.0,     LVL_SPD_CAP = 35;    // +1 move speed/level, max +35 (~account L36)
 const RMB_BASE_FRAC = 0.4;                        // level-1 RMB pool = 40% of base ("very short")
 const RMB_DUR_PER = 0.06,    RMB_DUR_CAP = 2.0;   // RMB-secondary duration grows ~3x by high level
 const DROP_LVL_PER = 0.004, DROP_LVL_CAP = 0.15, DROP_GATE_MAX = 0.75; // gate-only drop scaling
@@ -1663,7 +1668,7 @@ function assistantEvoBlurb(key, level){
 const CHARACTERS = {
   soldier: {
     name:'Dr. Syed', desc:'RAINFOREST WARRIOR · SPEAR (RMB) · ENERGY POOL',
-    color:'#3498db', hp:10, speed:156, damageMult:1.25, startShield:0,
+    color:'#3498db', hp:6, speed:110, damageMult:1.25, startShield:0,
     skills:{ x:'sprint', c:'flameburst', v:'barrage', f:'heal', b:'invuln' },
     skillLabels:{ x:'SPRINT', c:'NAPALM', v:'BARRAGE', f:'HEAL', b:'INVINC' },
     // Pixel sprite, FACING EAST: camo body + boonie head, flesh face, brown wooden spear
@@ -1685,7 +1690,7 @@ const CHARACTERS = {
   },
   scout: {
     name:'Xu Yihui', desc:'CYBER MECH · 3× LASER BEAM (RMB) · BLINK+DASH',
-    color:'#f1c40f', hp:9, speed:148, damageMult:1.25, startShield:0,
+    color:'#f1c40f', hp:5, speed:118, damageMult:1.25, startShield:0,
     skills:{ x:'sprint', c:'blink', v:'dash', f:'heal', b:'blast' },
     skillLabels:{ x:'SPRINT', c:'BLINK', v:'DASH', f:'HEAL', b:'BLAST' },
     // Futuristic warrior in blue armor — still the visually dominant class on the
@@ -1726,7 +1731,7 @@ const CHARACTERS = {
   },
   tank: {
     name:'Benjamin Wu', desc:'HEAVY · +20% DAMAGE · FLAMETHROWER (RMB)',
-    color:'#27ae60', hp:12, speed:95, damageMult:1.2, startShield:4,
+    color:'#27ae60', hp:8, speed:75, damageMult:1.2, startShield:4,
     skills:{ x:'sprint', c:'wall', v:'vsummon', f:'heal', b:'blast' },
     skillLabels:{ x:'SPRINT', c:'WALL', v:'BLADE+', f:'HEAL', b:'BLAST' },
     // Bulky mech: gunmetal core + olive shell, flesh face front, orange vents on the back.
@@ -1747,7 +1752,7 @@ const CHARACTERS = {
   },
   bounty_hunter: {
     name:'Leo', desc:'BOUNTY HUNTER · SHOTGUN · MACHETE (RMB) · FURY',
-    color:'#d35400', hp:11, speed:120, damageMult:1.3, startShield:0,
+    color:'#d35400', hp:7, speed:95, damageMult:1.3, startShield:0,
     skills:{ x:'sprint', c:'grit', v:'fanfire', f:'heal', b:'blast' },
     skillLabels:{ x:'SPRINT', c:'GRIT', v:'FANFIRE', f:'HEAL', b:'BLAST' },
     // Gritty survivor: brown duster body, dark-grey shoulders, silver shotgun forward.
@@ -1768,7 +1773,7 @@ const CHARACTERS = {
   },
   cyborg: {
     name:'Ong', desc:'CYBORG · BIO-GUN · RAPID PISTOL (RMB) · MAGAZINE',
-    color:'#8e44ad', hp:10, speed:140, damageMult:1.15, startShield:2,
+    color:'#8e44ad', hp:6, speed:102, damageMult:1.15, startShield:2,
     skills:{ x:'sprint', c:'overclock', v:'biobomb', f:'heal', b:'blast' },
     skillLabels:{ x:'SPRINT', c:'OVRCLK', v:'BIOBOMB', f:'HEAL', b:'BLAST' },
     // Bio-machine: top-half flesh, bottom-half chrome, red optic + toxic-green back tank.
@@ -2126,6 +2131,7 @@ function applyLevelScaling(p){
   p.fireRate *= (1 - fireBonus);
   p.laserScale = (1 - fireBonus);
   p.maxHp += Math.min(LVL_HP_CAP, Math.floor(L / LVL_HP_PER));
+  p.speed += Math.min(LVL_SPD_CAP, L * LVL_SPD_PER);
   // VITALITY passive: +% max HP at run start when equipped (0 otherwise).
   const vt = passiveValue('vitality');
   if(vt > 0) p.maxHp = Math.round(p.maxHp * (1 + vt));
@@ -8151,12 +8157,13 @@ function scaledStatsFor(charKey, level){
   const fireRate = 0.14 * (1 - fireBonus);
   const laserScale = (1 - fireBonus);
   const maxHp = ch.hp + Math.min(LVL_HP_CAP, Math.floor(L / LVL_HP_PER));
+  const speed = ch.speed + Math.min(LVL_SPD_CAP, L * LVL_SPD_PER);
   const rmbMul = RMB_BASE_FRAC * (1 + Math.min(RMB_DUR_CAP, L * RMB_DUR_PER));
   const pool = base => base > 0 ? Math.max(1, Math.round(base * rmbMul)) : 0;
   const weaponTier = weaponTierFor(level || 1);
   const weaponMult = WEAPON_TIER_MULT[weaponTier - 1] || 1;
   return {
-    ch, dmgMult, fireRate, laserScale, maxHp, weaponTier, weaponMult,
+    ch, dmgMult, fireRate, laserScale, maxHp, speed, weaponTier, weaponMult,
     maxFuel:   pool(charKey === 'tank'    ? 12 : 0),
     maxEnergy: pool(charKey === 'soldier' ?  6 : 0),
     maxPower:  pool(charKey === 'scout'   ? 20 : 0),
@@ -8233,7 +8240,7 @@ function drawParameters(){
     ['SHIELD', shieldStr, dl(0)],
     ['HP REGEN', hpRegen, dl(0)],
     { h:'MOBILITY' },
-    ['MOVE SPEED', fmt(ch.speed) + ' px/s', dl(0)],
+    ['MOVE SPEED', fmt(cur.speed) + ' px/s', dl(nxt.speed - cur.speed)],
     { h:'PRIMARY ATTACK (LMB)' },
     ['WEAPON', lmbName, null],
     ['DAMAGE', fmt(lmbBase * cur.dmgMult * cur.weaponMult) + ' /hit', dl(lmbBase * (nxt.dmgMult*nxt.weaponMult - cur.dmgMult*cur.weaponMult))],
@@ -8368,6 +8375,7 @@ function drawCharacterSelect(){
   const Llv = Math.max(0, (profile.level || 1) - 1);
   const rmbMul = RMB_BASE_FRAC * (1 + Math.min(RMB_DUR_CAP, Llv * RMB_DUR_PER));
   const hpBonus = Math.min(LVL_HP_CAP, Math.floor(Llv / LVL_HP_PER));
+  const spdBonus = Math.min(LVL_SPD_CAP, Llv * LVL_SPD_PER);
 
   for(let i = 0; i < CHAR_ORDER.length; i++){
     const key = CHAR_ORDER[i];
@@ -8430,7 +8438,7 @@ function drawCharacterSelect(){
     // Stats — laid out sequentially so optional rows (DMG/SHIELD/pool) never overlap.
     ctx.font = 'bold 7px monospace';
     ctx.textAlign = 'left';
-    const stats = [['HP   : ' + (ch.hp + hpBonus), '#bdc3c7'], ['SPEED: ' + ch.speed, '#bdc3c7']];
+    const stats = [['HP   : ' + (ch.hp + hpBonus), '#bdc3c7'], ['SPEED: ' + Math.round(ch.speed + spdBonus), '#bdc3c7']];
     if(ch.damageMult > 1) stats.push(['DMG  : x' + ch.damageMult, '#bdc3c7']);
     if(ch.startShield)    stats.push(['SHIELD: ' + ch.startShield, '#bdc3c7']);
     if(key === 'tank')          stats.push(['FUEL : ' + Math.max(1, Math.round(12 * rmbMul)) + ' RMB', '#e67e22']);
