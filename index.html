@@ -2363,15 +2363,19 @@ function ensureLavaMask(){
     const iw = m.img.naturalWidth || m.img.width, ih = m.img.naturalHeight || m.img.height;
     if(!iw || !ih){ lavaMask = out; return null; }         // degenerate (e.g. headless stub) — cache empty
     const step = 4, gw = Math.ceil(iw / step), gh = Math.ceil(ih / step);
+    // Draw at NATIVE pixel size with smoothing OFF — no downscale averaging that would
+    // pull lava pixels below the threshold.
     const oc = document.createElement('canvas'); oc.width = iw; oc.height = ih;
-    const octx = oc.getContext('2d'); octx.drawImage(m.img, 0, 0);
+    const octx = oc.getContext('2d'); octx.imageSmoothingEnabled = false; octx.drawImage(m.img, 0, 0);
     const data = octx.getImageData(0, 0, iw, ih).data;
     const grid = new Uint8Array(gw * gh);
+    let trueCount = 0;
     for(let gy = 0; gy < gh; gy++) for(let gx = 0; gx < gw; gx++){
       const px = Math.min(iw-1, gx*step), py = Math.min(ih-1, gy*step);
       const o = (py*iw + px) * 4, R = data[o], G = data[o+1], B = data[o+2];
-      if(R > 130 && (R-B) > 85 && (R-G) > 35) grid[gy*gw + gx] = 1;
+      if(R > 130 && (R-B) > 85 && (R-G) > 35){ grid[gy*gw + gx] = 1; trueCount++; }
     }
+    out.trueCount = trueCount;
     // Coarse cell list (fractions) for the cheap draw-time flow/heat pass.
     const dstep = 16, drawCells = [];
     for(let py = 0; py < ih; py += dstep) for(let px = 0; px < iw; px += dstep){
@@ -2391,17 +2395,14 @@ function lavaAt(wx, wy){
   if(ix < 0 || iy < 0 || ix >= lm.imgW || iy >= lm.imgH) return false;
   return lm.grid[Math.floor(iy/lm.step)*lm.gw + Math.floor(ix/lm.step)] === 1;
 }
-// Continuous burn application. Enemies route through the real enemy-damage path so
-// kills credit score/XP (damageEnemy is safe to call every frame — no i-frame grant).
-// The player/ally DISCRETE damage fns (damagePlayer/damageAlly) grant 0.9s/0.5s
-// i-frames + play a sound + drain a full shield PER CALL, so calling them every frame
-// would make a unit standing in lava INVINCIBLE to enemies and spam audio — so burn
-// instead subtracts HP directly while still honoring the active i-frame window
-// (dash/blink/wall/post-hit) and the player's shield, and handles death.
+// Continuous environmental burn. Enemies route through the real enemy-damage path so
+// kills credit score/XP (damageEnemy doesn't grant contact i-frames to regular enemies).
+// Player/ally burn is a CONTINUOUS DoT that BYPASSES the contact-invulnerability frames
+// (and the shield) — it subtracts HP directly, scaled by dt. (Routing it through the
+// discrete damagePlayer/damageAlly would let the 1.2s level-start invuln + the 0.9s
+// granted after every enemy contact swallow the per-frame tick, so lava dealt no damage.)
 function applyBurn(u, dmg){
   if(u.type === 'enemy'){ damageEnemy(u, dmg, false, false); return; }
-  if(u.invuln > 0) return;                            // active i-frames ignore burn (matches the rest of the game)
-  if(u === player && player.shieldHp > 0) return;     // the shield absorbs burn (no per-frame drain)
   u.hp -= dmg;
   u.hitFlash = Math.max(u.hitFlash || 0, 0.1);
   if(u !== player && u.hp <= 0 && !u.dead){           // ally death tail (player death = existing hp<=0 check)
@@ -6133,6 +6134,20 @@ function draw(){
     else if(state === STATE.PLAYING && showStats) drawStats();
     else if(state === STATE.PLAYING && paused) drawPause();
     if(state === STATE.PLAYING && debugMap) drawDebugHUD();
+    // TEMP DEBUG (lava burn) — remove once confirmed. Shows lava-grid true-cell count,
+    // lavaAt(player), and the player's computed grid cell while in the L21-30 block.
+    if(state === STATE.PLAYING && Math.floor(levelIdx / 10) + 1 === 3){
+      ctx.textAlign = 'left'; ctx.font = 'bold 8px monospace'; ctx.fillStyle = '#ffd24a';
+      const lm = ensureLavaMask();
+      let line;
+      if(!lm){ line = 'LAVA DEBUG: mask NOT built (image not loaded / canvas tainted)'; }
+      else {
+        const ix = player.x * (lm.imgW / worldW), iy = player.y * (lm.imgH / worldH);
+        line = 'LAVA cells:' + lm.trueCount + '  lavaAt(player):' + lavaAt(player.x, player.y)
+             + '  cell:' + Math.floor(ix/lm.step) + ',' + Math.floor(iy/lm.step);
+      }
+      ctx.fillText(line, 6, 12);
+    }
   } else {
     drawBackground(THEMES.menu, 0, W, H);
     if(state === STATE.MENU) drawMenu();
