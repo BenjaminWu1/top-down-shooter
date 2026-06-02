@@ -1159,6 +1159,41 @@ function flameAudioStop(){
   }
   flameLoop = null;
 }
+// L21-30 lava ambience: a low rumbling/sizzling loop (white noise through a very low
+// lowpass + a touch of higher fizz). Started while in a block-3 level, stopped by the
+// update() guard otherwise. No-op without audioCtx (headless). Mirrors flameLoop.
+let lavaLoop = null;
+function lavaAudioStart(){
+  if(!audioCtx || lavaLoop) return;
+  try {
+    const n = Math.max(1, Math.floor(audioCtx.sampleRate * 1.0));
+    const buf = audioCtx.createBuffer(1, n, audioCtx.sampleRate);
+    const d = buf.getChannelData(0);
+    for(let i=0;i<n;i++) d[i] = Math.random()*2-1;
+    const src = audioCtx.createBufferSource(); src.buffer = buf; src.loop = true;
+    const filt = audioCtx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 130;
+    const g = audioCtx.createGain();
+    const now = audioCtx.currentTime;
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(0.07, now + 0.5);   // fade in a quiet bed
+    src.connect(filt).connect(g).connect(audioCtx.destination);
+    src.start(now);
+    lavaLoop = { src, filter: filt, gain: g };
+  } catch(e){ lavaLoop = null; }
+}
+function lavaAudioStop(){
+  if(!lavaLoop){ return; }
+  if(audioCtx){
+    try {
+      const now = audioCtx.currentTime;
+      lavaLoop.gain.gain.cancelScheduledValues(now);
+      lavaLoop.gain.gain.setValueAtTime(lavaLoop.gain.gain.value || 0.0001, now);
+      lavaLoop.gain.gain.linearRampToValueAtTime(0.0001, now + 0.2);
+      lavaLoop.src.stop(now + 0.25);
+    } catch(e){}
+  }
+  lavaLoop = null;
+}
 const sfx = {
   shoot: () => tone(880, 0.05, 'square', 220, 0.06),
   laser: () => tone(1400, 0.08, 'sawtooth', 700, 0.05),
@@ -2270,7 +2305,70 @@ const TURRETS = [[0.155,0.13],[0.835,0.15],[0.165,0.82],[0.83,0.82]];
 let supplyStations = [];
 // Debug rect editor ('o' to toggle while PLAYING). debugDrag = in-progress drag in
 // world coords; debugDrawn = finalized rects (fractions, tagged wall/box via N/B).
-let debugMap = false, debugDrag = null, debugDrawn = [], lavaTintPts = null;
+let debugMap = false, debugDrag = null, debugDrawn = [];
+
+// ---- L21-30 (worldScale===3) lava: detected from the map image by pixel color ----
+// Built once when the lava image is loaded: an offscreen canvas reads the pixels and
+// stores a boolean grid sampled every `step` px (a pixel is LAVA if R>130 && R-B>85 &&
+// R-G>35), plus a coarser cell list used for the draw-time flow/heat. The solid cover
+// (collision) is handled separately by MAPS[3] walls/boxes — lava only BURNS.
+let lavaMask = null;   // { step, gw, gh, imgW, imgH, grid:Uint8Array, drawStep, drawCells } or {} on failure
+function ensureLavaMask(){
+  if(lavaMask) return lavaMask.grid ? lavaMask : null;   // built already (null if it failed/empty)
+  const m = MAPS[3];
+  if(!m || !m.img || !m.img.loaded) return null;          // image not ready — retry next frame (no cache)
+  const out = {};
+  try {
+    const iw = m.img.naturalWidth || m.img.width, ih = m.img.naturalHeight || m.img.height;
+    if(!iw || !ih){ lavaMask = out; return null; }         // degenerate (e.g. headless stub) — cache empty
+    const step = 4, gw = Math.ceil(iw / step), gh = Math.ceil(ih / step);
+    const oc = document.createElement('canvas'); oc.width = iw; oc.height = ih;
+    const octx = oc.getContext('2d'); octx.drawImage(m.img, 0, 0);
+    const data = octx.getImageData(0, 0, iw, ih).data;
+    const grid = new Uint8Array(gw * gh);
+    for(let gy = 0; gy < gh; gy++) for(let gx = 0; gx < gw; gx++){
+      const px = Math.min(iw-1, gx*step), py = Math.min(ih-1, gy*step);
+      const o = (py*iw + px) * 4, R = data[o], G = data[o+1], B = data[o+2];
+      if(R > 130 && (R-B) > 85 && (R-G) > 35) grid[gy*gw + gx] = 1;
+    }
+    // Coarse cell list (fractions) for the cheap draw-time flow/heat pass.
+    const dstep = 16, drawCells = [];
+    for(let py = 0; py < ih; py += dstep) for(let px = 0; px < iw; px += dstep){
+      if(grid[Math.floor(py/step)*gw + Math.floor(px/step)]) drawCells.push([px/iw, py/ih]);
+    }
+    out.step = step; out.gw = gw; out.gh = gh; out.imgW = iw; out.imgH = ih;
+    out.grid = grid; out.drawStep = dstep; out.drawCells = drawCells;
+  } catch(e){ /* tainted (file://) or headless canvas — degrade to no lava */ }
+  lavaMask = out;
+  return lavaMask.grid ? lavaMask : null;
+}
+// World coords -> image pixel -> grid cell. False when the mask isn't built.
+function lavaAt(wx, wy){
+  const lm = lavaMask;
+  if(!lm || !lm.grid) return false;
+  const ix = wx * (lm.imgW / worldW), iy = wy * (lm.imgH / worldH);
+  if(ix < 0 || iy < 0 || ix >= lm.imgW || iy >= lm.imgH) return false;
+  return lm.grid[Math.floor(iy/lm.step)*lm.gw + Math.floor(ix/lm.step)] === 1;
+}
+// Continuous burn application. Enemies route through the real enemy-damage path so
+// kills credit score/XP (damageEnemy is safe to call every frame — no i-frame grant).
+// The player/ally DISCRETE damage fns (damagePlayer/damageAlly) grant 0.9s/0.5s
+// i-frames + play a sound + drain a full shield PER CALL, so calling them every frame
+// would make a unit standing in lava INVINCIBLE to enemies and spam audio — so burn
+// instead subtracts HP directly while still honoring the active i-frame window
+// (dash/blink/wall/post-hit) and the player's shield, and handles death.
+function applyBurn(u, dmg){
+  if(u.type === 'enemy'){ damageEnemy(u, dmg, false, false); return; }
+  if(u.invuln > 0) return;                            // active i-frames ignore burn (matches the rest of the game)
+  if(u === player && player.shieldHp > 0) return;     // the shield absorbs burn (no per-frame drain)
+  u.hp -= dmg;
+  u.hitFlash = Math.max(u.hitFlash || 0, 0.1);
+  if(u !== player && u.hp <= 0 && !u.dead){           // ally death tail (player death = existing hp<=0 check)
+    u.dead = true;
+    emit(u.x, u.y, 20, u.deathColor || '#fff', 50, 160, 0.6);
+    sfx.enemyDeath();
+  }
+}
 
 // In-place array compaction: keeps items where aliveFn(item) is truthy, mutates
 // the array in place (no allocation) and sets length. Replaces .filter() in hot
@@ -3310,7 +3408,8 @@ function update(dt){
   }
   // Safety net for the sustained flamethrower loop: kill it whenever we're not in
   // active play (pause, Tab-stats, death/menu, level transitions) so it can't drone.
-  if(state !== STATE.PLAYING || paused || showStats) flameAudioStop();
+  if(state !== STATE.PLAYING || paused || showStats){ flameAudioStop(); lavaAudioStop(); }
+  else if(Math.floor(levelIdx / 10) + 1 !== 3) lavaAudioStop();   // left the lava block while still playing
   mouse.clicked = false;
   mouse.rclicked = false;
 }
@@ -3676,6 +3775,29 @@ function updatePlaying(dt){
     // them. AI fns are untouched; resolveWalls is a no-op outside the L1-10 block.
     if(e.type === 'enemy' || isAlly(e)){ resolveWalls(e, e.radius); resolveMapWalls(e, e.radius); }
     if(e.hitFlash > 0) e.hitFlash -= dt;
+  }
+
+  // ---- L21-30 LAVA BURN (worldScale===3). Lava is TRAVERSABLE (no body/bullet block —
+  // that's the MAPS[3] walls/boxes); it only BURNS. Standing in it deals a strong DoT and
+  // (re)ignites onFire; while onFire>0 a smaller DoT lingers after leaving. Re-entering
+  // refreshes + extends onFire (stackable, capped). Burn is dt-scaled and continuous. ----
+  if(Math.floor(levelIdx / 10) + 1 === 3 && ensureLavaMask()){
+    lavaAudioStart();
+    const LAVA_DPS = 6, FIRE_DPS = 4, FIRE_DUR = 2, FIRE_CAP = 6;
+    const burnUnit = u => {
+      if(!u || u.dead || u.hp <= 0) return;
+      const inLava = lavaAt(u.x, u.y);
+      if(inLava){ u.onFire = Math.min((u.onFire || 0) + FIRE_DUR, FIRE_CAP); applyBurn(u, LAVA_DPS * dt); }
+      if((u.onFire || 0) > 0){
+        applyBurn(u, FIRE_DPS * dt);
+        u.onFire -= dt;
+        // sparse flame motes on burning units (throttled by the global 300 particle cap)
+        if(Math.random() < dt * 6 && particles.length < 300)
+          emit(u.x + rand(-4,4), u.y + rand(-4,4), 1, Math.random() < 0.5 ? '#ff7a1e' : '#ffd24a', 20, 70, 0.3, true);
+      }
+    };
+    burnUnit(player);
+    for(const e of entities){ if(!e.dead && (e.type === 'enemy' || isAlly(e))) burnUnit(e); }
   }
 
   // ---- Boss poison-gas pools: small lingering AoE that drains the player ----
@@ -5764,6 +5886,7 @@ function drawBackground(theme, idx, bw, bh){
   if(mm && mm.img && mm.img.loaded){
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(mm.img, 0, 0, bw, bh);
+    if(Math.floor(idx / 10) + 1 === 3) drawLavaFlow(bw, bh);   // L21-30 molten flow/heat
     return;
   }
   ctx.fillStyle = theme.bg;
@@ -6264,29 +6387,42 @@ function drawGame(){
   }
 }
 
-// Debug-only: tint detected lava pixels of block 3's image (computed once, cached as
-// world fractions). Same-origin image only — getImageData throws on a tainted/headless
-// canvas, caught so it degrades to "no tint" rather than crashing the draw loop.
+// Debug-only: tint the detected-lava cells of block 3 (the same mask the burn uses,
+// so the overlay shows exactly what burns). No-op until the mask is built.
 function drawLavaTint(){
-  const m = MAPS[3];
-  if(!m || !m.img || !m.img.loaded) return;
-  if(lavaTintPts === null){
-    lavaTintPts = [];
-    try {
-      const iw = m.img.naturalWidth, ih = m.img.naturalHeight;
-      const oc = document.createElement('canvas'); oc.width = iw; oc.height = ih;
-      const octx = oc.getContext('2d'); octx.drawImage(m.img, 0, 0);
-      const data = octx.getImageData(0, 0, iw, ih).data, step = 8;
-      for(let y = 0; y < ih; y += step){
-        for(let x = 0; x < iw; x += step){
-          const o = (y*iw + x) * 4, r = data[o], g = data[o+1], b = data[o+2];
-          if(r > 150 && r > g*1.5 && r > b*1.8) lavaTintPts.push([x/iw, y/ih]);
-        }
-      }
-    } catch(e){ lavaTintPts = []; }
-  }
+  const lm = ensureLavaMask();
+  if(!lm) return;
   ctx.fillStyle = 'rgba(255,60,0,0.5)';
-  for(const p of lavaTintPts) ctx.fillRect(p[0]*worldW - 2, p[1]*worldH - 2, 4, 4);
+  for(const c of lm.drawCells) ctx.fillRect(c[0]*worldW - 2, c[1]*worldH - 2, 4, 4);
+}
+// Draw-time molten FLOW + HEAT over the classified lava cells (block 3, after the
+// image). Cheap: iterates the precomputed coarse drawCells, not pixels. Additive
+// brightness bands scroll UPWARD (heat rising) with a per-cell flicker, plus a few
+// faint rising shimmer specks.
+function drawLavaFlow(bw, bh){
+  const lm = ensureLavaMask();
+  if(!lm) return;
+  const t = stateTime, tile = lm.drawStep * (bw / lm.imgW);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = '#ff5a14';
+  for(let i = 0; i < lm.drawCells.length; i++){
+    const c = lm.drawCells[i], x = c[0]*bw, y = c[1]*bh;
+    const ph = x*0.03 + (y - t*40)*0.05;                       // bands scroll up over time
+    const a = 0.12 + 0.12*Math.sin(ph) + 0.06*Math.sin(t*7 + x*0.1);
+    if(a <= 0) continue;
+    ctx.globalAlpha = Math.min(0.5, a);
+    ctx.fillRect(x, y, tile + 1, tile + 1);
+  }
+  ctx.globalAlpha = 0.1;
+  ctx.fillStyle = '#ffd29a';
+  for(let i = 0; i < lm.drawCells.length; i += 7){              // faint rising heat shimmer
+    const c = lm.drawCells[i], sx = c[0]*bw, sy = c[1]*bh - ((t*30 + i*13) % 24);
+    ctx.fillRect(sx, sy, 1, 2);
+  }
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.restore();
 }
 
 // Debug-only screen-space HUD: cursor world coords + the editor key legend.
