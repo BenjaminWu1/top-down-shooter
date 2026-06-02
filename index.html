@@ -1194,6 +1194,40 @@ function lavaAudioStop(){
   }
   lavaLoop = null;
 }
+// L31-40 turret ambience: a heavy rapid-fire rattle (white noise through a mid bandpass)
+// while any turret is online. Started/stopped from the turret update + the update() guard.
+let turretLoop = null;
+function turretAudioStart(){
+  if(!audioCtx || turretLoop) return;
+  try {
+    const n = Math.max(1, Math.floor(audioCtx.sampleRate * 1.0));
+    const buf = audioCtx.createBuffer(1, n, audioCtx.sampleRate);
+    const d = buf.getChannelData(0);
+    for(let i=0;i<n;i++) d[i] = Math.random()*2-1;
+    const src = audioCtx.createBufferSource(); src.buffer = buf; src.loop = true;
+    const filt = audioCtx.createBiquadFilter(); filt.type = 'bandpass'; filt.frequency.value = 320; filt.Q.value = 0.7;
+    const g = audioCtx.createGain();
+    const now = audioCtx.currentTime;
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(0.08, now + 0.05);
+    src.connect(filt).connect(g).connect(audioCtx.destination);
+    src.start(now);
+    turretLoop = { src, filter: filt, gain: g };
+  } catch(e){ turretLoop = null; }
+}
+function turretAudioStop(){
+  if(!turretLoop){ return; }
+  if(audioCtx){
+    try {
+      const now = audioCtx.currentTime;
+      turretLoop.gain.gain.cancelScheduledValues(now);
+      turretLoop.gain.gain.setValueAtTime(turretLoop.gain.gain.value || 0.0001, now);
+      turretLoop.gain.gain.linearRampToValueAtTime(0.0001, now + 0.1);
+      turretLoop.src.stop(now + 0.15);
+    } catch(e){}
+  }
+  turretLoop = null;
+}
 const sfx = {
   shoot: () => tone(880, 0.05, 'square', 220, 0.06),
   laser: () => tone(1400, 0.08, 'sawtooth', 700, 0.05),
@@ -2299,10 +2333,17 @@ function bulletHitsMapWall(b){
 
 // L11-20 Supply Station centers (fractions of world) + per-station runtime state.
 const SUPPLY_STATIONS = [[0.135,0.195],[0.865,0.195],[0.135,0.785],[0.865,0.785]];
-// Turret anchors for the L31-40 (turret_arena) block — fractions of world. Defined
-// here as the mechanic-anchor data; no turret gameplay reads it yet (forthcoming).
+// Turret muzzle centers for the L31-40 (turret_arena) block — fractions of world.
 const TURRETS = [[0.155,0.13],[0.835,0.15],[0.165,0.82],[0.83,0.82]];
 let supplyStations = [];
+let turrets = [];   // per-turret runtime: { state, charge, active, angle, fireT, flashT } (block 4 only)
+// Activation Pad center for turret i: offset ~0.07*worldW inboard (toward map center).
+function turretPad(i){
+  const tx = TURRETS[i][0]*worldW, ty = TURRETS[i][1]*worldH;
+  let ox = worldW/2 - tx, oy = worldH/2 - ty;
+  const d = Math.hypot(ox, oy) || 1;
+  return [tx + (ox/d) * 0.07*worldW, ty + (oy/d) * 0.07*worldW];
+}
 // Debug rect editor ('o' to toggle while PLAYING). debugDrag = in-progress drag in
 // world coords; debugDrawn = finalized rects (fractions, tagged wall/box via N/B).
 let debugMap = false, debugDrag = null, debugDrawn = [];
@@ -3325,6 +3366,8 @@ function startLevel(idx){
   groundFields = [];
   // L11-20 Supply Stations: only this block has them (worldScale===2). Each starts active.
   supplyStations = (worldScale === 2) ? SUPPLY_STATIONS.map(() => ({ active:true, cd:0 })) : [];
+  // L31-40 turrets start idle/uncaptured (worldScale===4 only).
+  turrets = (worldScale === 4) ? TURRETS.map(() => ({ state:'idle', charge:0, active:0, angle:0, fireT:0, flashT:0 })) : [];
   debugDrag = null;   // clear any in-progress debug-editor drag across the transition
   if(!player){ player = createPlayer(selectedChar); entities.push(player); }
   else { player.x = worldW/2; player.y = worldH/2; player.invuln = 1.2; }
@@ -3408,7 +3451,7 @@ function update(dt){
   }
   // Safety net for the sustained flamethrower loop: kill it whenever we're not in
   // active play (pause, Tab-stats, death/menu, level transitions) so it can't drone.
-  if(state !== STATE.PLAYING || paused || showStats){ flameAudioStop(); lavaAudioStop(); }
+  if(state !== STATE.PLAYING || paused || showStats){ flameAudioStop(); lavaAudioStop(); turretAudioStop(); }
   else if(Math.floor(levelIdx / 10) + 1 !== 3) lavaAudioStop();   // left the lava block while still playing
   mouse.clicked = false;
   mouse.rclicked = false;
@@ -3798,6 +3841,56 @@ function updatePlaying(dt){
     };
     burnUnit(player);
     for(const e of entities){ if(!e.dead && (e.type === 'enemy' || isAlly(e))) burnUnit(e); }
+  }
+
+  // ---- L31-40 TURRETS (worldScale===4). Stand on a turret's Activation Pad (inboard of
+  // it) for 5s to bring it ONLINE for 10s; while online it tracks + auto-fires at the
+  // nearest enemy in its quadrant. Rounds are owner:'player' (respect walls + credit the
+  // player). Turrets/pads are NOT collision. ----
+  if(turrets.length){
+    const PAD_R = 0.05 * worldW, RANGE = 0.28 * worldW, MUZZLE = 0.06 * worldW;
+    const FIRE_CD = 0.07, CHARGE_NEED = 5, ACTIVE_DUR = 10;
+    let anyActive = false;
+    for(let i = 0; i < turrets.length; i++){
+      const t = turrets[i], tx = TURRETS[i][0]*worldW, ty = TURRETS[i][1]*worldH;
+      if(t.flashT > 0) t.flashT -= dt;
+      if(t.state === 'active'){
+        anyActive = true;
+        t.active -= dt;
+        if(t.active <= 0){ t.active = 0; t.state = 'idle'; t.charge = 0; }
+        else {
+          t.fireT -= dt;
+          if(t.fireT <= 0){
+            t.fireT = FIRE_CD;
+            // Nearest enemy within the RESTRICTED radius (its own quadrant).
+            let best = null, bd = RANGE*RANGE;
+            for(const e of entities){
+              if(e.type !== 'enemy' || e.dead) continue;
+              const dx = e.x - tx, dy = e.y - ty, d2 = dx*dx + dy*dy;
+              if(d2 < bd){ bd = d2; best = e; }
+            }
+            if(best){
+              t.angle = Math.atan2(best.y - ty, best.x - tx);   // barrel ROTATES to track each shot
+              const mx = tx + Math.cos(t.angle)*MUZZLE, my = ty + Math.sin(t.angle)*MUZZLE;
+              if(entities.length < 600)
+                entities.push(createBullet(mx, my, t.angle, 'player', { speed:520, dmg:2, radius:2, life:1.5, glow:'#ffd24a' }));
+              t.flashT = 0.05;
+              emit(mx, my, 3, '#ffe08a', 40, 150, 0.16, true);
+            }
+          }
+        }
+      } else {
+        // idle / charging — stand in the pad to capture.
+        const pad = turretPad(i), dx = player.x - pad[0], dy = player.y - pad[1];
+        if(player.hp > 0 && dx*dx + dy*dy < PAD_R*PAD_R){
+          t.charge += dt;
+          if(t.charge >= CHARGE_NEED){ t.state = 'active'; t.active = ACTIVE_DUR; t.charge = 0; t.fireT = 0; sfx.pickup(); }
+        } else {
+          t.charge = Math.max(0, t.charge - dt);   // leaving the pad before 5s decays the charge
+        }
+      }
+    }
+    if(anyActive) turretAudioStart(); else turretAudioStop();
   }
 
   // ---- Boss poison-gas pools: small lingering AoE that drains the player ----
@@ -6296,6 +6389,32 @@ function drawGame(){
       ctx.beginPath(); ctx.arc(cx, cy, rad * 0.9, 0, TAU); ctx.fill();
       ctx.globalAlpha = Math.min(1, pulse + 0.4); ctx.lineWidth = 2; ctx.strokeStyle = '#e8fbff';
       ctx.beginPath(); ctx.arc(cx, cy, rad, 0, TAU); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+  // L31-40 turret overlays (art is static): a faint pad locator + charge arc while
+  // capturing, and a rotating barrel + pulsing active ring + muzzle flash while online.
+  for(let i = 0; i < turrets.length; i++){
+    const t = turrets[i], tx = TURRETS[i][0]*worldW, ty = TURRETS[i][1]*worldH;
+    const pad = turretPad(i), padR = 0.05*worldW;
+    ctx.globalAlpha = 0.22; ctx.strokeStyle = '#7fd0ff'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(pad[0], pad[1], padR, 0, TAU); ctx.stroke();
+    if(t.state !== 'active' && t.charge > 0){
+      const frac = Math.min(1, t.charge / 5);
+      ctx.globalAlpha = 0.9; ctx.strokeStyle = '#ffd24a'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(pad[0], pad[1], padR, -Math.PI/2, -Math.PI/2 + frac*TAU); ctx.stroke();
+    }
+    if(t.state === 'active'){
+      const blen = 0.045*worldW;
+      ctx.globalAlpha = 0.35 + 0.2*Math.sin(stateTime*8); ctx.strokeStyle = '#ff7a1e'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(tx, ty, 0.03*worldW, 0, TAU); ctx.stroke();
+      ctx.globalAlpha = 0.95; ctx.strokeStyle = '#ffae42'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx + Math.cos(t.angle)*blen, ty + Math.sin(t.angle)*blen); ctx.stroke();
+      if(t.flashT > 0){
+        const mx = tx + Math.cos(t.angle)*blen, my = ty + Math.sin(t.angle)*blen;
+        ctx.globalAlpha = 1; ctx.fillStyle = '#fff4c0';
+        ctx.beginPath(); ctx.arc(mx, my, 3, 0, TAU); ctx.fill();
+      }
     }
     ctx.globalAlpha = 1;
   }
