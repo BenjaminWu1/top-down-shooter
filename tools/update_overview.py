@@ -310,6 +310,29 @@ REPLACEMENTS = [
      "shakeAmt anymore and draw() applies no recoil offset, so the camera and HUD are "
      "perfectly stable. The brief HD-vector/bloom experiment was also rolled back - "
      "rendering is crisp pixel-art again (imageSmoothingEnabled=false)."),
+
+    # Line count refresh (re-keyed off the now-current "8,111 lines"; new says 9,112).
+    ("8,111 lines",
+     "The entire game is one file: index.html (~9,112 lines). One <script> block, "
+     "vanilla JS, no build, no dependencies, no external assets. Sprites are inline "
+     "ASCII-art arrays; all SFX are synthesized via Web Audio. It deploys by pushing "
+     "to main (GitHub Pages serves the raw file). FIVE playable classes now ship "
+     "(Dr. Syed / Xu Yihui / Benjamin Wu / Leo / Ong)."),
+
+    # PARAMETERS screen: MOVE SPEED now SCALES per level (lean-stats rebalance), and the
+    # roster is 5 so it has FIVE class tabs. Re-keyed off the old "stats that don't scale,
+    # like move speed ... range" phrasing (gone from the new text -> idempotent).
+    ("stats that don't scale, like move speed / shield / regen / lifesteal / range",
+     "CHARACTER PARAMETERS screen (STATE.PARAMETERS): a PARAMETERS button on the MENU "
+     "(top-right, just below the profile bar's COINS line) opens a menu-side version of "
+     "the same readout, with FIVE class tabs. Since there is no live player on the menu, "
+     "values come from scaledStatsFor(charKey, level) - a pure mirror of "
+     "applyLevelScaling - and each numeric row also shows its GAIN PER ACCOUNT LEVEL as a "
+     "(+x) token (computed by diffing the helper at level vs level+1). MOVE SPEED now "
+     "SCALES too (+1 px/s per level, capped +35), so it shows a real (+1) delta; only "
+     "shield / regen / lifesteal / RANGE read (+0). It also manifests the DISTANCE UNIT "
+     "(px = game pixels of the 480x270 world): MOVE SPEED in px/s, a RANGE row for LMB "
+     "(projectile reach) and RMB (reach + scope) in px, and a bottom legend."),
 ]
 
 # INSERTS: bullets added immediately before the paragraph whose text contains the
@@ -395,7 +418,7 @@ INSERTS = [
         "by the protein pickup; C=grit, V=fanfire). Ong (key cyborg; HP 10 / speed 140 / "
         "dmg x1.15 / 2 start-shield): BIO-GUN LMB (fireBiogun lobs a glob that bursts into "
         "a lingering poison_cloud DoT, infinite ammo) + RAPID-FIRE PISTOL RMB "
-        "(fireRapidPistol - fast kinetic rounds) draining a MAGAZINE pool (24 rounds, ~14 "
+        "(fireRapidPistol - fast kinetic rounds) draining a MAGAZINE pool (24 rounds, ~21 "
         "rounds/s, reloads fast at 3/s, refilled by isotope; C=overclock, V=biobomb). Both "
         "ship at BASE form (no bespoke per-class weapon evolution beyond the universal "
         "weapon-tier multiplier).",
@@ -417,6 +440,37 @@ INSERTS = [
         "player.weaponTier/weaponMult), stacks multiplicatively with the DAMAGE pickup "
         "(x2), and is independent of RAPID (cadence only). The Tab stats window shows a "
         "WEAPON TIER row (Tier n / 5).",
+
+        "PER-CHARACTER WEAPON SWAP (the ARMORY gained a 4th tab, WEAPONS - SEPARATE from "
+        "the account-level weapon-tier multiplier above): each class can BUY an alternative "
+        "model for its first (LMB) and/or second (RMB) slot from the WEAPONS / WEAPON_ORDER "
+        "catalog - Syed AK-12 / Scimitar, Wu SIG M250 / Flame Blowgun, Leo Benelli M4 / "
+        "Great Sword, Ong XM7 / Dragon, plus Xu's cheap single PURPLE CORE - then EQUIP it "
+        "on the CHARACTER SELECT screen via clickable weapon chips that live-update the card "
+        "art (default = the original inline weapon). State persists in profile.ownedWeapons "
+        "/ equippedWeapons. STAGE 1 is shipped: the model visually swaps in-game + on the "
+        "card at the SAME hand/chest pivot (so hitboxes/scope are identical) and grants a "
+        "small cached buff applied at run start (AK-12 +3% LMB dmg, SIG +3.5% atk speed, "
+        "Scimitar/Great Sword +3% melee DPS, XM7 +10% gas radius, Dragon +15% mag regen, "
+        "Purple Core +3% move). Three special mechanics (Purple Core shield, Blowgun "
+        "blue-flame burst, Benelli pellet-explosion) are deferred STAGE 2.",
+
+        "Xu's PURPLE CORE recolor is LIVE (its STAGE-1 mechanic): equipping it RECOLORS the "
+        "mech blue->purple on both the in-game sprite and the CHARACTER SELECT card, and its "
+        "LMB now fires FLUORESCENT purple bullets - a fluor flag carried through "
+        "createBullet drives an additive glowing-orb render in drawBulletEntity. Only its "
+        "3s-no-hit defensive shield remains deferred to STAGE 2.",
+
+        "LEAN LEVEL-1 BASE STATS + per-level GROWTH (player-side only; the enemy difficulty "
+        "curve, XP, gold and all validators are untouched): the L1 base HP and move speed "
+        "were cut ~30% so a fresh account starts well below its ceiling and each level-up is "
+        "FELT. HP growth was sped up (LVL_HP_PER=4 / LVL_HP_CAP=9 -> +1 HP every 4 account "
+        "levels, max +9). NEW move-speed scaling (speed used to be flat, shown as (+0)): "
+        "LVL_SPD_PER=1.0 / LVL_SPD_CAP=35 -> +1 px/s per level, max +35, wired through "
+        "applyLevelScaling, scaledStatsFor, the PARAMETERS MOVE SPEED row and the "
+        "character-select card. The archetype spread is preserved (survivability "
+        "tank>...>scout, speed scout>...>tank) and the prior soldier-dominates-scout overlap "
+        "was fixed.",
     ]),
     ("10. Allies", [
         "FOUR-PHASE difficulty curve (difficultyRamp / enemyScale / bossHpScale / "
