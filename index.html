@@ -44,6 +44,27 @@ const PX = 2;
 // collapses to 0,0 whenever maxX/maxY are 0, so it stays correct either way).
 let worldW = W, worldH = H;
 let camX = 0, camY = 0;
+// Image-map registry for the 2nd/3rd/4th 10-level blocks (worldScale 2/3/4 =
+// L11-20/21-30/31-40). Each entry: src image, [world w,h], and obstacle rects as
+// FRACTIONS [fx,fy,fw,fh] of the world. PASSING RULE: bodies are blocked by walls
+// AND boxes; bullets are blocked by walls ONLY (pass through boxes). worldScale===1
+// (L1-10) is NOT in here — it keeps its own L1_WALLS path. Rects tuned live via the
+// 'o' debug editor. `.img` is filled by the preload loop near the sprite setup.
+const MAPS = {
+  2: { src:'assets/maps/supply_stations.png', world:[1380,776],
+       walls:[[0.45,0.42,0.10,0.17]],
+       boxes:[[0.45,0.045,0.10,0.06],[0.45,0.895,0.10,0.06],[0.27,0.30,0.10,0.06],
+              [0.63,0.30,0.10,0.06],[0.27,0.64,0.10,0.06],[0.63,0.64,0.10,0.06],
+              [0.05,0.42,0.05,0.16],[0.90,0.42,0.05,0.16]] },
+  3: { src:'assets/maps/lava_arena.png', world:[1656,932],
+       walls:[[0.45,0.42,0.09,0.17]],
+       boxes:[[0.26,0.14,0.11,0.09],[0.63,0.14,0.11,0.09],[0.26,0.61,0.11,0.09],[0.63,0.61,0.11,0.09],
+              [0.30,0.34,0.08,0.07],[0.62,0.34,0.08,0.07],[0.40,0.55,0.07,0.07],[0.53,0.55,0.07,0.07]] },
+  4: { src:'assets/maps/turret_arena.png', world:[2208,1242],
+       walls:[[0.13,0.07,0.08,0.12],[0.79,0.07,0.08,0.12],[0.13,0.81,0.08,0.12],[0.79,0.81,0.08,0.12]],
+       boxes:[[0.30,0.18,0.08,0.07],[0.55,0.27,0.09,0.08],[0.70,0.24,0.07,0.07],
+              [0.25,0.46,0.08,0.08],[0.40,0.55,0.08,0.07],[0.60,0.50,0.08,0.08]] },
+};
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 canvas.width = W * PX; canvas.height = H * PX;
@@ -71,6 +92,15 @@ const bgBlueBase = new Image();
 bgBlueBase.loaded = false;
 bgBlueBase.onload = () => { bgBlueBase.loaded = true; };
 bgBlueBase.src = 'assets/maps/blue_base.png';
+// Preload each block's image map (non-blocking, mirrors bgBlueBase). drawBackground
+// falls back to the procedural background per block until the image's `loaded` flips.
+for(const k in MAPS){
+  const m = MAPS[k];
+  m.img = new Image();
+  m.img.loaded = false;
+  m.img.onload = (img => () => { img.loaded = true; })(m.img);
+  m.img.src = m.src;
+}
 function S(pal, rows){
   const h = rows.length, w = rows[0].length;
   // Pre-compute color-batched pixel lists so drawSprite/drawSpriteTinted set
@@ -1962,6 +1992,7 @@ const mouse = { x: W/2, y: H/2, down:false, rdown:false, clicked:false, rclicked
 const GAMEPLAY_KEYS = new Set([
   'KeyW','KeyA','KeyS','KeyD',
   'KeyX','KeyC','KeyV','KeyF','KeyB',
+  'KeyO','KeyN','KeyP',  // debug rect editor (toggle / tag wall / tag box / log)
   'Tab',  // toggles the CHARACTER STATS window; preventDefault stops focus-traversal
   'Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'
 ]);
@@ -1993,6 +2024,22 @@ window.addEventListener('keydown', e => {
       showStats = false;
     }
   }
+  // Debug rect editor (dev tool). 'o' toggles it during play; while on, n/b tag the
+  // last drag-drawn rect as wall/box and 'p' logs the current block's rect arrays.
+  if(e.code === 'KeyO' && !wasDown && state === STATE.PLAYING){ debugMap = !debugMap; }
+  if(debugMap && state === STATE.PLAYING && !wasDown){
+    if(e.code === 'KeyN' && debugDrawn.length) debugDrawn[debugDrawn.length-1].kind = 'wall';
+    else if(e.code === 'KeyB' && debugDrawn.length) debugDrawn[debugDrawn.length-1].kind = 'box';
+    else if(e.code === 'KeyP'){
+      const m = MAPS[Math.floor(levelIdx/10)+1];
+      const f = r => '[' + [r.fx,r.fy,r.fw,r.fh].map(n => +n.toFixed(3)).join(',') + ']';
+      const dWalls = debugDrawn.filter(r => r.kind === 'wall').map(f);
+      const dBoxes = debugDrawn.filter(r => r.kind === 'box').map(f);
+      console.log('--- block ' + (Math.floor(levelIdx/10)+1) + ' rects (fractions) ---');
+      console.log('MAPS.walls:', m ? JSON.stringify(m.walls) : '[]', '\nnew walls:', '[' + dWalls.join(',') + ']');
+      console.log('MAPS.boxes:', m ? JSON.stringify(m.boxes) : '[]', '\nnew boxes:', '[' + dBoxes.join(',') + ']');
+    }
+  }
 });
 window.addEventListener('keyup', e => {
   keys[e.code] = false;
@@ -2002,6 +2049,8 @@ canvas.addEventListener('mousemove', e => {
   const r = canvas.getBoundingClientRect();
   mouse.x = (e.clientX - r.left) * (W / r.width);
   mouse.y = (e.clientY - r.top) * (H / r.height);
+  // Debug editor: extend the in-progress drag rect (world coords).
+  if(debugDrag){ debugDrag.wx1 = mouse.x + camX; debugDrag.wy1 = mouse.y + camY; }
 });
 canvas.addEventListener('mousedown', e => {
   initAudio();
@@ -2009,10 +2058,24 @@ canvas.addEventListener('mousedown', e => {
   if(state === STATE.PLAYING && paused){ paused = false; return; }
   // Likewise a click while the stats window is open just closes it (no shot).
   if(state === STATE.PLAYING && showStats){ showStats = false; return; }
+  // Debug editor: left-drag draws a new rect instead of firing.
+  if(debugMap && state === STATE.PLAYING && e.button !== 2){
+    const wx = mouse.x + camX, wy = mouse.y + camY;
+    debugDrag = { wx0:wx, wy0:wy, wx1:wx, wy1:wy };
+    return;
+  }
   if(e.button === 2){ mouse.rdown = true; mouse.rclicked = true; }
   else { mouse.down = true; mouse.clicked = true; }
 });
 window.addEventListener('mouseup', e => {
+  // Debug editor: finalize the drag into a rect stored as world fractions (untagged).
+  if(debugDrag && e.button !== 2){
+    const x0 = Math.min(debugDrag.wx0, debugDrag.wx1), y0 = Math.min(debugDrag.wy0, debugDrag.wy1);
+    const w = Math.abs(debugDrag.wx1 - debugDrag.wx0), h = Math.abs(debugDrag.wy1 - debugDrag.wy0);
+    if(w > 2 && h > 2) debugDrawn.push({ fx:x0/worldW, fy:y0/worldH, fw:w/worldW, fh:h/worldH, kind:null });
+    debugDrag = null;
+    return;
+  }
   if(e.button === 2){ mouse.rdown = false; }
   else { mouse.down = false; }
 });
@@ -2141,6 +2204,67 @@ function bulletHitsWall(b){
   }
   return false;
 }
+
+// ---- Blocks 2/3/4 obstacle collision (MAPS, worldScale 2/3/4) ----
+// Separate from the L1 path above (which is NOT touched). Two-tier passing rule:
+// bodyRects() = walls + boxes (block BODIES); bulletRects() = walls only (block
+// BULLETS, pass through boxes). Rects are derived from MAPS fractions in world px
+// and cached per arena size (recomputed only when worldW changes, i.e. per level).
+function rectsOf(list){
+  return list.map(b => ({ x0:b[0]*worldW, y0:b[1]*worldH, x1:(b[0]+b[2])*worldW, y1:(b[1]+b[3])*worldH }));
+}
+let _rectsCacheW = -1, _bodyRectsCache = [], _bulletRectsCache = [];
+function _ensureRects(){
+  if(_rectsCacheW === worldW) return;
+  _rectsCacheW = worldW;
+  const m = MAPS[Math.floor(levelIdx / 10) + 1];
+  _bodyRectsCache   = m ? rectsOf([...m.walls, ...m.boxes]) : [];
+  _bulletRectsCache = m ? rectsOf(m.walls) : [];
+}
+function bodyRects(){ _ensureRects(); return _bodyRectsCache; }
+function bulletRects(){ _ensureRects(); return _bulletRectsCache; }
+// Push a circular body (radius r) out of every body rect (walls+boxes), sliding
+// along the nearest edge. No-op on blocks without a MAPS entry (empty rect list).
+function resolveMapWalls(e, r){
+  r = r || 7;
+  for(const w of bodyRects()){
+    const cx = clamp(e.x, w.x0, w.x1);
+    const cy = clamp(e.y, w.y0, w.y1);
+    const dx = e.x - cx, dy = e.y - cy;
+    const d2 = dx*dx + dy*dy;
+    if(d2 >= r*r) continue;
+    if(d2 > 1e-4){
+      const d = Math.sqrt(d2);
+      e.x = cx + dx / d * r;
+      e.y = cy + dy / d * r;
+    } else {
+      const l = e.x - w.x0, rt = w.x1 - e.x, t = e.y - w.y0, bt = w.y1 - e.y;
+      const mn = Math.min(l, rt, t, bt);
+      if(mn === l)       e.x = w.x0 - r;
+      else if(mn === rt) e.x = w.x1 + r;
+      else if(mn === t)  e.y = w.y0 - r;
+      else               e.y = w.y1 + r;
+    }
+  }
+}
+// True if a bullet (circle, radius b.radius) overlaps ANY wall rect (boxes excluded).
+function bulletHitsMapWall(b){
+  const r = b.radius || 2;
+  for(const w of bulletRects()){
+    const cx = clamp(b.x, w.x0, w.x1);
+    const cy = clamp(b.y, w.y0, w.y1);
+    const dx = b.x - cx, dy = b.y - cy;
+    if(dx*dx + dy*dy < r*r) return true;
+  }
+  return false;
+}
+
+// L11-20 Supply Station centers (fractions of world) + per-station runtime state.
+const SUPPLY_STATIONS = [[0.135,0.20],[0.865,0.20],[0.135,0.80],[0.865,0.80]];
+let supplyStations = [];
+// Debug rect editor ('o' to toggle while PLAYING). debugDrag = in-progress drag in
+// world coords; debugDrawn = finalized rects (fractions, tagged wall/box via N/B).
+let debugMap = false, debugDrag = null, debugDrawn = [], lavaTintPts = null;
 
 // In-place array compaction: keeps items where aliveFn(item) is truthy, mutates
 // the array in place (no allocation) and sets length. Replaces .filter() in hot
@@ -3087,11 +3211,17 @@ function startLevel(idx){
   // L1-10 only: match the arena to the blue_base.png background (1104x622) so the
   // image maps 1:1. Other blocks keep the worldScale>=2 formula untouched.
   if(worldScale === 1){ worldW = 1104; worldH = 622; }
+  // Blocks 2/3/4: size the arena to the registered image map (B). Leaves worldScale===1
+  // and the worldScale>=2 base formula above untouched.
+  const m = MAPS[worldScale]; if(m){ worldW = m.world[0]; worldH = m.world[1]; }
   camX = 0; camY = 0;
   entities = entities.filter(e => e.type === 'player');
   particles = [];
   decals = [];
   groundFields = [];
+  // L11-20 Supply Stations: only this block has them (worldScale===2). Each starts active.
+  supplyStations = (worldScale === 2) ? SUPPLY_STATIONS.map(() => ({ active:true, cd:0 })) : [];
+  debugDrag = null;   // clear any in-progress debug-editor drag across the transition
   if(!player){ player = createPlayer(selectedChar); entities.push(player); }
   else { player.x = worldW/2; player.y = worldH/2; player.invuln = 1.2; }
   // Refresh the chosen assistants each level: keep survivors (full HP), recreate
@@ -3208,6 +3338,31 @@ function updatePlaying(dt){
   player.x = clamp(player.x, 8, worldW-8);
   player.y = clamp(player.y, 8, worldH-10);
   resolveWalls(player, player.radius);   // L1-10 obstacle push-out (no-op elsewhere)
+  resolveMapWalls(player, player.radius); // blocks 2/3/4 obstacle push-out (no-op on L1)
+
+  // ---- L11-20 Supply Stations (worldScale===2; supplyStations only populated there) ----
+  // Reach a LIT station to grab the Advanced Energy Pack: heal +30% max HP (capped) and
+  // refill the class's active RMB pool to 100%. Then it goes dark for 30s and relights.
+  if(supplyStations.length){
+    const grabR = 0.055 * worldW;
+    for(let i = 0; i < supplyStations.length; i++){
+      const st = supplyStations[i];
+      if(st.cd > 0){ st.cd -= dt; if(st.cd <= 0){ st.cd = 0; st.active = true; } }
+      if(!st.active) continue;
+      const cx = SUPPLY_STATIONS[i][0] * worldW, cy = SUPPLY_STATIONS[i][1] * worldH;
+      const ddx = player.x - cx, ddy = player.y - cy;
+      if(ddx*ddx + ddy*ddy < grabR*grabR){
+        player.hp = Math.min(player.maxHp, player.hp + 0.30 * player.maxHp);
+        if(player.maxFuel       > 0) player.fuel     = player.maxFuel;
+        else if(player.maxEnergy   > 0) player.energy   = player.maxEnergy;
+        else if(player.maxPower    > 0) player.power    = player.maxPower;
+        else if(player.maxFury     > 0) player.fury     = player.maxFury;
+        else if(player.maxMagazine > 0) player.magazine = player.maxMagazine;
+        st.active = false; st.cd = 30;
+        sfx.pickup();
+      }
+    }
+  }
 
   if(mag > 0){
     player.frameT += dt;
@@ -3232,7 +3387,9 @@ function updatePlaying(dt){
   // X/C/B/V come from player.loadout (already gated by unlocked slots + ownership in
   // resolvePlayerLoadout). A null slot is simply skipped, so low levels just have HEAL.
   const SKILL_KEYS = [['KeyF','f'],['KeyX','x'],['KeyC','c'],['KeyB','b'],['KeyV','v']];
-  for(const [code, slot] of SKILL_KEYS){
+  // While the debug rect editor is open, N/B/P drive the editor — suppress skill firing
+  // so KeyB (BLAST) doesn't also trigger when tagging a box. Movement still works.
+  if(!debugMap) for(const [code, slot] of SKILL_KEYS){
     const id = player.loadout[slot];
     if(id && keys[code] && player.skillCd[slot] <= 0){
       if(triggerSkill(id, dx, dy, mag)) player.skillCd[slot] = skillCdFor(id);
@@ -3511,7 +3668,7 @@ function updatePlaying(dt){
     else if(e.type === 'sword_ally') updateSwordAlly(e, dt);
     // L1-10 obstacle push-out for BODIES (enemies + allies) after their AI moved
     // them. AI fns are untouched; resolveWalls is a no-op outside the L1-10 block.
-    if(e.type === 'enemy' || isAlly(e)) resolveWalls(e, e.radius);
+    if(e.type === 'enemy' || isAlly(e)){ resolveWalls(e, e.radius); resolveMapWalls(e, e.radius); }
     if(e.hitFlash > 0) e.hitFlash -= dt;
   }
 
@@ -5451,6 +5608,18 @@ function updateBullet(b, dt){
     b.dead = true;
     return;
   }
+  // Blocks 2/3/4: a bullet that hits a WALL (not a box) is culled the same way. pierce
+  // does NOT punch through; explosive/grenade detonate first, bio-globs drop their cloud.
+  else if(bulletHitsMapWall(b)){
+    if(b.isGrenade){
+      explode(b.x, b.y, b.explodeRadius || 32, b.explodeDmg || 3, b.owner === 'player' && !b.fromAlly);
+    } else if(b.explosive){
+      explode(b.x, b.y, b.explodeRadius, b.dmg, !b.fromAlly);
+    }
+    if(b.spawnsCloud) spawnPoisonCloud(b.x, b.y, b);
+    b.dead = true;
+    return;
+  }
   if(b.life <= 0 || b.x < -12 || b.x > worldW+12 || b.y < -12 || b.y > worldH+12){
     if(b.isGrenade && b.life <= 0){
       // Detonate at end of fuse. Credit Syed's lifesteal only for his own shells
@@ -5581,6 +5750,14 @@ function drawBackground(theme, idx, bw, bh){
   if(Math.floor(idx / 10) + 1 === 1 && bgBlueBase.loaded){
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(bgBlueBase, 0, 0, bw, bh);
+    return;
+  }
+  // Blocks 2/3/4: draw the registered image map when loaded (fills the arena, scrolls
+  // with the camera). Falls back to the procedural background below if not ready.
+  const mm = MAPS[Math.floor(idx / 10) + 1];
+  if(mm && mm.img && mm.img.loaded){
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(mm.img, 0, 0, bw, bh);
     return;
   }
   ctx.fillStyle = theme.bg;
@@ -5733,6 +5910,7 @@ function draw(){
     else if(state === STATE.VICTORY) drawVictory();
     else if(state === STATE.PLAYING && showStats) drawStats();
     else if(state === STATE.PLAYING && paused) drawPause();
+    if(state === STATE.PLAYING && debugMap) drawDebugHUD();
   } else {
     drawBackground(THEMES.menu, 0, W, H);
     if(state === STATE.MENU) drawMenu();
@@ -5974,6 +6152,24 @@ function drawGame(){
     ctx.stroke();
     ctx.globalAlpha = 1;
   }
+  // L11-20 Supply Stations: the art already shows them lit, so we only OVERLAY runtime
+  // state — a dim dark disc while on cooldown, a soft pulsing highlight while ready.
+  for(let i = 0; i < supplyStations.length; i++){
+    const st = supplyStations[i];
+    const cx = SUPPLY_STATIONS[i][0] * worldW, cy = SUPPLY_STATIONS[i][1] * worldH;
+    const rad = 0.07 * worldW;
+    if(!st.active){
+      ctx.globalAlpha = 0.5; ctx.fillStyle = '#04060c';
+      ctx.beginPath(); ctx.arc(cx, cy, rad, 0, TAU); ctx.fill();
+    } else {
+      const pulse = 0.3 + 0.25 * Math.sin(stateTime * 4);
+      ctx.globalAlpha = pulse; ctx.fillStyle = '#9be7ff';
+      ctx.beginPath(); ctx.arc(cx, cy, rad * 0.9, 0, TAU); ctx.fill();
+      ctx.globalAlpha = Math.min(1, pulse + 0.4); ctx.lineWidth = 2; ctx.strokeStyle = '#e8fbff';
+      ctx.beginPath(); ctx.arc(cx, cy, rad, 0, TAU); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
   // Reuse a scratch array (drop dead entries in the same pass) instead of cloning
   // `entities` every frame, then y-sort for painter order. Bullets are drawn in a
   // separate unsorted first pass — they're tiny dots (~1-4 px) whose depth order is
@@ -6039,6 +6235,63 @@ function drawGame(){
     }
   }
   ctx.globalAlpha = 1;
+  // Debug rect editor overlay (world space): current block's MAPS rects + drawn rects +
+  // drag preview, and for block 3 a tint of detected-lava pixels. Toggled with 'o'.
+  if(debugMap && state === STATE.PLAYING){
+    const ws = Math.floor(levelIdx/10)+1, m = MAPS[ws];
+    const sr = (x,y,w,h,col) => { ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.strokeRect(x,y,w,h); };
+    ctx.globalAlpha = 0.9;
+    if(ws === 3) drawLavaTint();
+    if(m){
+      for(const r of m.walls) sr(r[0]*worldW, r[1]*worldH, r[2]*worldW, r[3]*worldH, '#ff3b3b');
+      for(const r of m.boxes) sr(r[0]*worldW, r[1]*worldH, r[2]*worldW, r[3]*worldH, '#ffd23b');
+    }
+    for(const r of debugDrawn){
+      const col = r.kind === 'wall' ? '#ff3b3b' : r.kind === 'box' ? '#ffd23b' : '#ffffff';
+      sr(r.fx*worldW, r.fy*worldH, r.fw*worldW, r.fh*worldH, col);
+    }
+    if(debugDrag){
+      const x0 = Math.min(debugDrag.wx0, debugDrag.wx1), y0 = Math.min(debugDrag.wy0, debugDrag.wy1);
+      sr(x0, y0, Math.abs(debugDrag.wx1-debugDrag.wx0), Math.abs(debugDrag.wy1-debugDrag.wy0), '#66ff66');
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+// Debug-only: tint detected lava pixels of block 3's image (computed once, cached as
+// world fractions). Same-origin image only — getImageData throws on a tainted/headless
+// canvas, caught so it degrades to "no tint" rather than crashing the draw loop.
+function drawLavaTint(){
+  const m = MAPS[3];
+  if(!m || !m.img || !m.img.loaded) return;
+  if(lavaTintPts === null){
+    lavaTintPts = [];
+    try {
+      const iw = m.img.naturalWidth, ih = m.img.naturalHeight;
+      const oc = document.createElement('canvas'); oc.width = iw; oc.height = ih;
+      const octx = oc.getContext('2d'); octx.drawImage(m.img, 0, 0);
+      const data = octx.getImageData(0, 0, iw, ih).data, step = 8;
+      for(let y = 0; y < ih; y += step){
+        for(let x = 0; x < iw; x += step){
+          const o = (y*iw + x) * 4, r = data[o], g = data[o+1], b = data[o+2];
+          if(r > 150 && r > g*1.5 && r > b*1.8) lavaTintPts.push([x/iw, y/ih]);
+        }
+      }
+    } catch(e){ lavaTintPts = []; }
+  }
+  ctx.fillStyle = 'rgba(255,60,0,0.5)';
+  for(const p of lavaTintPts) ctx.fillRect(p[0]*worldW - 2, p[1]*worldH - 2, 4, 4);
+}
+
+// Debug-only screen-space HUD: cursor world coords + the editor key legend.
+function drawDebugHUD(){
+  ctx.textAlign = 'left';
+  ctx.font = 'bold 8px monospace';
+  const wx = (mouse.x + camX) | 0, wy = (mouse.y + camY) | 0;
+  ctx.fillStyle = '#66ff66';
+  ctx.fillText('DEBUG MAP  world ' + wx + ',' + wy, 6, H - 16);
+  ctx.fillStyle = '#9fb3c8';
+  ctx.fillText('drag=rect  N=wall  B=box  P=log  O=off', 6, H - 6);
 }
 
 // Stacked-fillRect "floor plan" character body. Caller is responsible for the

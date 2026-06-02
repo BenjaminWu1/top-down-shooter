@@ -65,6 +65,10 @@ function clearInterval(){ return 0; }
 function addEventListener(){}
 function AudioContext(){ return __makeStub(); }
 var webkitAudioContext = AudioContext;
+// Image() ctor (used by the background-image preloads). onload never fires in headless,
+// so `.loaded` stays false and drawBackground falls back to the procedural background.
+function Image(){ this.loaded = false; this.onload = null; this.src = '';
+  this.naturalWidth = 0; this.naturalHeight = 0; this.width = 0; this.height = 0; }
 var console = {
   log: function(){},
   warn: function(){},
