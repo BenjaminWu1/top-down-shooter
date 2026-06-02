@@ -2087,6 +2087,61 @@ function enemiesNear(x, y){
 }
 function rand(a,b){ return a + Math.random()*(b-a); }
 function clamp(v,a,b){ return v<a?a:v>b?b:v; }
+
+// ---- L1-10 obstacle collision (worldScale===1 only, i.e. levelIdx < 10) ----
+// AABB rects in 1104x622 world space, aligned to the crates/containers/pillars
+// painted into blue_base.png. Bodies are pushed out of these and clamped inside
+// L1_BOUNDS; bullets are culled on contact. Other blocks have no obstacles.
+const L1_WALLS = [
+  {x:237, y:78,  w:160, h:53}, {x:473, y:78,  w:141, h:53}, {x:707, y:78,  w:160, h:53},
+  {x:331, y:156, w:55,  h:47}, {x:696, y:156, w:55,  h:47},
+  {x:174, y:171, w:44,  h:267},{x:885, y:171, w:44,  h:267},
+  {x:331, y:386, w:61,  h:50}, {x:693, y:386, w:61,  h:50},
+  {x:237, y:479, w:160, h:53}, {x:473, y:479, w:141, h:53}, {x:707, y:479, w:160, h:53},
+];
+const L1_BOUNDS = {x0:50, y0:44, x1:1054, y1:578};
+// Push a circular body (radius r) out of any L1 box (slide along the nearest edge)
+// and keep it inside L1_BOUNDS. No-op outside the L1-10 block. Mutates e.x/e.y.
+function resolveWalls(e, r){
+  if(levelIdx >= 10) return;
+  r = r || 7;
+  for(const w of L1_WALLS){
+    const cx = clamp(e.x, w.x, w.x + w.w);
+    const cy = clamp(e.y, w.y, w.y + w.h);
+    const dx = e.x - cx, dy = e.y - cy;
+    const d2 = dx*dx + dy*dy;
+    if(d2 >= r*r) continue;
+    if(d2 > 1e-4){
+      // Overlapping an edge/corner: push out along the contact normal (slides).
+      const d = Math.sqrt(d2);
+      e.x = cx + dx / d * r;
+      e.y = cy + dy / d * r;
+    } else {
+      // Center is inside the box: eject through the nearest face.
+      const l = e.x - w.x, rt = (w.x + w.w) - e.x, t = e.y - w.y, bt = (w.y + w.h) - e.y;
+      const m = Math.min(l, rt, t, bt);
+      if(m === l)       e.x = w.x - r;
+      else if(m === rt) e.x = w.x + w.w + r;
+      else if(m === t)  e.y = w.y - r;
+      else              e.y = w.y + w.h + r;
+    }
+  }
+  e.x = clamp(e.x, L1_BOUNDS.x0 + r, L1_BOUNDS.x1 - r);
+  e.y = clamp(e.y, L1_BOUNDS.y0 + r, L1_BOUNDS.y1 - r);
+}
+// True if a bullet (circle, radius b.radius) overlaps ANY L1 box. Iterates the
+// full L1_WALLS array so every crate/container/pillar is included.
+function bulletHitsWall(b){
+  const r = b.radius || 2;
+  for(const w of L1_WALLS){
+    const cx = clamp(b.x, w.x, w.x + w.w);
+    const cy = clamp(b.y, w.y, w.y + w.h);
+    const dx = b.x - cx, dy = b.y - cy;
+    if(dx*dx + dy*dy < r*r) return true;
+  }
+  return false;
+}
+
 // In-place array compaction: keeps items where aliveFn(item) is truthy, mutates
 // the array in place (no allocation) and sets length. Replaces .filter() in hot
 // paths to avoid per-frame GC churn from discarded array objects.
@@ -3152,6 +3207,7 @@ function updatePlaying(dt){
   player.y += dy * player.speed * speedMult * dt;
   player.x = clamp(player.x, 8, worldW-8);
   player.y = clamp(player.y, 8, worldH-10);
+  resolveWalls(player, player.radius);   // L1-10 obstacle push-out (no-op elsewhere)
 
   if(mag > 0){
     player.frameT += dt;
@@ -3453,6 +3509,9 @@ function updatePlaying(dt){
     else if(e.type === 'poison_ally') updatePoisonAlly(e, dt);
     else if(e.type === 'poison_cloud') updatePoisonCloud(e, dt);
     else if(e.type === 'sword_ally') updateSwordAlly(e, dt);
+    // L1-10 obstacle push-out for BODIES (enemies + allies) after their AI moved
+    // them. AI fns are untouched; resolveWalls is a no-op outside the L1-10 block.
+    if(e.type === 'enemy' || isAlly(e)) resolveWalls(e, e.radius);
     if(e.hitFlash > 0) e.hitFlash -= dt;
   }
 
@@ -5377,6 +5436,20 @@ function updateBullet(b, dt){
       if(b.hitSet) b.hitSet.clear();
       emit(b.x, b.y, 3, '#aed6f1', 40, 100, 0.18);
     }
+  }
+  // L1-10 obstacles: a bullet that enters a wall box is culled the SAME way the
+  // edge/lifetime path below culls it (b.dead=true, then compact() prunes it). The
+  // pierce flag does NOT punch through walls; explosive/grenade detonate first and
+  // bio-gun globs drop their cloud, mirroring the on-hit / end-of-fuse behaviour.
+  if(levelIdx < 10 && bulletHitsWall(b)){
+    if(b.isGrenade){
+      explode(b.x, b.y, b.explodeRadius || 32, b.explodeDmg || 3, b.owner === 'player' && !b.fromAlly);
+    } else if(b.explosive){
+      explode(b.x, b.y, b.explodeRadius, b.dmg, !b.fromAlly);
+    }
+    if(b.spawnsCloud) spawnPoisonCloud(b.x, b.y, b);
+    b.dead = true;
+    return;
   }
   if(b.life <= 0 || b.x < -12 || b.x > worldW+12 || b.y < -12 || b.y > worldH+12){
     if(b.isGrenade && b.life <= 0){
