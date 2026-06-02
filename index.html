@@ -65,6 +65,12 @@ window.addEventListener('resize', resize); resize();
 // ============================================================
 // SPRITES
 // ============================================================
+// Image-backed background for the L1-10 block (worldScale===1). Loaded once at
+// startup, non-blocking; drawBackground falls back to procedural until `loaded`.
+const bgBlueBase = new Image();
+bgBlueBase.loaded = false;
+bgBlueBase.onload = () => { bgBlueBase.loaded = true; };
+bgBlueBase.src = 'assets/maps/blue_base.png';
 function S(pal, rows){
   const h = rows.length, w = rows[0].length;
   // Pre-compute color-batched pixel lists so drawSprite/drawSpriteTinted set
@@ -3023,6 +3029,9 @@ function startLevel(idx){
   let worldScale = Math.floor(idx / 10) + 1;
   worldW = Math.round(W * worldScale * MAP_EXPAND);
   worldH = Math.round(H * worldScale * MAP_EXPAND);
+  // L1-10 only: match the arena to the blue_base.png background (1104x622) so the
+  // image maps 1:1. Other blocks keep the worldScale>=2 formula untouched.
+  if(worldScale === 1){ worldW = 1104; worldH = 622; }
   camX = 0; camY = 0;
   entities = entities.filter(e => e.type === 'player');
   particles = [];
@@ -5494,6 +5503,13 @@ function srand(seed){ return ((seed * 9301 + 49297) % 233280) / 233280; }
 // `bw`/`bh` are the dims to fill — viewport (W/H) for menus, world (worldW/worldH)
 // for active gameplay (so a 2x level paints its full arena, not just the screen).
 function drawBackground(theme, idx, bw, bh){
+  // L1-10 (worldScale===1) uses an image background when it's loaded; the 1104x622
+  // PNG maps 1:1 to the resized arena. Fall back to procedural if not ready/missing.
+  if(Math.floor(idx / 10) + 1 === 1 && bgBlueBase.loaded){
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(bgBlueBase, 0, 0, bw, bh);
+    return;
+  }
   ctx.fillStyle = theme.bg;
   ctx.fillRect(0, 0, bw, bh);
   ctx.fillStyle = theme.tile;
