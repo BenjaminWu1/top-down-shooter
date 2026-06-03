@@ -44,30 +44,6 @@ const PX = 2;
 // collapses to 0,0 whenever maxX/maxY are 0, so it stays correct either way).
 let worldW = W, worldH = H;
 let camX = 0, camY = 0;
-// Image-map registry for the 2nd/3rd/4th 10-level blocks (worldScale 2/3/4 =
-// L11-20/21-30/31-40). Each entry: src image, [world w,h], and obstacle rects as
-// FRACTIONS [fx,fy,fw,fh] of the world. PASSING RULE: bodies are blocked by walls
-// AND boxes; bullets are blocked by walls ONLY (pass through boxes). worldScale===1
-// (L1-10) is NOT in here — it keeps its own L1_WALLS path. Rects tuned live via the
-// 'o' debug editor. `.img` is filled by the preload loop near the sprite setup.
-const MAPS = {
-  2: { src:'assets/maps/supply_stations.png', world:[1380,776],
-       walls:[[0.44,0.41,0.11,0.14]],
-       boxes:[[0.46,0.02,0.08,0.07],[0.45,0.90,0.10,0.06],[0.255,0.135,0.085,0.06],[0.66,0.135,0.085,0.06],
-              [0.31,0.30,0.09,0.075],[0.60,0.30,0.09,0.075],[0.035,0.42,0.085,0.13],[0.88,0.42,0.085,0.13],
-              [0.19,0.43,0.075,0.10],[0.735,0.43,0.075,0.10],[0.32,0.56,0.09,0.08],[0.59,0.56,0.09,0.08],
-              [0.27,0.72,0.105,0.08],[0.62,0.72,0.105,0.08]] },
-  3: { src:'assets/maps/lava_arena.png', world:[1656,932],
-       walls:[[0.45,0.43,0.10,0.13]],
-       boxes:[[0.28,0.13,0.10,0.10],[0.62,0.13,0.10,0.10],[0.29,0.28,0.10,0.12],[0.61,0.28,0.10,0.12],
-              [0.62,0.43,0.08,0.13],[0.30,0.43,0.08,0.10],[0.31,0.56,0.08,0.08],[0.61,0.56,0.08,0.08],
-              [0.12,0.40,0.06,0.16],[0.82,0.40,0.06,0.16]] },
-  4: { src:'assets/maps/turret_arena.png', world:[2208,1242],
-       walls:[[0.115,0.075,0.085,0.115],[0.795,0.095,0.085,0.115],[0.125,0.775,0.085,0.115],[0.79,0.775,0.085,0.115]],
-       boxes:[[0.40,0.18,0.06,0.08],[0.29,0.31,0.105,0.10],[0.14,0.58,0.11,0.11],[0.31,0.67,0.11,0.10],
-              [0.385,0.52,0.075,0.06],[0.565,0.16,0.105,0.11],[0.55,0.36,0.08,0.08],[0.70,0.50,0.10,0.11],
-              [0.56,0.62,0.09,0.10],[0.545,0.78,0.075,0.07],[0.40,0.02,0.05,0.08]] },
-};
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 canvas.width = W * PX; canvas.height = H * PX;
@@ -89,21 +65,6 @@ window.addEventListener('resize', resize); resize();
 // ============================================================
 // SPRITES
 // ============================================================
-// Image-backed background for the L1-10 block (worldScale===1). Loaded once at
-// startup, non-blocking; drawBackground falls back to procedural until `loaded`.
-const bgBlueBase = new Image();
-bgBlueBase.loaded = false;
-bgBlueBase.onload = () => { bgBlueBase.loaded = true; };
-bgBlueBase.src = 'assets/maps/blue_base.png';
-// Preload each block's image map (non-blocking, mirrors bgBlueBase). drawBackground
-// falls back to the procedural background per block until the image's `loaded` flips.
-for(const k in MAPS){
-  const m = MAPS[k];
-  m.img = new Image();
-  m.img.loaded = false;
-  m.img.onload = (img => () => { img.loaded = true; })(m.img);
-  m.img.src = m.src;
-}
 function S(pal, rows){
   const h = rows.length, w = rows[0].length;
   // Pre-compute color-batched pixel lists so drawSprite/drawSpriteTinted set
@@ -1159,75 +1120,6 @@ function flameAudioStop(){
   }
   flameLoop = null;
 }
-// L21-30 lava ambience: a low rumbling/sizzling loop (white noise through a very low
-// lowpass + a touch of higher fizz). Started while in a block-3 level, stopped by the
-// update() guard otherwise. No-op without audioCtx (headless). Mirrors flameLoop.
-let lavaLoop = null;
-function lavaAudioStart(){
-  if(!audioCtx || lavaLoop) return;
-  try {
-    const n = Math.max(1, Math.floor(audioCtx.sampleRate * 1.0));
-    const buf = audioCtx.createBuffer(1, n, audioCtx.sampleRate);
-    const d = buf.getChannelData(0);
-    for(let i=0;i<n;i++) d[i] = Math.random()*2-1;
-    const src = audioCtx.createBufferSource(); src.buffer = buf; src.loop = true;
-    const filt = audioCtx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 130;
-    const g = audioCtx.createGain();
-    const now = audioCtx.currentTime;
-    g.gain.setValueAtTime(0.0001, now);
-    g.gain.linearRampToValueAtTime(0.07, now + 0.5);   // fade in a quiet bed
-    src.connect(filt).connect(g).connect(audioCtx.destination);
-    src.start(now);
-    lavaLoop = { src, filter: filt, gain: g };
-  } catch(e){ lavaLoop = null; }
-}
-function lavaAudioStop(){
-  if(!lavaLoop){ return; }
-  if(audioCtx){
-    try {
-      const now = audioCtx.currentTime;
-      lavaLoop.gain.gain.cancelScheduledValues(now);
-      lavaLoop.gain.gain.setValueAtTime(lavaLoop.gain.gain.value || 0.0001, now);
-      lavaLoop.gain.gain.linearRampToValueAtTime(0.0001, now + 0.2);
-      lavaLoop.src.stop(now + 0.25);
-    } catch(e){}
-  }
-  lavaLoop = null;
-}
-// L31-40 turret ambience: a heavy rapid-fire rattle (white noise through a mid bandpass)
-// while any turret is online. Started/stopped from the turret update + the update() guard.
-let turretLoop = null;
-function turretAudioStart(){
-  if(!audioCtx || turretLoop) return;
-  try {
-    const n = Math.max(1, Math.floor(audioCtx.sampleRate * 1.0));
-    const buf = audioCtx.createBuffer(1, n, audioCtx.sampleRate);
-    const d = buf.getChannelData(0);
-    for(let i=0;i<n;i++) d[i] = Math.random()*2-1;
-    const src = audioCtx.createBufferSource(); src.buffer = buf; src.loop = true;
-    const filt = audioCtx.createBiquadFilter(); filt.type = 'bandpass'; filt.frequency.value = 320; filt.Q.value = 0.7;
-    const g = audioCtx.createGain();
-    const now = audioCtx.currentTime;
-    g.gain.setValueAtTime(0.0001, now);
-    g.gain.linearRampToValueAtTime(0.08, now + 0.05);
-    src.connect(filt).connect(g).connect(audioCtx.destination);
-    src.start(now);
-    turretLoop = { src, filter: filt, gain: g };
-  } catch(e){ turretLoop = null; }
-}
-function turretAudioStop(){
-  if(!turretLoop){ return; }
-  if(audioCtx){
-    try {
-      const now = audioCtx.currentTime;
-      turretLoop.gain.gain.cancelScheduledValues(now);
-      turretLoop.gain.gain.setValueAtTime(turretLoop.gain.gain.value || 0.0001, now);
-      turretLoop.gain.gain.linearRampToValueAtTime(0.0001, now + 0.1);
-      turretLoop.src.stop(now + 0.15);
-    } catch(e){}
-  }
-  turretLoop = null;
-}
 const sfx = {
   shoot: () => tone(880, 0.05, 'square', 220, 0.06),
   laser: () => tone(1400, 0.08, 'sawtooth', 700, 0.05),
@@ -2064,7 +1956,6 @@ const mouse = { x: W/2, y: H/2, down:false, rdown:false, clicked:false, rclicked
 const GAMEPLAY_KEYS = new Set([
   'KeyW','KeyA','KeyS','KeyD',
   'KeyX','KeyC','KeyV','KeyF','KeyB',
-  'KeyO','KeyN','KeyP',  // debug rect editor (toggle / tag wall / tag box / log)
   'Tab',  // toggles the CHARACTER STATS window; preventDefault stops focus-traversal
   'Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'
 ]);
@@ -2096,22 +1987,6 @@ window.addEventListener('keydown', e => {
       showStats = false;
     }
   }
-  // Debug rect editor (dev tool). 'o' toggles it during play; while on, n/b tag the
-  // last drag-drawn rect as wall/box and 'p' logs the current block's rect arrays.
-  if(e.code === 'KeyO' && !wasDown && state === STATE.PLAYING){ debugMap = !debugMap; }
-  if(debugMap && state === STATE.PLAYING && !wasDown){
-    if(e.code === 'KeyN' && debugDrawn.length) debugDrawn[debugDrawn.length-1].kind = 'wall';
-    else if(e.code === 'KeyB' && debugDrawn.length) debugDrawn[debugDrawn.length-1].kind = 'box';
-    else if(e.code === 'KeyP'){
-      const m = MAPS[Math.floor(levelIdx/10)+1];
-      const f = r => '[' + [r.fx,r.fy,r.fw,r.fh].map(n => +n.toFixed(3)).join(',') + ']';
-      const dWalls = debugDrawn.filter(r => r.kind === 'wall').map(f);
-      const dBoxes = debugDrawn.filter(r => r.kind === 'box').map(f);
-      console.log('--- block ' + (Math.floor(levelIdx/10)+1) + ' rects (fractions) ---');
-      console.log('MAPS.walls:', m ? JSON.stringify(m.walls) : '[]', '\nnew walls:', '[' + dWalls.join(',') + ']');
-      console.log('MAPS.boxes:', m ? JSON.stringify(m.boxes) : '[]', '\nnew boxes:', '[' + dBoxes.join(',') + ']');
-    }
-  }
 });
 window.addEventListener('keyup', e => {
   keys[e.code] = false;
@@ -2121,8 +1996,6 @@ canvas.addEventListener('mousemove', e => {
   const r = canvas.getBoundingClientRect();
   mouse.x = (e.clientX - r.left) * (W / r.width);
   mouse.y = (e.clientY - r.top) * (H / r.height);
-  // Debug editor: extend the in-progress drag rect (world coords).
-  if(debugDrag){ debugDrag.wx1 = mouse.x + camX; debugDrag.wy1 = mouse.y + camY; }
 });
 canvas.addEventListener('mousedown', e => {
   initAudio();
@@ -2130,24 +2003,10 @@ canvas.addEventListener('mousedown', e => {
   if(state === STATE.PLAYING && paused){ paused = false; return; }
   // Likewise a click while the stats window is open just closes it (no shot).
   if(state === STATE.PLAYING && showStats){ showStats = false; return; }
-  // Debug editor: left-drag draws a new rect instead of firing.
-  if(debugMap && state === STATE.PLAYING && e.button !== 2){
-    const wx = mouse.x + camX, wy = mouse.y + camY;
-    debugDrag = { wx0:wx, wy0:wy, wx1:wx, wy1:wy };
-    return;
-  }
   if(e.button === 2){ mouse.rdown = true; mouse.rclicked = true; }
   else { mouse.down = true; mouse.clicked = true; }
 });
 window.addEventListener('mouseup', e => {
-  // Debug editor: finalize the drag into a rect stored as world fractions (untagged).
-  if(debugDrag && e.button !== 2){
-    const x0 = Math.min(debugDrag.wx0, debugDrag.wx1), y0 = Math.min(debugDrag.wy0, debugDrag.wy1);
-    const w = Math.abs(debugDrag.wx1 - debugDrag.wx0), h = Math.abs(debugDrag.wy1 - debugDrag.wy0);
-    if(w > 2 && h > 2) debugDrawn.push({ fx:x0/worldW, fy:y0/worldH, fw:w/worldW, fh:h/worldH, kind:null });
-    debugDrag = null;
-    return;
-  }
   if(e.button === 2){ mouse.rdown = false; }
   else { mouse.down = false; }
 });
@@ -2222,196 +2081,6 @@ function enemiesNear(x, y){
 }
 function rand(a,b){ return a + Math.random()*(b-a); }
 function clamp(v,a,b){ return v<a?a:v>b?b:v; }
-
-// ---- L1-10 obstacle collision (worldScale===1 only, i.e. levelIdx < 10) ----
-// AABB rects in 1104x622 world space, aligned to the crates/containers/pillars
-// painted into blue_base.png. Bodies are pushed out of these and clamped inside
-// L1_BOUNDS; bullets are culled on contact. Other blocks have no obstacles.
-const L1_WALLS = [
-  {x:237, y:78,  w:160, h:53}, {x:473, y:78,  w:141, h:53}, {x:707, y:78,  w:160, h:53},
-  {x:331, y:156, w:55,  h:47}, {x:696, y:156, w:55,  h:47},
-  {x:174, y:171, w:44,  h:267},{x:885, y:171, w:44,  h:267},
-  {x:331, y:386, w:61,  h:50}, {x:693, y:386, w:61,  h:50},
-  {x:237, y:479, w:160, h:53}, {x:473, y:479, w:141, h:53}, {x:707, y:479, w:160, h:53},
-];
-const L1_BOUNDS = {x0:50, y0:44, x1:1054, y1:578};
-// Push a circular body (radius r) out of any L1 box (slide along the nearest edge)
-// and keep it inside L1_BOUNDS. No-op outside the L1-10 block. Mutates e.x/e.y.
-function resolveWalls(e, r){
-  if(levelIdx >= 10) return;
-  r = r || 7;
-  for(const w of L1_WALLS){
-    const cx = clamp(e.x, w.x, w.x + w.w);
-    const cy = clamp(e.y, w.y, w.y + w.h);
-    const dx = e.x - cx, dy = e.y - cy;
-    const d2 = dx*dx + dy*dy;
-    if(d2 >= r*r) continue;
-    if(d2 > 1e-4){
-      // Overlapping an edge/corner: push out along the contact normal (slides).
-      const d = Math.sqrt(d2);
-      e.x = cx + dx / d * r;
-      e.y = cy + dy / d * r;
-    } else {
-      // Center is inside the box: eject through the nearest face.
-      const l = e.x - w.x, rt = (w.x + w.w) - e.x, t = e.y - w.y, bt = (w.y + w.h) - e.y;
-      const m = Math.min(l, rt, t, bt);
-      if(m === l)       e.x = w.x - r;
-      else if(m === rt) e.x = w.x + w.w + r;
-      else if(m === t)  e.y = w.y - r;
-      else              e.y = w.y + w.h + r;
-    }
-  }
-  e.x = clamp(e.x, L1_BOUNDS.x0 + r, L1_BOUNDS.x1 - r);
-  e.y = clamp(e.y, L1_BOUNDS.y0 + r, L1_BOUNDS.y1 - r);
-}
-// True if a bullet (circle, radius b.radius) overlaps ANY L1 box. Iterates the
-// full L1_WALLS array so every crate/container/pillar is included.
-function bulletHitsWall(b){
-  const r = b.radius || 2;
-  for(const w of L1_WALLS){
-    const cx = clamp(b.x, w.x, w.x + w.w);
-    const cy = clamp(b.y, w.y, w.y + w.h);
-    const dx = b.x - cx, dy = b.y - cy;
-    if(dx*dx + dy*dy < r*r) return true;
-  }
-  return false;
-}
-
-// ---- Blocks 2/3/4 obstacle collision (MAPS, worldScale 2/3/4) ----
-// Separate from the L1 path above (which is NOT touched). Two-tier passing rule:
-// bodyRects() = walls + boxes (block BODIES); bulletRects() = walls only (block
-// BULLETS, pass through boxes). Rects are derived from MAPS fractions in world px
-// and cached per arena size (recomputed only when worldW changes, i.e. per level).
-function rectsOf(list){
-  return list.map(b => ({ x0:b[0]*worldW, y0:b[1]*worldH, x1:(b[0]+b[2])*worldW, y1:(b[1]+b[3])*worldH }));
-}
-let _rectsCacheW = -1, _bodyRectsCache = [], _bulletRectsCache = [];
-function _ensureRects(){
-  if(_rectsCacheW === worldW) return;
-  _rectsCacheW = worldW;
-  const m = MAPS[Math.floor(levelIdx / 10) + 1];
-  _bodyRectsCache   = m ? rectsOf([...m.walls, ...m.boxes]) : [];
-  _bulletRectsCache = m ? rectsOf(m.walls) : [];
-}
-function bodyRects(){ _ensureRects(); return _bodyRectsCache; }
-function bulletRects(){ _ensureRects(); return _bulletRectsCache; }
-// Push a circular body (radius r) out of every body rect (walls+boxes), sliding
-// along the nearest edge. No-op on blocks without a MAPS entry (empty rect list).
-function resolveMapWalls(e, r){
-  r = r || 7;
-  for(const w of bodyRects()){
-    const cx = clamp(e.x, w.x0, w.x1);
-    const cy = clamp(e.y, w.y0, w.y1);
-    const dx = e.x - cx, dy = e.y - cy;
-    const d2 = dx*dx + dy*dy;
-    if(d2 >= r*r) continue;
-    if(d2 > 1e-4){
-      const d = Math.sqrt(d2);
-      e.x = cx + dx / d * r;
-      e.y = cy + dy / d * r;
-    } else {
-      const l = e.x - w.x0, rt = w.x1 - e.x, t = e.y - w.y0, bt = w.y1 - e.y;
-      const mn = Math.min(l, rt, t, bt);
-      if(mn === l)       e.x = w.x0 - r;
-      else if(mn === rt) e.x = w.x1 + r;
-      else if(mn === t)  e.y = w.y0 - r;
-      else               e.y = w.y1 + r;
-    }
-  }
-}
-// True if a bullet (circle, radius b.radius) overlaps ANY wall rect (boxes excluded).
-function bulletHitsMapWall(b){
-  const r = b.radius || 2;
-  for(const w of bulletRects()){
-    const cx = clamp(b.x, w.x0, w.x1);
-    const cy = clamp(b.y, w.y0, w.y1);
-    const dx = b.x - cx, dy = b.y - cy;
-    if(dx*dx + dy*dy < r*r) return true;
-  }
-  return false;
-}
-
-// L11-20 Supply Station centers (fractions of world) + per-station runtime state.
-const SUPPLY_STATIONS = [[0.135,0.195],[0.865,0.195],[0.135,0.785],[0.865,0.785]];
-// Turret muzzle centers for the L31-40 (turret_arena) block — fractions of world.
-const TURRETS = [[0.155,0.13],[0.835,0.15],[0.165,0.82],[0.83,0.82]];
-let supplyStations = [];
-let turrets = [];   // per-turret runtime: { state, charge, active, angle, fireT, flashT } (block 4 only)
-// Activation Pad center for turret i: offset ~0.07*worldW inboard (toward map center).
-function turretPad(i){
-  const tx = TURRETS[i][0]*worldW, ty = TURRETS[i][1]*worldH;
-  let ox = worldW/2 - tx, oy = worldH/2 - ty;
-  const d = Math.hypot(ox, oy) || 1;
-  return [tx + (ox/d) * 0.07*worldW, ty + (oy/d) * 0.07*worldW];
-}
-// Debug rect editor ('o' to toggle while PLAYING). debugDrag = in-progress drag in
-// world coords; debugDrawn = finalized rects (fractions, tagged wall/box via N/B).
-let debugMap = false, debugDrag = null, debugDrawn = [];
-
-// ---- L21-30 (worldScale===3) lava: detected from the map image by pixel color ----
-// Built once when the lava image is loaded: an offscreen canvas reads the pixels and
-// stores a boolean grid sampled every `step` px (a pixel is LAVA if R>130 && R-B>85 &&
-// R-G>35), plus a coarser cell list used for the draw-time flow/heat. The solid cover
-// (collision) is handled separately by MAPS[3] walls/boxes — lava only BURNS.
-let lavaMask = null;   // { step, gw, gh, imgW, imgH, grid:Uint8Array, drawStep, drawCells } or {} on failure
-function ensureLavaMask(){
-  if(lavaMask) return lavaMask.grid ? lavaMask : null;   // built already (null if it failed/empty)
-  const m = MAPS[3];
-  if(!m || !m.img || !m.img.loaded) return null;          // image not ready — retry next frame (no cache)
-  const out = {};
-  try {
-    const iw = m.img.naturalWidth || m.img.width, ih = m.img.naturalHeight || m.img.height;
-    if(!iw || !ih){ lavaMask = out; return null; }         // degenerate (e.g. headless stub) — cache empty
-    const step = 4, gw = Math.ceil(iw / step), gh = Math.ceil(ih / step);
-    // Draw at NATIVE pixel size with smoothing OFF — no downscale averaging that would
-    // pull lava pixels below the threshold.
-    const oc = document.createElement('canvas'); oc.width = iw; oc.height = ih;
-    const octx = oc.getContext('2d'); octx.imageSmoothingEnabled = false; octx.drawImage(m.img, 0, 0);
-    const data = octx.getImageData(0, 0, iw, ih).data;
-    const grid = new Uint8Array(gw * gh);
-    let trueCount = 0;
-    for(let gy = 0; gy < gh; gy++) for(let gx = 0; gx < gw; gx++){
-      const px = Math.min(iw-1, gx*step), py = Math.min(ih-1, gy*step);
-      const o = (py*iw + px) * 4, R = data[o], G = data[o+1], B = data[o+2];
-      if(R > 130 && (R-B) > 85 && (R-G) > 35){ grid[gy*gw + gx] = 1; trueCount++; }
-    }
-    out.trueCount = trueCount;
-    // Coarse cell list (fractions) for the cheap draw-time flow/heat pass.
-    const dstep = 16, drawCells = [];
-    for(let py = 0; py < ih; py += dstep) for(let px = 0; px < iw; px += dstep){
-      if(grid[Math.floor(py/step)*gw + Math.floor(px/step)]) drawCells.push([px/iw, py/ih]);
-    }
-    out.step = step; out.gw = gw; out.gh = gh; out.imgW = iw; out.imgH = ih;
-    out.grid = grid; out.drawStep = dstep; out.drawCells = drawCells;
-  } catch(e){ /* tainted (file://) or headless canvas — degrade to no lava */ }
-  lavaMask = out;
-  return lavaMask.grid ? lavaMask : null;
-}
-// World coords -> image pixel -> grid cell. False when the mask isn't built.
-function lavaAt(wx, wy){
-  const lm = lavaMask;
-  if(!lm || !lm.grid) return false;
-  const ix = wx * (lm.imgW / worldW), iy = wy * (lm.imgH / worldH);
-  if(ix < 0 || iy < 0 || ix >= lm.imgW || iy >= lm.imgH) return false;
-  return lm.grid[Math.floor(iy/lm.step)*lm.gw + Math.floor(ix/lm.step)] === 1;
-}
-// Continuous environmental burn. Enemies route through the real enemy-damage path so
-// kills credit score/XP (damageEnemy doesn't grant contact i-frames to regular enemies).
-// Player/ally burn is a CONTINUOUS DoT that BYPASSES the contact-invulnerability frames
-// (and the shield) — it subtracts HP directly, scaled by dt. (Routing it through the
-// discrete damagePlayer/damageAlly would let the 1.2s level-start invuln + the 0.9s
-// granted after every enemy contact swallow the per-frame tick, so lava dealt no damage.)
-function applyBurn(u, dmg){
-  if(u.type === 'enemy'){ damageEnemy(u, dmg, false, false); return; }
-  u.hp -= dmg;
-  u.hitFlash = Math.max(u.hitFlash || 0, 0.1);
-  if(u !== player && u.hp <= 0 && !u.dead){           // ally death tail (player death = existing hp<=0 check)
-    u.dead = true;
-    emit(u.x, u.y, 20, u.deathColor || '#fff', 50, 160, 0.6);
-    sfx.enemyDeath();
-  }
-}
-
 // In-place array compaction: keeps items where aliveFn(item) is truthy, mutates
 // the array in place (no allocation) and sets length. Replaces .filter() in hot
 // paths to avoid per-frame GC churn from discarded array objects.
@@ -3354,22 +3023,11 @@ function startLevel(idx){
   let worldScale = Math.floor(idx / 10) + 1;
   worldW = Math.round(W * worldScale * MAP_EXPAND);
   worldH = Math.round(H * worldScale * MAP_EXPAND);
-  // L1-10 only: match the arena to the blue_base.png background (1104x622) so the
-  // image maps 1:1. Other blocks keep the worldScale>=2 formula untouched.
-  if(worldScale === 1){ worldW = 1104; worldH = 622; }
-  // Blocks 2/3/4: size the arena to the registered image map (B). Leaves worldScale===1
-  // and the worldScale>=2 base formula above untouched.
-  const m = MAPS[worldScale]; if(m){ worldW = m.world[0]; worldH = m.world[1]; }
   camX = 0; camY = 0;
   entities = entities.filter(e => e.type === 'player');
   particles = [];
   decals = [];
   groundFields = [];
-  // L11-20 Supply Stations: only this block has them (worldScale===2). Each starts active.
-  supplyStations = (worldScale === 2) ? SUPPLY_STATIONS.map(() => ({ active:true, cd:0 })) : [];
-  // L31-40 turrets start idle/uncaptured (worldScale===4 only).
-  turrets = (worldScale === 4) ? TURRETS.map(() => ({ state:'idle', charge:0, active:0, angle:0, fireT:0, flashT:0 })) : [];
-  debugDrag = null;   // clear any in-progress debug-editor drag across the transition
   if(!player){ player = createPlayer(selectedChar); entities.push(player); }
   else { player.x = worldW/2; player.y = worldH/2; player.invuln = 1.2; }
   // Refresh the chosen assistants each level: keep survivors (full HP), recreate
@@ -3452,8 +3110,7 @@ function update(dt){
   }
   // Safety net for the sustained flamethrower loop: kill it whenever we're not in
   // active play (pause, Tab-stats, death/menu, level transitions) so it can't drone.
-  if(state !== STATE.PLAYING || paused || showStats){ flameAudioStop(); lavaAudioStop(); turretAudioStop(); }
-  else if(Math.floor(levelIdx / 10) + 1 !== 3) lavaAudioStop();   // left the lava block while still playing
+  if(state !== STATE.PLAYING || paused || showStats) flameAudioStop();
   mouse.clicked = false;
   mouse.rclicked = false;
 }
@@ -3486,32 +3143,6 @@ function updatePlaying(dt){
   player.y += dy * player.speed * speedMult * dt;
   player.x = clamp(player.x, 8, worldW-8);
   player.y = clamp(player.y, 8, worldH-10);
-  resolveWalls(player, player.radius);   // L1-10 obstacle push-out (no-op elsewhere)
-  resolveMapWalls(player, player.radius); // blocks 2/3/4 obstacle push-out (no-op on L1)
-
-  // ---- L11-20 Supply Stations (worldScale===2; supplyStations only populated there) ----
-  // Reach a LIT station to grab the Advanced Energy Pack: heal +30% max HP (capped) and
-  // refill the class's active RMB pool to 100%. Then it goes dark for 30s and relights.
-  if(supplyStations.length){
-    const grabR = 0.055 * worldW;
-    for(let i = 0; i < supplyStations.length; i++){
-      const st = supplyStations[i];
-      if(st.cd > 0){ st.cd -= dt; if(st.cd <= 0){ st.cd = 0; st.active = true; } }
-      if(!st.active) continue;
-      const cx = SUPPLY_STATIONS[i][0] * worldW, cy = SUPPLY_STATIONS[i][1] * worldH;
-      const ddx = player.x - cx, ddy = player.y - cy;
-      if(ddx*ddx + ddy*ddy < grabR*grabR){
-        player.hp = Math.min(player.maxHp, player.hp + 0.30 * player.maxHp);
-        if(player.maxFuel       > 0) player.fuel     = player.maxFuel;
-        else if(player.maxEnergy   > 0) player.energy   = player.maxEnergy;
-        else if(player.maxPower    > 0) player.power    = player.maxPower;
-        else if(player.maxFury     > 0) player.fury     = player.maxFury;
-        else if(player.maxMagazine > 0) player.magazine = player.maxMagazine;
-        st.active = false; st.cd = 30;
-        sfx.pickup();
-      }
-    }
-  }
 
   if(mag > 0){
     player.frameT += dt;
@@ -3536,9 +3167,7 @@ function updatePlaying(dt){
   // X/C/B/V come from player.loadout (already gated by unlocked slots + ownership in
   // resolvePlayerLoadout). A null slot is simply skipped, so low levels just have HEAL.
   const SKILL_KEYS = [['KeyF','f'],['KeyX','x'],['KeyC','c'],['KeyB','b'],['KeyV','v']];
-  // While the debug rect editor is open, N/B/P drive the editor — suppress skill firing
-  // so KeyB (BLAST) doesn't also trigger when tagging a box. Movement still works.
-  if(!debugMap) for(const [code, slot] of SKILL_KEYS){
+  for(const [code, slot] of SKILL_KEYS){
     const id = player.loadout[slot];
     if(id && keys[code] && player.skillCd[slot] <= 0){
       if(triggerSkill(id, dx, dy, mag)) player.skillCd[slot] = skillCdFor(id);
@@ -3815,83 +3444,7 @@ function updatePlaying(dt){
     else if(e.type === 'poison_ally') updatePoisonAlly(e, dt);
     else if(e.type === 'poison_cloud') updatePoisonCloud(e, dt);
     else if(e.type === 'sword_ally') updateSwordAlly(e, dt);
-    // L1-10 obstacle push-out for BODIES (enemies + allies) after their AI moved
-    // them. AI fns are untouched; resolveWalls is a no-op outside the L1-10 block.
-    if(e.type === 'enemy' || isAlly(e)){ resolveWalls(e, e.radius); resolveMapWalls(e, e.radius); }
     if(e.hitFlash > 0) e.hitFlash -= dt;
-  }
-
-  // ---- L21-30 LAVA BURN (worldScale===3). Lava is TRAVERSABLE (no body/bullet block —
-  // that's the MAPS[3] walls/boxes); it only BURNS. Standing in it deals a strong DoT and
-  // (re)ignites onFire; while onFire>0 a smaller DoT lingers after leaving. Re-entering
-  // refreshes + extends onFire (stackable, capped). Burn is dt-scaled and continuous. ----
-  if(Math.floor(levelIdx / 10) + 1 === 3 && ensureLavaMask()){
-    lavaAudioStart();
-    const LAVA_DPS = 6, FIRE_DPS = 4, FIRE_DUR = 2, FIRE_CAP = 6;
-    const burnUnit = u => {
-      if(!u || u.dead || u.hp <= 0) return;
-      const inLava = lavaAt(u.x, u.y);
-      if(inLava){ u.onFire = Math.min((u.onFire || 0) + FIRE_DUR, FIRE_CAP); applyBurn(u, LAVA_DPS * dt); }
-      if((u.onFire || 0) > 0){
-        applyBurn(u, FIRE_DPS * dt);
-        u.onFire -= dt;
-        // sparse flame motes on burning units (throttled by the global 300 particle cap)
-        if(Math.random() < dt * 6 && particles.length < 300)
-          emit(u.x + rand(-4,4), u.y + rand(-4,4), 1, Math.random() < 0.5 ? '#ff7a1e' : '#ffd24a', 20, 70, 0.3, true);
-      }
-    };
-    burnUnit(player);
-    for(const e of entities){ if(!e.dead && (e.type === 'enemy' || isAlly(e))) burnUnit(e); }
-  }
-
-  // ---- L31-40 TURRETS (worldScale===4). Stand on a turret's Activation Pad (inboard of
-  // it) for 5s to bring it ONLINE for 10s; while online it tracks + auto-fires at the
-  // nearest enemy in its quadrant. Rounds are owner:'player' (respect walls + credit the
-  // player). Turrets/pads are NOT collision. ----
-  if(turrets.length){
-    const PAD_R = 0.05 * worldW, RANGE = 0.28 * worldW, MUZZLE = 0.06 * worldW;
-    const FIRE_CD = 0.07, CHARGE_NEED = 5, ACTIVE_DUR = 10;
-    let anyActive = false;
-    for(let i = 0; i < turrets.length; i++){
-      const t = turrets[i], tx = TURRETS[i][0]*worldW, ty = TURRETS[i][1]*worldH;
-      if(t.flashT > 0) t.flashT -= dt;
-      if(t.state === 'active'){
-        anyActive = true;
-        t.active -= dt;
-        if(t.active <= 0){ t.active = 0; t.state = 'idle'; t.charge = 0; }
-        else {
-          t.fireT -= dt;
-          if(t.fireT <= 0){
-            t.fireT = FIRE_CD;
-            // Nearest enemy within the RESTRICTED radius (its own quadrant).
-            let best = null, bd = RANGE*RANGE;
-            for(const e of entities){
-              if(e.type !== 'enemy' || e.dead) continue;
-              const dx = e.x - tx, dy = e.y - ty, d2 = dx*dx + dy*dy;
-              if(d2 < bd){ bd = d2; best = e; }
-            }
-            if(best){
-              t.angle = Math.atan2(best.y - ty, best.x - tx);   // barrel ROTATES to track each shot
-              const mx = tx + Math.cos(t.angle)*MUZZLE, my = ty + Math.sin(t.angle)*MUZZLE;
-              if(entities.length < 600)
-                entities.push(createBullet(mx, my, t.angle, 'player', { speed:520, dmg:2, radius:2, life:1.5, glow:'#ffd24a' }));
-              t.flashT = 0.05;
-              emit(mx, my, 3, '#ffe08a', 40, 150, 0.16, true);
-            }
-          }
-        }
-      } else {
-        // idle / charging — stand in the pad to capture.
-        const pad = turretPad(i), dx = player.x - pad[0], dy = player.y - pad[1];
-        if(player.hp > 0 && dx*dx + dy*dy < PAD_R*PAD_R){
-          t.charge += dt;
-          if(t.charge >= CHARGE_NEED){ t.state = 'active'; t.active = ACTIVE_DUR; t.charge = 0; t.fireT = 0; sfx.pickup(); }
-        } else {
-          t.charge = Math.max(0, t.charge - dt);   // leaving the pad before 5s decays the charge
-        }
-      }
-    }
-    if(anyActive) turretAudioStart(); else turretAudioStop();
   }
 
   // ---- Boss poison-gas pools: small lingering AoE that drains the player ----
@@ -5816,32 +5369,6 @@ function updateBullet(b, dt){
       emit(b.x, b.y, 3, '#aed6f1', 40, 100, 0.18);
     }
   }
-  // L1-10 obstacles: a bullet that enters a wall box is culled the SAME way the
-  // edge/lifetime path below culls it (b.dead=true, then compact() prunes it). The
-  // pierce flag does NOT punch through walls; explosive/grenade detonate first and
-  // bio-gun globs drop their cloud, mirroring the on-hit / end-of-fuse behaviour.
-  if(levelIdx < 10 && bulletHitsWall(b)){
-    if(b.isGrenade){
-      explode(b.x, b.y, b.explodeRadius || 32, b.explodeDmg || 3, b.owner === 'player' && !b.fromAlly);
-    } else if(b.explosive){
-      explode(b.x, b.y, b.explodeRadius, b.dmg, !b.fromAlly);
-    }
-    if(b.spawnsCloud) spawnPoisonCloud(b.x, b.y, b);
-    b.dead = true;
-    return;
-  }
-  // Blocks 2/3/4: a bullet that hits a WALL (not a box) is culled the same way. pierce
-  // does NOT punch through; explosive/grenade detonate first, bio-globs drop their cloud.
-  else if(bulletHitsMapWall(b)){
-    if(b.isGrenade){
-      explode(b.x, b.y, b.explodeRadius || 32, b.explodeDmg || 3, b.owner === 'player' && !b.fromAlly);
-    } else if(b.explosive){
-      explode(b.x, b.y, b.explodeRadius, b.dmg, !b.fromAlly);
-    }
-    if(b.spawnsCloud) spawnPoisonCloud(b.x, b.y, b);
-    b.dead = true;
-    return;
-  }
   if(b.life <= 0 || b.x < -12 || b.x > worldW+12 || b.y < -12 || b.y > worldH+12){
     if(b.isGrenade && b.life <= 0){
       // Detonate at end of fuse. Credit Syed's lifesteal only for his own shells
@@ -5967,22 +5494,6 @@ function srand(seed){ return ((seed * 9301 + 49297) % 233280) / 233280; }
 // `bw`/`bh` are the dims to fill — viewport (W/H) for menus, world (worldW/worldH)
 // for active gameplay (so a 2x level paints its full arena, not just the screen).
 function drawBackground(theme, idx, bw, bh){
-  // L1-10 (worldScale===1) uses an image background when it's loaded; the 1104x622
-  // PNG maps 1:1 to the resized arena. Fall back to procedural if not ready/missing.
-  if(Math.floor(idx / 10) + 1 === 1 && bgBlueBase.loaded){
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(bgBlueBase, 0, 0, bw, bh);
-    return;
-  }
-  // Blocks 2/3/4: draw the registered image map when loaded (fills the arena, scrolls
-  // with the camera). Falls back to the procedural background below if not ready.
-  const mm = MAPS[Math.floor(idx / 10) + 1];
-  if(mm && mm.img && mm.img.loaded){
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(mm.img, 0, 0, bw, bh);
-    if(Math.floor(idx / 10) + 1 === 3) drawLavaFlow(bw, bh);   // L21-30 molten flow/heat
-    return;
-  }
   ctx.fillStyle = theme.bg;
   ctx.fillRect(0, 0, bw, bh);
   ctx.fillStyle = theme.tile;
@@ -6133,21 +5644,6 @@ function draw(){
     else if(state === STATE.VICTORY) drawVictory();
     else if(state === STATE.PLAYING && showStats) drawStats();
     else if(state === STATE.PLAYING && paused) drawPause();
-    if(state === STATE.PLAYING && debugMap) drawDebugHUD();
-    // TEMP DEBUG (lava burn) — remove once confirmed. Shows lava-grid true-cell count,
-    // lavaAt(player), and the player's computed grid cell while in the L21-30 block.
-    if(state === STATE.PLAYING && Math.floor(levelIdx / 10) + 1 === 3){
-      ctx.textAlign = 'left'; ctx.font = 'bold 8px monospace'; ctx.fillStyle = '#ffd24a';
-      const lm = ensureLavaMask();
-      let line;
-      if(!lm){ line = 'LAVA DEBUG: mask NOT built (image not loaded / canvas tainted)'; }
-      else {
-        const ix = player.x * (lm.imgW / worldW), iy = player.y * (lm.imgH / worldH);
-        line = 'LAVA cells:' + lm.trueCount + '  lavaAt(player):' + lavaAt(player.x, player.y)
-             + '  cell:' + Math.floor(ix/lm.step) + ',' + Math.floor(iy/lm.step);
-      }
-      ctx.fillText(line, 6, 12);
-    }
   } else {
     drawBackground(THEMES.menu, 0, W, H);
     if(state === STATE.MENU) drawMenu();
@@ -6389,50 +5885,6 @@ function drawGame(){
     ctx.stroke();
     ctx.globalAlpha = 1;
   }
-  // L11-20 Supply Stations: the art already shows them lit, so we only OVERLAY runtime
-  // state — a dim dark disc while on cooldown, a soft pulsing highlight while ready.
-  for(let i = 0; i < supplyStations.length; i++){
-    const st = supplyStations[i];
-    const cx = SUPPLY_STATIONS[i][0] * worldW, cy = SUPPLY_STATIONS[i][1] * worldH;
-    const rad = 0.07 * worldW;
-    if(!st.active){
-      ctx.globalAlpha = 0.5; ctx.fillStyle = '#04060c';
-      ctx.beginPath(); ctx.arc(cx, cy, rad, 0, TAU); ctx.fill();
-    } else {
-      const pulse = 0.3 + 0.25 * Math.sin(stateTime * 4);
-      ctx.globalAlpha = pulse; ctx.fillStyle = '#9be7ff';
-      ctx.beginPath(); ctx.arc(cx, cy, rad * 0.9, 0, TAU); ctx.fill();
-      ctx.globalAlpha = Math.min(1, pulse + 0.4); ctx.lineWidth = 2; ctx.strokeStyle = '#e8fbff';
-      ctx.beginPath(); ctx.arc(cx, cy, rad, 0, TAU); ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-  }
-  // L31-40 turret overlays (art is static): a faint pad locator + charge arc while
-  // capturing, and a rotating barrel + pulsing active ring + muzzle flash while online.
-  for(let i = 0; i < turrets.length; i++){
-    const t = turrets[i], tx = TURRETS[i][0]*worldW, ty = TURRETS[i][1]*worldH;
-    const pad = turretPad(i), padR = 0.05*worldW;
-    ctx.globalAlpha = 0.22; ctx.strokeStyle = '#7fd0ff'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(pad[0], pad[1], padR, 0, TAU); ctx.stroke();
-    if(t.state !== 'active' && t.charge > 0){
-      const frac = Math.min(1, t.charge / 5);
-      ctx.globalAlpha = 0.9; ctx.strokeStyle = '#ffd24a'; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.arc(pad[0], pad[1], padR, -Math.PI/2, -Math.PI/2 + frac*TAU); ctx.stroke();
-    }
-    if(t.state === 'active'){
-      const blen = 0.045*worldW;
-      ctx.globalAlpha = 0.35 + 0.2*Math.sin(stateTime*8); ctx.strokeStyle = '#ff7a1e'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(tx, ty, 0.03*worldW, 0, TAU); ctx.stroke();
-      ctx.globalAlpha = 0.95; ctx.strokeStyle = '#ffae42'; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx + Math.cos(t.angle)*blen, ty + Math.sin(t.angle)*blen); ctx.stroke();
-      if(t.flashT > 0){
-        const mx = tx + Math.cos(t.angle)*blen, my = ty + Math.sin(t.angle)*blen;
-        ctx.globalAlpha = 1; ctx.fillStyle = '#fff4c0';
-        ctx.beginPath(); ctx.arc(mx, my, 3, 0, TAU); ctx.fill();
-      }
-    }
-    ctx.globalAlpha = 1;
-  }
   // Reuse a scratch array (drop dead entries in the same pass) instead of cloning
   // `entities` every frame, then y-sort for painter order. Bullets are drawn in a
   // separate unsorted first pass — they're tiny dots (~1-4 px) whose depth order is
@@ -6498,76 +5950,6 @@ function drawGame(){
     }
   }
   ctx.globalAlpha = 1;
-  // Debug rect editor overlay (world space): current block's MAPS rects + drawn rects +
-  // drag preview, and for block 3 a tint of detected-lava pixels. Toggled with 'o'.
-  if(debugMap && state === STATE.PLAYING){
-    const ws = Math.floor(levelIdx/10)+1, m = MAPS[ws];
-    const sr = (x,y,w,h,col) => { ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.strokeRect(x,y,w,h); };
-    ctx.globalAlpha = 0.9;
-    if(ws === 3) drawLavaTint();
-    if(m){
-      for(const r of m.walls) sr(r[0]*worldW, r[1]*worldH, r[2]*worldW, r[3]*worldH, '#ff3b3b');
-      for(const r of m.boxes) sr(r[0]*worldW, r[1]*worldH, r[2]*worldW, r[3]*worldH, '#ffd23b');
-    }
-    for(const r of debugDrawn){
-      const col = r.kind === 'wall' ? '#ff3b3b' : r.kind === 'box' ? '#ffd23b' : '#ffffff';
-      sr(r.fx*worldW, r.fy*worldH, r.fw*worldW, r.fh*worldH, col);
-    }
-    if(debugDrag){
-      const x0 = Math.min(debugDrag.wx0, debugDrag.wx1), y0 = Math.min(debugDrag.wy0, debugDrag.wy1);
-      sr(x0, y0, Math.abs(debugDrag.wx1-debugDrag.wx0), Math.abs(debugDrag.wy1-debugDrag.wy0), '#66ff66');
-    }
-    ctx.globalAlpha = 1;
-  }
-}
-
-// Debug-only: tint the detected-lava cells of block 3 (the same mask the burn uses,
-// so the overlay shows exactly what burns). No-op until the mask is built.
-function drawLavaTint(){
-  const lm = ensureLavaMask();
-  if(!lm) return;
-  ctx.fillStyle = 'rgba(255,60,0,0.5)';
-  for(const c of lm.drawCells) ctx.fillRect(c[0]*worldW - 2, c[1]*worldH - 2, 4, 4);
-}
-// Draw-time molten FLOW + HEAT over the classified lava cells (block 3, after the
-// image). Cheap: iterates the precomputed coarse drawCells, not pixels. Additive
-// brightness bands scroll UPWARD (heat rising) with a per-cell flicker, plus a few
-// faint rising shimmer specks.
-function drawLavaFlow(bw, bh){
-  const lm = ensureLavaMask();
-  if(!lm) return;
-  const t = stateTime, tile = lm.drawStep * (bw / lm.imgW);
-  ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.fillStyle = '#ff5a14';
-  for(let i = 0; i < lm.drawCells.length; i++){
-    const c = lm.drawCells[i], x = c[0]*bw, y = c[1]*bh;
-    const ph = x*0.03 + (y - t*40)*0.05;                       // bands scroll up over time
-    const a = 0.12 + 0.12*Math.sin(ph) + 0.06*Math.sin(t*7 + x*0.1);
-    if(a <= 0) continue;
-    ctx.globalAlpha = Math.min(0.5, a);
-    ctx.fillRect(x, y, tile + 1, tile + 1);
-  }
-  ctx.globalAlpha = 0.1;
-  ctx.fillStyle = '#ffd29a';
-  for(let i = 0; i < lm.drawCells.length; i += 7){              // faint rising heat shimmer
-    const c = lm.drawCells[i], sx = c[0]*bw, sy = c[1]*bh - ((t*30 + i*13) % 24);
-    ctx.fillRect(sx, sy, 1, 2);
-  }
-  ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.restore();
-}
-
-// Debug-only screen-space HUD: cursor world coords + the editor key legend.
-function drawDebugHUD(){
-  ctx.textAlign = 'left';
-  ctx.font = 'bold 8px monospace';
-  const wx = (mouse.x + camX) | 0, wy = (mouse.y + camY) | 0;
-  ctx.fillStyle = '#66ff66';
-  ctx.fillText('DEBUG MAP  world ' + wx + ',' + wy, 6, H - 16);
-  ctx.fillStyle = '#9fb3c8';
-  ctx.fillText('drag=rect  N=wall  B=box  P=log  O=off', 6, H - 6);
 }
 
 // Stacked-fillRect "floor plan" character body. Caller is responsible for the
